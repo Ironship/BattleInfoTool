@@ -66,6 +66,30 @@ MODULES = {}
 # ---------------------------------------------------------------------------------------------
 # ResourceDing
 # ---------------------------------------------------------------------------------------------
+def rd_replay_secret_guid_fix(name, text):
+    """Replays the BIT-only usableGuid fix (Modules/ResourceDing/Core.lua, added with the RD-1
+    per-target latch): "secret and nil or value" is value for a secret string -- true and nil or
+    value is value -- and the client raises on the first touch of the per-target table (8241
+    errors). The standalone repo has not shipped this function yet; where the buggy idiom
+    arrives it is replaced exactly once, and any other shape of the helpers stops the port
+    (fail closed: a silent pass-through would re-ship the crash at the next port)."""
+    buggy = "    if ok then return secret and nil or value end\n"
+    fixed = ("    if ok then\n"
+             "      if secret then return nil end\n"
+             "      return value\n"
+             "    end\n")
+    got = text.count(buggy)
+    if got > 1:
+        sys.exit(f"{name}: the secret-GUID idiom appears {got} times; inspect before adapting")
+    if got == 1:
+        text = text.replace(buggy, fixed)
+    if "usableGuid" in text or "isSecret" in text:
+        if text.count(buggy) != 0 or text.count("if secret then return nil end") != 1:
+            sys.exit(f"{name}: usableGuid changed shape upstream; the fail-closed secret branch "
+                     "cannot be reproduced -- inspect before the next port")
+    return text
+
+
 MODULES["ResourceDing"] = {
     "repo": PROJECTS / "ResourceDing",
     "files": [
@@ -93,6 +117,7 @@ MODULES["ResourceDing"] = {
             ('SlashCmdList.RESOURCEDING = function(message)\n',
              'SlashCmdList.RESOURCEDING = function(message)\n'
              '  if BIT.IsRunning and not BIT.IsRunning("ResourceDing") then BIT.SayOff("ResourceDing") return end\n'),
+            rd_replay_secret_guid_fix,
         ]),
         # the dots under the target's nameplate; started by Core.lua once the module runs
         ("Dots.lua", "Dots.lua", [

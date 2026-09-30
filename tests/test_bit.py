@@ -1576,9 +1576,12 @@ plays3 = len(GRD1.plays)
 check("  4 -> 5 on the same target dings exactly once", plays3 - plays2, 1)
 # a secret GUID (Forever in combat) must never touch the per-target table:
 # the client raises "cannot be indexed with secret keys" on every tick, so the
-# test models the table with the same guard and fails if the code touches it
+# test models the table with the same guard and fails if the code touches it.
+# The sentinel is a secret STRING: that is what the client hands over. A table
+# sentinel never reaches the leak -- usableGuid turns non-strings away before
+# issecretvalue ever runs, so only a string proves the branch (8241 errors).
 rtRDS, GRDS, BITRDS, _ = load(saved="""
-SECRET_GUID = {}
+SECRET_GUID = "SECRET-GUID-SENTINEL-8241"
 function issecretvalue(v) return v == SECRET_GUID end
 STRICT = setmetatable({}, {
   __index = function(t, k) if rawequal(k, SECRET_GUID) then error("attempted to index a table that cannot be indexed with secret keys") end return rawget(t, k) end,
@@ -1599,6 +1602,7 @@ except Exception as e:
     raised = str(e)
 check("RD-SECRET-GUID RED: a secret GUID never indexes the per-target table", raised, None)
 check("  and the full bar still dings once", len(GRDS.plays), 1)
+check("  and nothing was ever written into the latch", rtRDS.eval("next(STRICT) ~= nil"), False)
 # without the detector the per-target latch must still work for a real GUID
 # (the probe only refuses keys the client itself rejects, which lupa cannot model)
 rtRDN, GRDN, BITRDN, _ = load()

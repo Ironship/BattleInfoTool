@@ -167,7 +167,11 @@ local function usableGuid(value)
   if type(value) ~= "string" then return nil end
   if type(issecretvalue) == "function" then
     local ok, secret = pcall(issecretvalue, value)
-    if ok then return secret and nil or value end
+    -- Explicit: "secret and nil or value" hands a secret string straight through
+    -- (true and nil or value is value) and the client raises on the first touch
+    -- of the per-target latch (8241 errors). Say what is meant instead.
+    if ok and secret then return nil end
+    if ok then return value end
   end
   local probe = {}
   local ok = pcall(function() probe[value] = true return probe[value] end)
