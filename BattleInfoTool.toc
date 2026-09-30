@@ -1,0 +1,42 @@
+## Interface: 16001
+## Title: BattleInfoTool
+## Notes: Spell damage on your action buttons, DoTs that will kill your target, stats against what you wear, sounds for full combo points, mana and Soul Shards, and a range mark over your target. Every part can be switched off. /bit
+## Author: Ironship
+## Version: 0.8.0
+## SavedVariables: BattleInfoToolDB, BattleInfoTool_SpellDamageInfoDB, BattleInfoTool_DoTInfoDB, BattleInfoTool_ResourceDingDB
+
+Core\Init.lua
+Core\Settings.lua
+
+# SpellDamageInfo, from the addon of that name
+Modules\SpellDamageInfo\Locale.lua
+Modules\SpellDamageInfo\SpellIDs.lua
+Modules\SpellDamageInfo\SpellCoefficients.lua
+Modules\SpellDamageInfo\Parser.lua
+Modules\SpellDamageInfo\Estimate.lua
+Modules\SpellDamageInfo\Core.lua
+Modules\SpellDamageInfo\Options.lua
+
+# DoTInfo: based on a standalone DoT addon by Joe Greive (MIT), via Ironship's German fork (see LICENSE)
+Modules\DoTInfo\Locale.lua
+Modules\DoTInfo\Core.lua
+Modules\DoTInfo\Options.lua
+Modules\DoTInfo\Nameplates.lua
+
+Modules\StatsInfo\Weights.lua
+Modules\StatsInfo\StatsInfo.lua
+
+# ResourceDing, from the addon of that name
+Modules\ResourceDing\Core.lua
+Modules\ResourceDing\Dots.lua
+Modules\ResourceDing\Shards.lua
+Modules\ResourceDing\Mana.lua
+Modules\ResourceDing\Settings.lua
+
+Modules\Range\Range.lua
+
+# Remaining absorbs on unit frames, nameplates and the optional curved HUD
+Modules\ShieldsInfo\ShieldsInfo.lua
+
+# Hunter-specific range ladder, beside the existing class range marker
+Modules\HunterRangeFinder\HunterRangeFinder.lua

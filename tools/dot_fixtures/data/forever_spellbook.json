@@ -1,0 +1,3502 @@
+[
+ {
+  "class": "warrior",
+  "name": "Battle Stance",
+  "rank": "level 1",
+  "kind": "unchanged",
+  "tooltip": "A balanced combat stance."
+ },
+ {
+  "class": "warrior",
+  "name": "Heroic Strike",
+  "rank": "Rank 9, level 60",
+  "kind": "unchanged",
+  "tooltip": "A strong attack that increases melee damage by 157 and causes a high amount of threat.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "warrior",
+  "name": "Charge",
+  "rank": "Rank 3, level 46",
+  "kind": "unchanged",
+  "tooltip": "Charge an enemy, generate 15 Rage, and Stun it for 1 sec. Cannot be used in combat."
+ },
+ {
+  "class": "warrior",
+  "name": "Rend",
+  "rank": "Rank 7, level 60",
+  "kind": "unchanged",
+  "tooltip": "Wounds the target causing them to bleed for 147 damage over 21 sec.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "warrior",
+  "name": "Thunder Clap",
+  "rank": "Rank 6, level 58",
+  "kind": "modified",
+  "tooltip": "Blasts nearby enemies with thunder, increasing the time between their attacks by 20% for 30 sec and doing 103 damage to them. Will affect up to 4 targets."
+ },
+ {
+  "class": "warrior",
+  "name": "Hamstring",
+  "rank": "Rank 3, level 54",
+  "kind": "unchanged",
+  "tooltip": "Maims the enemy, causing 45 damage and slowing the enemy's movement by 50% for 15 sec.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "warrior",
+  "name": "Overpower",
+  "rank": "Rank 4, level 60",
+  "kind": "unchanged",
+  "tooltip": "Instantly overpower the enemy, causing weapon damage plus 35. Only useable after the target dodges. The Overpower cannot be blocked, dodged or parried.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "warrior",
+  "name": "Tactical Mastery",
+  "rank": "level 14",
+  "kind": "baseline",
+  "tooltip": "You retain up to 10 Rage when you change Stances."
+ },
+ {
+  "class": "warrior",
+  "name": "Mocking Blow",
+  "rank": "Rank 5, level 56",
+  "kind": "unchanged",
+  "tooltip": "A mocking attack that causes 93 damage, a moderate amount of threat and forces the target to focus attacks on you for 6 sec.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "warrior",
+  "name": "Retaliation",
+  "rank": "level 20",
+  "kind": "modified",
+  "tooltip": "Instantly counterattack any enemy that strikes you in melee for 15 sec. Melee attacks made from behind cannot be counterattacked. A maximum of 30 attacks will cause retaliation."
+ },
+ {
+  "class": "warrior",
+  "name": "Victory Rush",
+  "rank": "level 20",
+  "kind": "added",
+  "tooltip": "Instantly attack the target causing 1 damage and healing you for 10% of your maximum health. Only useable within 20 sec after you kill a non-trivial enemy."
+ },
+ {
+  "class": "warrior",
+  "name": "Mortal Strike",
+  "rank": "Rank 4, level 60",
+  "kind": "talent",
+  "tooltip": "A vicious strike that deals weapon damage plus 160 and wounds the target, reducing the effectiveness of any healing by 50% for 10 sec.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "warrior",
+  "name": "Spearing Strike",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "A brutal attack that deals 40% weapon damage. Deals an additional 80% weapon damage against Giants, Dragonkin, and mounted targets. Mounted targets are dismounted.\n\nRequires Two-Handed Melee Weapon"
+ },
+ {
+  "class": "warrior",
+  "name": "Sweeping Strikes",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Your next 5 melee attacks strike an additional nearby opponent."
+ },
+ {
+  "class": "warrior",
+  "name": "Battle Shout",
+  "rank": "Rank 7, level 60",
+  "kind": "modified",
+  "tooltip": "The warrior shouts, increasing the melee attack power of all party members within 20 yards by 139. Lasts 3 min."
+ },
+ {
+  "class": "warrior",
+  "name": "Demoralizing Shout",
+  "rank": "Rank 5, level 54",
+  "kind": "modified",
+  "tooltip": "Reduces the melee attack power of all enemies within 10 yards by 196 for 45 sec."
+ },
+ {
+  "class": "warrior",
+  "name": "Cleave",
+  "rank": "Rank 5, level 60",
+  "kind": "modified",
+  "tooltip": "A sweeping attack that does your weapon damage plus 50 to the target and a second nearby enemy.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "warrior",
+  "name": "Slam",
+  "rank": "Rank 4, level 46",
+  "kind": "earlier",
+  "tooltip": "Slams the opponent, causing weapon damage plus 68.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "warrior",
+  "name": "Intimidating Shout",
+  "rank": "level 22",
+  "kind": "unchanged",
+  "tooltip": "The warrior shouts, causing the targeted enemy to cower in fear. Up to 5 total nearby enemies will flee in fear. Lasts 8 sec."
+ },
+ {
+  "class": "warrior",
+  "name": "Execute",
+  "rank": "Rank 5, level 56",
+  "kind": "unchanged",
+  "tooltip": "Attempt to finish off a wounded foe, causing 600 damage and converting each extra point of rage into 15 additional damage. Only usable on enemies that have 20% or less health.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "warrior",
+  "name": "Challenging Shout",
+  "rank": "level 26",
+  "kind": "modified",
+  "tooltip": "Forces all nearby enemies within 10 yards to focus attacks on you for 6 sec."
+ },
+ {
+  "class": "warrior",
+  "name": "Berserker Stance",
+  "rank": "level 30",
+  "kind": "modified",
+  "tooltip": "An aggressive stance. Critical strike chance increased by 3% and all damage taken is increased by 10%."
+ },
+ {
+  "class": "warrior",
+  "name": "Intercept",
+  "rank": "Rank 3, level 52",
+  "kind": "unchanged",
+  "tooltip": "Charge an enemy, causing 65 damage and stunning it for 3 sec."
+ },
+ {
+  "class": "warrior",
+  "name": "Berserker Rage",
+  "rank": "level 32",
+  "kind": "unchanged",
+  "tooltip": "The warrior enters a berserker rage, becoming immune to Fear and Incapacitate effects and generating extra rage when taking damage. Lasts 10 sec."
+ },
+ {
+  "class": "warrior",
+  "name": "Whirlwind",
+  "rank": "level 36",
+  "kind": "unchanged",
+  "tooltip": "In a whirlwind of steel you attack up to 4 enemies within 8 yards, causing weapon damage to each enemy.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "warrior",
+  "name": "Pummel",
+  "rank": "Rank 2, level 58",
+  "kind": "unchanged",
+  "tooltip": "Pummel the target for 50 damage. It also interrupts spellcasting and prevents any spell in that school from being cast for 4 sec."
+ },
+ {
+  "class": "warrior",
+  "name": "Bloodthirst",
+  "rank": "Rank 4, level 60",
+  "kind": "talent",
+  "tooltip": "Instantly attack the target causing damage equal to 35% of your Attack Power plus 48 and increasing your movement speed by 10% for 10 sec."
+ },
+ {
+  "class": "warrior",
+  "name": "Recklessness",
+  "rank": "level 50",
+  "kind": "modified",
+  "tooltip": "The warrior will gain 100% increased critical strike chance and will be immune to Fear effects for the next 15 sec, but all damage taken is increased by 20%."
+ },
+ {
+  "class": "warrior",
+  "name": "Piercing Howl",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Causes all nearby enemies to be Dazed, reducing movement speed by 50% for 6 sec."
+ },
+ {
+  "class": "warrior",
+  "name": "Death Wish",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "When activated, increases your Physical damage done by 20% and makes you immune to Fear effects, but increases all damage you take by 5%. Lasts 30 sec."
+ },
+ {
+  "class": "warrior",
+  "name": "Bloodrage",
+  "rank": "level 10",
+  "kind": "unchanged",
+  "tooltip": "Generates 10 rage at the cost of health, and then generates an additional 10 rage over 10 sec. The warrior is considered in combat for the duration."
+ },
+ {
+  "class": "warrior",
+  "name": "Defensive Stance",
+  "rank": "level 10",
+  "kind": "modified",
+  "tooltip": "A defensive combat stance. Decreases damage taken by 10% and damage caused by 10%. Increases all threat generated by 30%."
+ },
+ {
+  "class": "warrior",
+  "name": "Sunder Armor",
+  "rank": "Rank 5, level 58",
+  "kind": "unchanged",
+  "tooltip": "Sunders the target's armor, reducing it by 450 per Sunder Armor and causes a high amount of threat. Can be applied up to 5 times. Lasts 30 sec.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "warrior",
+  "name": "Taunt",
+  "rank": "level 10",
+  "kind": "modified",
+  "tooltip": "Taunts the target to attack you, but has no effect if the target is already attacking you."
+ },
+ {
+  "class": "warrior",
+  "name": "Shield Bash",
+  "rank": "Rank 3, level 52",
+  "kind": "unchanged",
+  "tooltip": "Bashes the target with your shield for 45 damage. It also interrupts spellcasting and prevents any spell in that school from being cast for 6 sec.\n\nRequires Shields"
+ },
+ {
+  "class": "warrior",
+  "name": "Revenge",
+  "rank": "Rank 6, level 60",
+  "kind": "modified",
+  "tooltip": "Instantly counterattack an enemy for 138 to 168 damage and a high amount of threat. Revenge must follow a block, dodge or parry.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "warrior",
+  "name": "Shield Block",
+  "rank": "level 16",
+  "kind": "modified",
+  "tooltip": "Increases chance to block by 75% for 7 sec, but will only block 2 attacks.\n\nRequires Shields"
+ },
+ {
+  "class": "warrior",
+  "name": "Disarm",
+  "rank": "level 18",
+  "kind": "unchanged",
+  "tooltip": "Disarm the enemy's weapon for 10 sec."
+ },
+ {
+  "class": "warrior",
+  "name": "Shield Wall",
+  "rank": "level 28",
+  "kind": "modified",
+  "tooltip": "Reduces the damage taken from all attacks by 60% for 12 sec.\n\nRequires Shields"
+ },
+ {
+  "class": "warrior",
+  "name": "Shield Slam",
+  "rank": "Rank 4, level 60",
+  "kind": "talent",
+  "tooltip": "Slam the target with your shield, causing 640 to 670 damage, increased by your Block Value, and has a 50% chance of dispelling 1 magic effect on the target. Causes a very high amount of threat.\n\nRequires Shields"
+ },
+ {
+  "class": "warrior",
+  "name": "Last Stand",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "When activated, this ability temporarily grants you 30% of your maximum health for 20 sec. After the effect expires, the health is lost."
+ },
+ {
+  "class": "warrior",
+  "name": "Concussion Blow",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Stuns the target for 5 sec.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "paladin",
+  "name": "Holy Light",
+  "rank": "Rank 9, level 60",
+  "kind": "modified",
+  "tooltip": "Heals a friendly target for 1495 to 1665."
+ },
+ {
+  "class": "paladin",
+  "name": "Seal of Righteousness",
+  "rank": "Rank 8, level 58",
+  "kind": "unchanged",
+  "tooltip": "Fills the Paladin with holy spirit for 30 sec, granting each melee attack an additional 20.5 to 71.4 Holy damage. Slower weapons cause more Holy damage per swing. Only one Seal can be active on the Paladin at any one time.\n\nUnleashing this Seal's energy will cause 162 to 178 Holy damage to an enemy."
+ },
+ {
+  "class": "paladin",
+  "name": "Purify",
+  "rank": "level 8",
+  "kind": "unchanged",
+  "tooltip": "Purifies the friendly target, removing 1 disease effect and 1 poison effect."
+ },
+ {
+  "class": "paladin",
+  "name": "Lay on Hands",
+  "rank": "Rank 3, level 50",
+  "kind": "modified",
+  "tooltip": "Heals a friendly target for an amount equal to the Paladin's maximum health and restores 550 of their mana. Drains all of the Paladin's remaining Mana when used, but does not interrupt Mana regeneration."
+ },
+ {
+  "class": "paladin",
+  "name": "Redemption",
+  "rank": "Rank 5, level 60",
+  "kind": "unchanged",
+  "tooltip": "Brings a dead player back to life with 600 health and 800 mana. Cannot be cast when in combat."
+ },
+ {
+  "class": "paladin",
+  "name": "Blessing of Wisdom",
+  "rank": "Rank 6, level 60",
+  "kind": "modified",
+  "tooltip": "Places a Blessing on the friendly target, restoring 40 mana every 5 seconds for 1 hr. Players may only have one Blessing on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Consecration",
+  "rank": "Rank 5, level 60",
+  "kind": "baseline",
+  "tooltip": "Consecrates the land beneath the Paladin, doing 96 Holy damage over 8 sec to enemies who enter the area The first 4 enemies who enter the area will take an additional 216 damage over 8 sec."
+ },
+ {
+  "class": "paladin",
+  "name": "Exorcism",
+  "rank": "Rank 6, level 60",
+  "kind": "modified",
+  "tooltip": "Causes 475 to 529 Holy damage to an Undead or Demon target."
+ },
+ {
+  "class": "paladin",
+  "name": "Flash of Light",
+  "rank": "Rank 6, level 58",
+  "kind": "modified",
+  "tooltip": "Heals a friendly target for 286 to 320."
+ },
+ {
+  "class": "paladin",
+  "name": "Sense Undead",
+  "rank": "level 20",
+  "kind": "unchanged",
+  "tooltip": "Shows the location of all nearby undead on the minimap until cancelled. Only one type of tracking can be used at a time."
+ },
+ {
+  "class": "paladin",
+  "name": "Turn Undead",
+  "rank": "Rank 3, level 52",
+  "kind": "unchanged",
+  "tooltip": "The targeted undead enemy will be compelled to flee for up to 20 sec. Damage caused may interrupt the effect. Only one target can be turned at a time."
+ },
+ {
+  "class": "paladin",
+  "name": "Holy Shock",
+  "rank": "Rank 3, level 48",
+  "kind": "talent",
+  "tooltip": "Blasts the target with Holy energy, causing 248 to 268 Holy damage to an enemy, or 221 to 239 healing to an ally."
+ },
+ {
+  "class": "paladin",
+  "name": "Seal of Light",
+  "rank": "Rank 4, level 60",
+  "kind": "modified",
+  "tooltip": "Fills the Paladin with divine light for 30 sec, giving each melee attack a chance to heal the Paladin for 94. Only one Seal can be active on the Paladin at any one time.\n\nUnleashing this Seal's energy will judge an enemy for 40 sec, granting melee attacks made against the judged enemy a chance of healing the attacker for 61. Your melee strikes will refresh the spell's duration. Only one Judgement per Paladin can be active at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Seal of Wisdom",
+  "rank": "Rank 3, level 58",
+  "kind": "modified",
+  "tooltip": "Fills the Paladin with divine wisdom for 30 sec, giving each melee attack a chance to restore 90 of the Paladin's mana. Only one Seal can be active on the Paladin at any one time.\n\nUnleashing this Seal's energy will judge an enemy for 40 sec, granting attacks and spells used against the judged enemy a chance to restore 59 mana to the attacker. Your melee strikes will refresh the spell's duration. Only one Judgement per Paladin can be active at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Blessing of Light",
+  "rank": "Rank 3, level 60",
+  "kind": "modified",
+  "tooltip": "Places a Blessing on the friendly target, increasing the effects of Holy Light spells used on the target by up to 400 and the effect Flash of Light spells used on the target by up to 115. Lasts 1 hr. Players may only have one Blessing on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Light's Vigil",
+  "rank": "Rank 3, level 60",
+  "kind": "talent",
+  "tooltip": "Applies Light's Vigil to the target for 30 sec. Your next Holy Shock cast on them triggers no cooldown and causes allied targets to heal their party for 684 to 724, or enemy targets to suffer 380 to 410 Holy damage and refund 75% of Light's Vigil's Mana cost. You may only have 1 Light's Vigil active per Paladin, per party."
+ },
+ {
+  "class": "paladin",
+  "name": "Cleanse",
+  "rank": "level 42",
+  "kind": "unchanged",
+  "tooltip": "Cleanses a friendly target, removing 1 poison effect, 1 disease effect, and 1 magic effect."
+ },
+ {
+  "class": "paladin",
+  "name": "Hammer of Wrath",
+  "rank": "Rank 3, level 60",
+  "kind": "modified",
+  "tooltip": "Hurls a hammer that strikes an enemy for 474 to 522 Holy damage. Only usable on enemies that have 20% or less health."
+ },
+ {
+  "class": "paladin",
+  "name": "Holy Wrath",
+  "rank": "Rank 2, level 60",
+  "kind": "modified",
+  "tooltip": "Sends bolts of holy power in all directions, causing 490 to 576 Holy damage to all Undead and Demon targets within 20 yds and stunning them for 2 sec."
+ },
+ {
+  "class": "paladin",
+  "name": "Greater Blessing of Wisdom",
+  "rank": "Rank 2, level 60",
+  "kind": "modified",
+  "tooltip": "Gives all members of the raid or group that share the same class with the target the Greater Blessing of Wisdom, restoring 40 mana every 5 seconds for 1 hr. Players may only have one Blessing on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Greater Blessing of Light",
+  "rank": "Rank 1, level 60",
+  "kind": "modified",
+  "tooltip": "Gives all members of the raid or group that share the same class with the target the Greater Blessing of Light, increasing the effects of Holy Light spells used on the target by up to 400 and the effect Flash of Light spells used on the target by up to 115. Lasts 1 hr. Players may only have one Blessing on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Voice of Truth",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Grants you immunity to Silence and Interrupt effects. Lasts 6 sec."
+ },
+ {
+  "class": "paladin",
+  "name": "Divine Favor",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "When activated, gives your next Flash of Light, Holy Light, or Holy Shock spell a 100% critical effect chance."
+ },
+ {
+  "class": "paladin",
+  "name": "Devotion Aura",
+  "rank": "Rank 7, level 60",
+  "kind": "unchanged",
+  "tooltip": "Gives 735 additional armor to party members within 30 yards. Players may only have one Aura on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Divine Protection",
+  "rank": "Rank 2, level 18",
+  "kind": "modified",
+  "tooltip": "You are protected from all physical attacks and spells for 8 sec, but during that time you cannot attack or use physical abilities yourself. Applies Forbearance for 1 min. Cannot be cast while Forbearance is active."
+ },
+ {
+  "class": "paladin",
+  "name": "Hammer of Justice",
+  "rank": "Rank 4, level 54",
+  "kind": "unchanged",
+  "tooltip": "Stuns the target for 6 sec."
+ },
+ {
+  "class": "paladin",
+  "name": "Blessing of Protection",
+  "rank": "Rank 3, level 38",
+  "kind": "modified",
+  "tooltip": "A targeted party member is protected from all physical attacks for 10 sec, but during that time they cannot attack or use physical abilities. Players may only have one Blessing on them per Paladin at any one time. Applies Forbearance for 1 min. Cannot be cast while Forbearance is active."
+ },
+ {
+  "class": "paladin",
+  "name": "Seal of Fury",
+  "rank": "Rank 7, level 58",
+  "kind": "added",
+  "tooltip": "Fills the Paladin with divine fury for 30 sec, causing melee attacks to deal an additional 35 Holy damage. While a shield is equipped, each attack also grants an absorb shield equal to 50% of the Holy damage dealt. Only one Seal can be active on the Paladin at any one time.\n\nUnleashing this Seal's energy causes 146 to 160 Holy damage to an enemy and taunts the target to attack you for 4 sec."
+ },
+ {
+  "class": "paladin",
+  "name": "Righteous Fury",
+  "rank": "level 16",
+  "kind": "modified",
+  "tooltip": "Increases the threat generated by your Holy attacks by 90%. Lasts 30 min."
+ },
+ {
+  "class": "paladin",
+  "name": "Blessing of Freedom",
+  "rank": "level 18",
+  "kind": "unchanged",
+  "tooltip": "Places a Blessing on the friendly target, granting immunity to movement impairing effects for 10 sec. Players may only have one Blessing on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Blessing of Kings",
+  "rank": "level 20",
+  "kind": "baseline",
+  "tooltip": "Places a Blessing on the friendly target, increasing total stats by 10% for 1 hr. Players may only have one Blessing on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Concentration Aura",
+  "rank": "level 22",
+  "kind": "unchanged",
+  "tooltip": "Gives a 35% chance of ignoring spell interruption when damaged to all party members within 30 yards. Players may only have one Aura on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Seal of Justice",
+  "rank": "level 22",
+  "kind": "unchanged",
+  "tooltip": "Fills the Paladin with the spirit of justice for 30 sec, giving each melee attack a chance to stun for 2 sec. Only one Seal can be active on the Paladin at any one time.\n\nUnleashing this Seal's energy will judge an enemy for 10 sec, preventing them from fleeing. Your melee strikes will refresh the spell's duration. Only one Judgement per Paladin can be active at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Blessing of Salvation",
+  "rank": "level 26",
+  "kind": "modified",
+  "tooltip": "Places a Blessing on the party member, reducing the amount of all threat generated by 30% for 1 hr. Players may only have one Blessing on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Shadow Resistance Aura",
+  "rank": "Rank 3, level 52",
+  "kind": "modified",
+  "tooltip": "Gives 60 additional Shadow resistance to all party and raid members within 30 yards. Players may only have one Aura on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Divine Intervention",
+  "rank": "level 30",
+  "kind": "unchanged",
+  "tooltip": "The paladin sacrifices himself to remove the targeted party member from harms way. Enemies will stop attacking the protected party member, who will be immune to all harmful attacks but cannot take any action for 3 min."
+ },
+ {
+  "class": "paladin",
+  "name": "Frost Resistance Aura",
+  "rank": "Rank 3, level 56",
+  "kind": "modified",
+  "tooltip": "Gives 60 additional Frost resistance to all party and raid members within 30 yards. Players may only have one Aura on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Divine Shield",
+  "rank": "Rank 2, level 50",
+  "kind": "modified",
+  "tooltip": "Protects the paladin from all damage and spells for 12 sec, but reduces all damage you deal by 50%. Applies Forbearance for 1 min. Cannot be cast while Forbearance is active."
+ },
+ {
+  "class": "paladin",
+  "name": "Fire Resistance Aura",
+  "rank": "Rank 3, level 60",
+  "kind": "modified",
+  "tooltip": "Gives 60 additional Fire resistance to all party and raid members within 30 yards. Players may only have one Aura on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Hammer of the Righteous",
+  "rank": "level 40",
+  "kind": "added",
+  "tooltip": "Hammer the current target and up to 3 additional nearby targets, causing Holy damage to each equal to 3 times the damage per second of your main hand weapon. Cooldown shared with Crusader Strike.\n\nRequires One-Handed Axes, One-Handed Maces, One-Handed Swords"
+ },
+ {
+  "class": "paladin",
+  "name": "Holy Shield",
+  "rank": "Rank 3, level 60",
+  "kind": "talent",
+  "tooltip": "Increases chance to block by 20% for 10 sec, and deals 221 Holy damage for each attack blocked while active. Damage caused by Holy Shield causes 20% additional threat.\n\nRequires Shields"
+ },
+ {
+  "class": "paladin",
+  "name": "Blessing of Sacrifice",
+  "rank": "Rank 2, level 54",
+  "kind": "unchanged",
+  "tooltip": "Places a Blessing on the party member, transfering 55 damage taken per hit to the caster. Lasts 30 sec. Players may only have one Blessing on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Greater Blessing of Kings",
+  "rank": "level 60",
+  "kind": "modified",
+  "tooltip": "Gives all members of the raid or group that share the same class with the target the Greater Blessing of Kings, increasing total stats by 10% for 1 hr. Players may only have one Blessing on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Greater Blessing of Salvation",
+  "rank": "level 60",
+  "kind": "modified",
+  "tooltip": "Gives all members of the raid or group that share the same class with the target the Greater Blessing of Salvation, reducing the amount of all threat generated by 30% for 1 hr. Players may only have one Blessing on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Swift Judgement",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Finishes the remaining cooldown on your Judgement ability and reduces the Mana cost of your next Judgement by 100%."
+ },
+ {
+  "class": "paladin",
+  "name": "Templar's Bulwark",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "When activated, this ability grants you an absorb shield equal to 100% of your maximum health for 8 sec. Applies Forbearance for 1 min. Cannot be cast while Forbearance is active."
+ },
+ {
+  "class": "paladin",
+  "name": "Blessing of Might",
+  "rank": "Rank 7, level 60",
+  "kind": "modified",
+  "tooltip": "Places a Blessing on the friendly target, increasing melee attack power by 133 for 1 hr. Players may only have one Blessing on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Judgement",
+  "rank": "level 4",
+  "kind": "modified",
+  "tooltip": "Unleash the energy of a Seal spell upon an enemy. Does not consume the Seal. Refer to individual Seals for Judgement effect."
+ },
+ {
+  "class": "paladin",
+  "name": "Holy Strike",
+  "rank": "Rank 8, level 60",
+  "kind": "added",
+  "tooltip": "An instant strike that causes 40% weapon damage plus an additional 81 to 105 as Holy damage.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "paladin",
+  "name": "Seal of the Crusader",
+  "rank": "Rank 6, level 52",
+  "kind": "modified",
+  "tooltip": "Fills the Paladin with the spirit of a crusader for 30 sec, granting 306 melee attack power. The Paladin also attacks 40% faster, but deals less damage with each attack. Only one Seal can be active on the Paladin at any one time.\n\nUnleashing this Seal's energy will judge an enemy for 40 sec, increasing Holy damage taken by up to 161. Your melee strikes will refresh the spell's duration. Only one Judgement per Paladin can be active at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Retribution Aura",
+  "rank": "Rank 5, level 56",
+  "kind": "modified",
+  "tooltip": "Causes 30 Holy damage to any creature that strikes a party member within 30 yards. Players may only have one Aura on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Seal of Command",
+  "rank": "Rank 5, level 60",
+  "kind": "talent",
+  "tooltip": "Gives the Paladin a chance to deal additional Holy damage equal to 70% of normal weapon damage. Only one Seal can be active on the Paladin at any one time. Lasts 30 sec.\n\nUnleashing this Seal's energy will judge an enemy, instantly causing 169.5 to 186.5 Holy damage, 339 to 373 if the target is stunned or incapacitated."
+ },
+ {
+  "class": "paladin",
+  "name": "Greater Blessing of Might",
+  "rank": "Rank 2, level 60",
+  "kind": "modified",
+  "tooltip": "Gives all members of the raid or group that share the same class with the target the Greater Blessing of Might, increasing melee attack power by 133 for 1 hr. Players may only have one Blessing on them per Paladin at any one time."
+ },
+ {
+  "class": "paladin",
+  "name": "Repentance",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Puts the enemy target in a state of meditation, incapacitating them for up to 6 sec. Any damage caused will awaken the target. Only works against Humanoids."
+ },
+ {
+  "class": "paladin",
+  "name": "Summon Warhorse",
+  "rank": "level 40",
+  "kind": "modified",
+  "tooltip": "Summons a warhorse, which serves as a mount."
+ },
+ {
+  "class": "paladin",
+  "name": "Summon Charger",
+  "rank": "level 60",
+  "kind": "modified",
+  "tooltip": "Summons a Charger, which serves as a mount."
+ },
+ {
+  "class": "hunter",
+  "name": "Aspect of the Monkey",
+  "rank": "level 4",
+  "kind": "modified",
+  "tooltip": "The hunter takes on the aspects of a monkey, increasing chance to dodge by 8%. Only one Aspect can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Aspect of the Hawk",
+  "rank": "Rank 6, level 58",
+  "kind": "modified",
+  "tooltip": "The hunter takes on the aspects of a hawk, increasing Ranged Attack Power by 55. Only one Aspect can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Call Pet",
+  "rank": "level 10",
+  "kind": "unchanged",
+  "tooltip": "Summons your pet to you."
+ },
+ {
+  "class": "hunter",
+  "name": "Dismiss Pet",
+  "rank": "level 10",
+  "kind": "unchanged",
+  "tooltip": "Dismiss your pet. Dismissing your pet will reduce its happiness by 50."
+ },
+ {
+  "class": "hunter",
+  "name": "Feed Pet",
+  "rank": "level 10",
+  "kind": "unchanged",
+  "tooltip": "Feed your pet the selected item. Feeding your pet increases happiness. Using food close to the pet's level will have a better result."
+ },
+ {
+  "class": "hunter",
+  "name": "Revive Pet",
+  "rank": "level 10",
+  "kind": "unchanged",
+  "tooltip": "Revive your pet, returning it to life with 15% of its health."
+ },
+ {
+  "class": "hunter",
+  "name": "Mend Pet",
+  "rank": "Rank 7, level 60",
+  "kind": "unchanged",
+  "tooltip": "Heals your pet 245 health every second while you focus. Lasts 5 sec."
+ },
+ {
+  "class": "hunter",
+  "name": "Eagle Eye",
+  "rank": "level 14",
+  "kind": "unchanged",
+  "tooltip": "Zooms in the hunter's vision. Only usable outdoors. Lasts 1 min."
+ },
+ {
+  "class": "hunter",
+  "name": "Eyes of the Beast",
+  "rank": "level 14",
+  "kind": "modified",
+  "tooltip": "Take direct control of your pet and see through its eyes for 2 min."
+ },
+ {
+  "class": "hunter",
+  "name": "Scare Beast",
+  "rank": "Rank 3, level 46",
+  "kind": "unchanged",
+  "tooltip": "Scares a beast, causing it to run in fear for up to 20 sec. Damage caused may interrupt the effect. Only one beast can be feared at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Aspect of the Cheetah",
+  "rank": "level 20",
+  "kind": "unchanged",
+  "tooltip": "The hunter takes on the aspects of a cheetah, increasing movement speed by 30%. If the hunter takes damage, he will be dazed for 4 sec. Only one Aspect can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Beast Lore",
+  "rank": "level 24",
+  "kind": "unchanged",
+  "tooltip": "Gather information about the target beast. The tooltip will display damage, health, armor, any special resistances, and diet."
+ },
+ {
+  "class": "hunter",
+  "name": "Summon Hawk",
+  "rank": "Rank 4, level 60",
+  "kind": "talent",
+  "tooltip": "Command a hawk to dive-bomb your targeted enemy, dealing 110 Physical damage and continuing its assault for 18 sec. Only 2 hawks can be active at once. Summon Hawk shares its cooldown with Arcane Shot."
+ },
+ {
+  "class": "hunter",
+  "name": "Aspect of the Beast",
+  "rank": "Rank 1, level 30",
+  "kind": "modified",
+  "tooltip": "The hunter takes on the aspects of a beast, becoming untrackable and increasing Melee Attack Power by 50. Only one Aspect can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Aspect of the Pack",
+  "rank": "level 40",
+  "kind": "unchanged",
+  "tooltip": "The hunter and group members within 30 yards take on the aspects of a pack of cheetahs, increasing movement speed by 30%. If a pack member takes damage, they will be dazed for 4 sec. Only one Aspect can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Aspect of the Wild",
+  "rank": "Rank 2, level 56",
+  "kind": "modified",
+  "tooltip": "The hunter and all party and raid members within 30 yards take on the aspect of the wild, increasing Nature resistance by 60. Only one Aspect can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Tranquilizing Shot",
+  "rank": "level 60",
+  "kind": "unchanged",
+  "tooltip": "Attempts to remove 1 Frenzy effect from an enemy creature.\n\nRequires Ranged Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Intimidation",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Command your pet to Stun the target for 3 sec on its next successful attack, which also gains 100% increased critical strike chance. Generates high threat."
+ },
+ {
+  "class": "hunter",
+  "name": "Bestial Wrath",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Send your pet into a rage causing 50% additional damage for 18 sec. While enraged, the beast does not feel pity or remorse or fear and it cannot be stopped unless killed."
+ },
+ {
+  "class": "hunter",
+  "name": "Auto Shot",
+  "rank": "level 1",
+  "kind": "unchanged",
+  "tooltip": "Automatically shoots the target until cancelled.\n\nRequires Ranged Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Serpent Sting",
+  "rank": "Rank 9, level 60",
+  "kind": "modified",
+  "tooltip": "Stings the target, causing 555 Nature damage over 15 sec. Only one Sting per Hunter can be active on any one target.\n\nRequires Ranged Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Arcane Shot",
+  "rank": "Rank 8, level 60",
+  "kind": "modified",
+  "tooltip": "An instant shot that causes 217 Arcane damage.\n\nRequires Ranged Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Hunter's Mark",
+  "rank": "Rank 4, level 58",
+  "kind": "modified",
+  "tooltip": "Places the Hunter's Mark on the target, increasing the Ranged Attack Power of all attackers against that target by 71. In addition, the target of this ability can always be seen by the hunter whether it stealths or turns invisible. The target also appears on the mini-map. Lasts for 2 min."
+ },
+ {
+  "class": "hunter",
+  "name": "Concussive Shot",
+  "rank": "level 8",
+  "kind": "unchanged",
+  "tooltip": "Dazes the target, slowing movement speed by 50% for 4 sec.\n\nRequires Ranged Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Distracting Shot",
+  "rank": "Rank 6, level 60",
+  "kind": "unchanged",
+  "tooltip": "Distract the target, causing threat. More effective than Distracting Shot (Rank 5).\n\nRequires Ranged Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Multi-Shot",
+  "rank": "Rank 1, level 18",
+  "kind": "modified",
+  "tooltip": "Fires several missiles, hitting 3 targets. Multi-Shot shares its cooldown with Aimed Shot.\n\nRequires Ranged Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Aimed Shot",
+  "rank": "Rank 6, level 60",
+  "kind": "baseline",
+  "tooltip": "An aimed shot that increases ranged damage by 166. Aimed Shot shares its cooldown with Multi-Shot.\n\nRequires Ranged Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Scorpid Sting",
+  "rank": "Rank 1, level 22",
+  "kind": "modified",
+  "tooltip": "Stings the target, reducing the target's chance to hit with attacks by 2% for 20 sec. Only one Sting per Hunter can be active on any one target.\n\nRequires Ranged Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Trueshot Aura",
+  "rank": "Rank 3, level 40",
+  "kind": "talent",
+  "tooltip": "Increases the Ranged Attack Power of party members within 45 yards by 50. Lasts 30 min."
+ },
+ {
+  "class": "hunter",
+  "name": "Rapid Fire",
+  "rank": "level 26",
+  "kind": "modified",
+  "tooltip": "Increases ranged and melee attack speed by 40% for 15 sec."
+ },
+ {
+  "class": "hunter",
+  "name": "Flare",
+  "rank": "level 32",
+  "kind": "unchanged",
+  "tooltip": "Exposes all hidden and invisible enemies within 10 yards of the targeted area for 30 sec."
+ },
+ {
+  "class": "hunter",
+  "name": "Viper Sting",
+  "rank": "Rank 3, level 56",
+  "kind": "modified",
+  "tooltip": "Stings the target, draining 1108 mana over 8 sec. Only one Sting per Hunter can be active on any one target.\n\nRequires Ranged Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Sniper Shot",
+  "rank": "Rank 3, level 58",
+  "kind": "talent",
+  "tooltip": "A steady snipe that increases ranged damage by 295.\n\nRequires Ranged Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Volley",
+  "rank": "Rank 3, level 58",
+  "kind": "modified",
+  "tooltip": "Continuously fires a volley of ammo at the target area, causing 112 Arcane damage to enemy targets within 8 yards every 1 sec for 6 sec.\n\nRequires Ranged Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Black Arrow",
+  "rank": "Rank 2, level 60",
+  "kind": "unchanged",
+  "tooltip": "Fires a Black Arrow into the target, slowing the target's movement speed by 70%, causing 150 Shadow damage and draining 150 mana over 30 sec.\n\nRequires Ranged Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Scatter Shot",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "A short-range shot that deals 50% weapon damage and disorients the target for 4 sec. Any damage caused will remove the effect. Turns off your attack when used.\n\nRequires Ranged Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Raptor Strike",
+  "rank": "Rank 8, level 56",
+  "kind": "modified",
+  "tooltip": "A strong attack that deals melee weapon damage plus 70.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Track Beasts",
+  "rank": "level 1",
+  "kind": "unchanged",
+  "tooltip": "Shows the location of all nearby beasts on the minimap. Only one form of tracking can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Track Humanoids",
+  "rank": "level 10",
+  "kind": "unchanged",
+  "tooltip": "Shows the location of all nearby humanoids on the minimap. Only one form of tracking can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Wing Clip",
+  "rank": "Rank 3, level 60",
+  "kind": "unchanged",
+  "tooltip": "Inflicts 50 damage and reduces the enemy target's movement speed by 60% for 10 sec.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Immolation Trap",
+  "rank": "Rank 5, level 56",
+  "kind": "modified",
+  "tooltip": "Place a Fire trap that will burn the first enemy to approach for 690 Fire damage over 15 sec. Trap will exist for 1 min. Only one Fire trap can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Mongoose Bite",
+  "rank": "Rank 4, level 58",
+  "kind": "modified",
+  "tooltip": "Counterattack the enemy for melee weapon damage plus 57. Can only be performed after you dodge."
+ },
+ {
+  "class": "hunter",
+  "name": "Track Undead",
+  "rank": "level 18",
+  "kind": "unchanged",
+  "tooltip": "Shows the location of all nearby undead on the minimap. Only one form of tracking can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Disengage",
+  "rank": "Rank 3, level 48",
+  "kind": "modified",
+  "tooltip": "Attempts to disengage from the target by reducing threat. More effective than Disengage (Rank 2). Disables auto-attack.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Freezing Trap",
+  "rank": "Rank 3, level 60",
+  "kind": "modified",
+  "tooltip": "Place a Frost trap that freezes the first enemy that approaches, preventing all action for up to 20 sec. Any damage caused will break the ice. Trap will exist for 1 min. Only one Frost trap can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Track Hidden",
+  "rank": "level 24",
+  "kind": "unchanged",
+  "tooltip": "Increases stealth detection and shows hidden units within detection range on the minimap. Only one form of tracking can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Track Elementals",
+  "rank": "level 26",
+  "kind": "unchanged",
+  "tooltip": "Shows the location of all nearby elementals on the minimap. Only one form of tracking can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Frost Trap",
+  "rank": "level 28",
+  "kind": "modified",
+  "tooltip": "Place a Frost trap that creates an ice slick around itself for 30 sec when the first enemy approaches it. All enemies within 10 yards will be slowed by 60% while in the area of effect. Trap will exist for 1 min. Only one Frost trap can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Counterattack",
+  "rank": "Rank 3, level 42",
+  "kind": "talent",
+  "tooltip": "A strike that becomes active after parrying an opponent's attack. This attack deals 50% weapon damage plus 70 and immobilizes the target for 5 sec. Counterattack cannot be blocked, dodged, or parried.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Feign Death",
+  "rank": "level 30",
+  "kind": "modified",
+  "tooltip": "Feign death which may trick enemies into ignoring you. Lasts 6 min. If not cancelled, after 6 min you will actually die."
+ },
+ {
+  "class": "hunter",
+  "name": "Lacerate",
+  "rank": "Rank 4, level 60",
+  "kind": "added",
+  "tooltip": "Wounds the target causing them to bleed for 406 damage over 21 sec.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Track Demons",
+  "rank": "level 32",
+  "kind": "unchanged",
+  "tooltip": "Shows the location of all nearby demons on the minimap. Only one form of tracking can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Explosive Trap",
+  "rank": "Rank 3, level 54",
+  "kind": "modified",
+  "tooltip": "Place a Fire trap that explodes when an enemy approaches, causing 201 to 257 Fire damage and 330 additional Fire damage over 20 sec to all within 10 yards. Trap will exist for 1 min. Only one Fire trap can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Track Giants",
+  "rank": "level 40",
+  "kind": "unchanged",
+  "tooltip": "Shows the location of all nearby giants on the minimap. Only one form of tracking can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Track Dragonkin",
+  "rank": "level 50",
+  "kind": "unchanged",
+  "tooltip": "Shows the location of all nearby dragonkin on the minimap. Only one form of tracking can be active at a time."
+ },
+ {
+  "class": "hunter",
+  "name": "Deterrence",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "When activated, increases your Dodge and Parry chance by 25% for 10 sec."
+ },
+ {
+  "class": "hunter",
+  "name": "Strider Kick",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "A powerful kick that deals 100% melee weapon damage.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "hunter",
+  "name": "Beast Training",
+  "rank": "level 10",
+  "kind": "modified",
+  "tooltip": "Lets you train your pet with various abilities that you have learned how to teach."
+ },
+ {
+  "class": "rogue",
+  "name": "Eviscerate",
+  "rank": "Rank 6, level 40",
+  "kind": "modified",
+  "tooltip": "Finishing move that causes damage per combo point, increased by Attack Power:\n1 point : 93-137 damage\n2 points: 164-208 damage\n3 points: 235-279 damage\n4 points: 306-350 damage\n5 points: 377-421 damage\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "rogue",
+  "name": "Slice and Dice",
+  "rank": "Rank 2, level 42",
+  "kind": "unchanged",
+  "tooltip": "Finishing move that increases melee attack speed by 30%. Lasts longer per combo point:\n1 point : 9 seconds\n2 points: 12 seconds\n3 points: 15 seconds\n4 points: 18 seconds\n5 points: 21 seconds"
+ },
+ {
+  "class": "rogue",
+  "name": "Expose Armor",
+  "rank": "Rank 5, level 56",
+  "kind": "modified",
+  "tooltip": "Finishing move that exposes the target for 30 sec, reducing armor per combo point:\n1 point : 450 armor\n2 points: 900 armor\n3 points: 1350 armor\n4 points: 1800 armor\n5 points: 2250 armor\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "rogue",
+  "name": "Garrote",
+  "rank": "Rank 6, level 54",
+  "kind": "unchanged",
+  "tooltip": "Garrote the enemy, causing 552 damage over 18 sec, increased by your Attack Power. Must be stealthed and behind the target. Awards 1 combo points."
+ },
+ {
+  "class": "rogue",
+  "name": "Ambush",
+  "rank": "Rank 6, level 58",
+  "kind": "unchanged",
+  "tooltip": "Ambush the target, causing 250% weapon damage plus 290 to the target. Must be stealthed and behind the target. Requires a dagger in the main hand. Awards 1 combo points.\n\nRequires Daggers"
+ },
+ {
+  "class": "rogue",
+  "name": "Rupture",
+  "rank": "Rank 6, level 60",
+  "kind": "modified",
+  "tooltip": "Finishing move that causes damage over time, increased by your Attack Power. Lasts longer per combo point:\n1 point : 159 damage over 8 secs\n2 points: 222 damage over 10 secs\n3 points: 295 damage over 12 secs\n4 points: 377 damage over 14 secs\n5 points: 469 damage over 16 secs\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "rogue",
+  "name": "Cheap Shot",
+  "rank": "level 26",
+  "kind": "unchanged",
+  "tooltip": "Stuns the target for 4 sec. Must be stealthed. Awards 2 combo points.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "rogue",
+  "name": "Kidney Shot",
+  "rank": "Rank 2, level 50",
+  "kind": "unchanged",
+  "tooltip": "Finishing move that stuns the target. Lasts longer per combo point:\n1 point : 2 seconds\n2 points: 3 seconds\n3 points: 4 seconds\n4 points: 5 seconds\n5 points: 6 seconds\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "rogue",
+  "name": "Mutilate",
+  "rank": "Rank 4, level 60",
+  "kind": "talent",
+  "tooltip": "Instantly attacks with both weapons for 75% weapon damage plus an additional 50 with each weapon. Damage increased by 20% against Poisoned targets. Awards 2 Combo Points.\n\nRequires Daggers"
+ },
+ {
+  "class": "rogue",
+  "name": "Cold Blood",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "When activated, increases the critical strike chance of your next Sinister Strike, Backstab, Ambush, Eviscerate, or Mutilate by 100%."
+ },
+ {
+  "class": "rogue",
+  "name": "Venom",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Finishing move that increases the damage of your Poisons by 30% and your chance to apply Poisons by 10%. Lasts longer per combo point:\n1 point : 9 seconds\n2 points: 12 seconds\n3 points: 15 seconds\n4 points: 18 seconds\n5 points: 21 seconds\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "rogue",
+  "name": "Sinister Strike",
+  "rank": "Rank 8, level 54",
+  "kind": "unchanged",
+  "tooltip": "An instant strike that causes 68 damage in addition to your normal weapon damage. Awards 1 combo points.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "rogue",
+  "name": "Backstab",
+  "rank": "Rank 9, level 60",
+  "kind": "modified",
+  "tooltip": "Backstab the target, causing 150% weapon damage plus 150 to the target. Must be behind the target. Requires a dagger in the main hand. Awards 1 combo points.\n\nRequires Daggers"
+ },
+ {
+  "class": "rogue",
+  "name": "Gouge",
+  "rank": "Rank 5, level 60",
+  "kind": "modified",
+  "tooltip": "Causes 75 damage, stops your attack, and incapacitates the target for 4 sec. The target must be facing you. Any damage taken will break the effect. Awards 1 combo points.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "rogue",
+  "name": "Evasion",
+  "rank": "level 8",
+  "kind": "unchanged",
+  "tooltip": "The rogue's dodge chance will increase by 50% for 15 sec."
+ },
+ {
+  "class": "rogue",
+  "name": "Sprint",
+  "rank": "Rank 3, level 58",
+  "kind": "unchanged",
+  "tooltip": "Increases the rogue's movement speed by 70% for 15 sec. Does not break stealth."
+ },
+ {
+  "class": "rogue",
+  "name": "Kick",
+  "rank": "Rank 4, level 58",
+  "kind": "unchanged",
+  "tooltip": "A quick kick that injures a single foe for 80 damage. It also interrupts spellcasting and prevents any spell in that school from being cast for 5 sec."
+ },
+ {
+  "class": "rogue",
+  "name": "Feint",
+  "rank": "Rank 5, level 60",
+  "kind": "unchanged",
+  "tooltip": "Performs a feint, causing no damage but lowering your threat by a large amount, making the enemy less likely to attack you."
+ },
+ {
+  "class": "rogue",
+  "name": "Riposte",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "A strike that becomes active after parrying an opponent's attack. This attack deals 150% weapon damage and disarms the target for ?."
+ },
+ {
+  "class": "rogue",
+  "name": "Blade Flurry",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Increases your melee attack speed by 20% and your melee attacks strike an additional nearby opponent. Lasts 15 sec."
+ },
+ {
+  "class": "rogue",
+  "name": "Adrenaline Rush",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Increases your Energy regeneration rate by 100% for 15 sec."
+ },
+ {
+  "class": "rogue",
+  "name": "Stealth",
+  "rank": "Rank 4, level 60",
+  "kind": "unchanged",
+  "tooltip": "Allows the rogue to sneak around, but reduces your speed by 30%. Lasts until cancelled."
+ },
+ {
+  "class": "rogue",
+  "name": "Pick Pocket",
+  "rank": "level 4",
+  "kind": "unchanged",
+  "tooltip": "Pick the target's pocket."
+ },
+ {
+  "class": "rogue",
+  "name": "Sap",
+  "rank": "Rank 3, level 48",
+  "kind": "modified",
+  "tooltip": "Incapacitates the target for up to 45 sec. Only works on Humanoids that are not in combat. Any damage taken will break the effect. Only 1 target may be sapped at a time. Does not break Stealth.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "rogue",
+  "name": "Distract",
+  "rank": "level 22",
+  "kind": "modified",
+  "tooltip": "Throws a distraction, attracting the attention of all nearby enemies and reducing their Stealth detection as if they were 1 level lower for 10 seconds. Does not break stealth."
+ },
+ {
+  "class": "rogue",
+  "name": "Vanish",
+  "rank": "Rank 2, level 42",
+  "kind": "unchanged",
+  "tooltip": "Allows the rogue to vanish from sight, entering an improved stealth mode for 10 sec. Also breaks movement impairing effects. More effective than Vanish (Rank 1)."
+ },
+ {
+  "class": "rogue",
+  "name": "Detect Traps",
+  "rank": "level 24",
+  "kind": "unchanged",
+  "tooltip": "Greatly increased chance to detect traps."
+ },
+ {
+  "class": "rogue",
+  "name": "Disarm Trap",
+  "rank": "level 30",
+  "kind": "unchanged",
+  "tooltip": "Sneak up on the trap in order to disarm it. Don't get too close or the trap will go off."
+ },
+ {
+  "class": "rogue",
+  "name": "Blind",
+  "rank": "level 34",
+  "kind": "unchanged",
+  "tooltip": "Blinds the target, causing it to wander disoriented for up to 10 sec. Any damage caused will remove the effect."
+ },
+ {
+  "class": "rogue",
+  "name": "Safe Fall",
+  "rank": "level 40",
+  "kind": "unchanged",
+  "tooltip": "Reduces damage from falling."
+ },
+ {
+  "class": "rogue",
+  "name": "Ghostly Strike",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "A strike that deals 125% (180% if a Dagger is equipped in your Main Hand) weapon damage and increases your chance to dodge by 15% for 7 sec. Awards 1 combo points.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "rogue",
+  "name": "Premeditation",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Adds 2 Combo Points to your target. You must add to or use those combo points within 20 sec or the combo points are lost."
+ },
+ {
+  "class": "rogue",
+  "name": "Preparation",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "When activated, this ability immediately finishes the cooldown on your other Rogue abilities."
+ },
+ {
+  "class": "rogue",
+  "name": "Hemorrhage",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "An instant strike that deals 100% weapon damage (145% if a Dagger is equipped) and causes the target to take 15% increased Rupture damage from the Rogue. Lasts 15 sec. Awards 1 Combo Points.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "rogue",
+  "name": "Pick Lock",
+  "rank": "level 1",
+  "kind": "modified",
+  "tooltip": "Allows opening of locked chests and doors."
+ },
+ {
+  "class": "rogue",
+  "name": "Crippling Poison",
+  "rank": "Rank 1, level 20",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 30% chance of poisoning the enemy, slowing their movement speed by 50% for 12 sec."
+ },
+ {
+  "class": "rogue",
+  "name": "Instant Poison",
+  "rank": "Rank 1, level 20",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 20% chance of poisoning the enemy which instantly inflicts 13 to 17 Nature damage. 60 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Poisons",
+  "rank": "level 20",
+  "kind": "modified",
+  "tooltip": "You can create and mix poisons, with both found and storebought ingredients."
+ },
+ {
+  "class": "rogue",
+  "name": "Mind-numbing Poison",
+  "rank": "Rank 1, level 24",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 20% chance of poisoning the enemy, increasing their casting time by 40% for 10 sec. 75 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Instant Poison II",
+  "rank": "Rank 2, level 28",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 20% chance of poisoning the enemy which instantly inflicts 20 to 26 Nature damage. 85 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Deadly Poison",
+  "rank": "Rank 1, level 30",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 30% chance of poisoning the enemy for 24 Nature damage over 12 sec. Stacks up to 5 times on a single target. 90 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Wound Poison",
+  "rank": "Rank 1, level 32",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 30% chance of poisoning the enemy, reducing all healing effects used on them by 67 for 15 sec. Stacks up to 5 times on a single target. 90 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Blinding Powder",
+  "rank": "level 34",
+  "kind": "modified",
+  "tooltip": "Create the reagent for the Blind ability."
+ },
+ {
+  "class": "rogue",
+  "name": "Instant Poison III",
+  "rank": "Rank 3, level 36",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 20% chance of poisoning the enemy which instantly inflicts 29 to 37 Nature damage. 105 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Deadly Poison II",
+  "rank": "Rank 2, level 38",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 30% chance of poisoning the enemy for 36 Nature damage over 12 sec. Stacks up to 5 times on a single target. 115 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Mind-numbing Poison II",
+  "rank": "Rank 2, level 38",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 20% chance of poisoning the enemy, increasing their casting time by 50% for 12 sec. 115 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Wound Poison II",
+  "rank": "Rank 2, level 40",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 30% chance of poisoning the enemy, reducing all healing effects used on them by 92 for 15 sec. Stacks up to 5 times on a single target. 115 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Instant Poison IV",
+  "rank": "Rank 4, level 44",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 20% chance of poisoning the enemy which instantly inflicts 45 to 57 Nature damage. 1800 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Deadly Poison III",
+  "rank": "Rank 3, level 46",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 30% chance of poisoning the enemy for 56 Nature damage over 12 sec. Stacks up to 5 times on a single target. 135 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Wound Poison III",
+  "rank": "Rank 3, level 48",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 30% chance of poisoning the enemy, reducing all healing effects used on them by 128 for 15 sec. Stacks up to 5 times on a single target. 135 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Crippling Poison II",
+  "rank": "Rank 2, level 50",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 30% chance of poisoning the enemy, slowing their movement speed by 70% for 12 sec."
+ },
+ {
+  "class": "rogue",
+  "name": "Instant Poison V",
+  "rank": "Rank 5, level 52",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 20% chance of poisoning the enemy which instantly inflicts 62 to 80 Nature damage. 150 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Mind-numbing Poison III",
+  "rank": "Rank 3, level 52",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 20% chance of poisoning the enemy, increasing their casting time by 60% for 14 sec. 150 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Deadly Poison IV",
+  "rank": "Rank 4, level 54",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 30% chance of poisoning the enemy for 72 Nature damage over 12 sec. Stacks up to 5 times on a single target. 160 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Wound Poison IV",
+  "rank": "Rank 4, level 56",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 30% chance of poisoning the enemy, reducing all healing effects used on them by 165 for 15 sec. Stacks up to 5 times on a single target. 160 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Deadly Poison V",
+  "rank": "Rank 5, level 60",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 30% chance of poisoning the enemy for 92 Nature damage over 12 sec. Stacks up to 5 times on a single target. 180 charges."
+ },
+ {
+  "class": "rogue",
+  "name": "Instant Poison VI",
+  "rank": "Rank 6, level 60",
+  "kind": "modified",
+  "tooltip": "Coats a weapon with poison that lasts for 30 minutes.\nEach strike has a 20% chance of poisoning the enemy which instantly inflicts 76 to 100 Nature damage. 175 charges."
+ },
+ {
+  "class": "priest",
+  "name": "Power Word: Fortitude",
+  "rank": "Rank 6, level 60",
+  "kind": "modified",
+  "tooltip": "Power infuses the target, increasing their Stamina by 70 for 1 hr."
+ },
+ {
+  "class": "priest",
+  "name": "Power Word: Shield",
+  "rank": "Rank 10, level 60",
+  "kind": "modified",
+  "tooltip": "Draws on the soul of the party member to shield them, absorbing 928 damage. Lasts 30 sec. While the shield holds, spellcasting will not be interrupted by damage. Once shielded, the target cannot be shielded again for 15 sec."
+ },
+ {
+  "class": "priest",
+  "name": "Confounding Flash",
+  "rank": "level 10",
+  "kind": "added",
+  "tooltip": "Confuses up to 5 enemies within 8 yds for 3 sec. Any damage taken will break the effect."
+ },
+ {
+  "class": "priest",
+  "name": "Starshards",
+  "rank": "Rank 7, level 58",
+  "kind": "modified",
+  "tooltip": "Rains starshards down on the enemy target's head, causing 1800 Arcane damage over 6 sec."
+ },
+ {
+  "class": "priest",
+  "name": "Inner Fire",
+  "rank": "Rank 6, level 60",
+  "kind": "unchanged",
+  "tooltip": "A burst of Holy energy fills the caster, increasing armor by 1395. Each melee or ranged damage hit against the priest will remove one charge. Lasts 10 min or until 20 charges are used."
+ },
+ {
+  "class": "priest",
+  "name": "Dispel Magic",
+  "rank": "Rank 2, level 36",
+  "kind": "unchanged",
+  "tooltip": "Dispels magic on the target, removing 2 harmful spells from a friend or 2 beneficial spells from an enemy."
+ },
+ {
+  "class": "priest",
+  "name": "Contingency Plan",
+  "rank": "Rank 5, level 60",
+  "kind": "added",
+  "tooltip": "Place a Holy ward on an ally for 30 sec. The next time this ally takes damage dropping their Health below 35%, they will gain a shield absorbing ? damage and begin healing for ? Health over 15 sec. A target may be affected by only one Contingency Plan."
+ },
+ {
+  "class": "priest",
+  "name": "Elune's Grace",
+  "rank": "level 20",
+  "kind": "modified",
+  "tooltip": "Reduces the chance you'll be hit by melee and ranged attacks by 50% for 15 sec or until you are missed 3 times."
+ },
+ {
+  "class": "priest",
+  "name": "Feedback",
+  "rank": "Rank 5, level 60",
+  "kind": "modified",
+  "tooltip": "The priest becomes surrounded with anti-magic energy. Any successful spell cast against the priest will burn 105 of the attacker's Mana, causing 1 Shadow damage for each point of Mana burned. Lasts 15 sec."
+ },
+ {
+  "class": "priest",
+  "name": "Shackle Undead",
+  "rank": "Rank 3, level 60",
+  "kind": "unchanged",
+  "tooltip": "Shackles the target undead enemy for up to 50 sec. The shackled unit is unable to move, attack or cast spells. Any damage caused will release the target. Only one target can be shackled at a time."
+ },
+ {
+  "class": "priest",
+  "name": "Mana Burn",
+  "rank": "Rank 5, level 56",
+  "kind": "unchanged",
+  "tooltip": "Drains 738 to 780 mana from a target. For each mana drained in this way, the target takes 0.5 Shadow damage."
+ },
+ {
+  "class": "priest",
+  "name": "Divine Spirit",
+  "rank": "Rank 4, level 60",
+  "kind": "baseline",
+  "tooltip": "Holy power infuses the target, increasing their Spirit by 40 for 1 hr."
+ },
+ {
+  "class": "priest",
+  "name": "Penance",
+  "rank": "Rank 4, level 60",
+  "kind": "talent",
+  "tooltip": "Launches a volley of holy light at the target, causing 131 Holy damage to an enemy, or 673 healing to an ally, instantly and every 1 sec for 2 sec."
+ },
+ {
+  "class": "priest",
+  "name": "Levitate",
+  "rank": "level 34",
+  "kind": "modified",
+  "tooltip": "Allows the caster to levitate, floating a few feet above the ground. While levitating, you will fall at a reduced speed and travel over water-like surfaces. Mounting or any damage taken will cancel the effect. Lasts 2 min."
+ },
+ {
+  "class": "priest",
+  "name": "Prayer of Fortitude",
+  "rank": "Rank 2, level 60",
+  "kind": "modified",
+  "tooltip": "Power infuses all party and raid members, increasing their Stamina by 70 for 1 hr."
+ },
+ {
+  "class": "priest",
+  "name": "Prayer of Spirit",
+  "rank": "Rank 1, level 60",
+  "kind": "modified",
+  "tooltip": "Power infuses all party and raid members, increasing their Spirit by 40 for 1 hr."
+ },
+ {
+  "class": "priest",
+  "name": "Inner Focus",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "When activated, reduces the Mana cost of your next spell by 100% and increases its critical effect chance by 25% if it is capable of a critical effect."
+ },
+ {
+  "class": "priest",
+  "name": "Power Infusion",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Infuses the target with power, increasing their spell damage and healing done by 20% for 15 sec."
+ },
+ {
+  "class": "priest",
+  "name": "Lesser Heal",
+  "rank": "Rank 3, level 10",
+  "kind": "modified",
+  "tooltip": "Heal your target for 130 to 152."
+ },
+ {
+  "class": "priest",
+  "name": "Smite",
+  "rank": "Rank 8, level 54",
+  "kind": "modified",
+  "tooltip": "Smite an enemy for 160 to 180 Holy damage."
+ },
+ {
+  "class": "priest",
+  "name": "Renew",
+  "rank": "Rank 10, level 60",
+  "kind": "modified",
+  "tooltip": "Heals the target of 830 damage over 15 sec."
+ },
+ {
+  "class": "priest",
+  "name": "Desperate Prayer",
+  "rank": "Rank 7, level 58",
+  "kind": "race",
+  "tooltip": "Instantly heals the caster for 1269 to 1497."
+ },
+ {
+  "class": "priest",
+  "name": "Divine Grace",
+  "rank": "Rank 7, level 58",
+  "kind": "added",
+  "tooltip": "Instantly heals a friendly target below 50% Health for 1269 to 1497 and removes Weakened Soul from that target. Cannot be cast on self."
+ },
+ {
+  "class": "priest",
+  "name": "Resurrection",
+  "rank": "Rank 5, level 58",
+  "kind": "modified",
+  "tooltip": "Brings a dead player back to life with 750 health and 1000 mana. Cannot be cast when in combat."
+ },
+ {
+  "class": "priest",
+  "name": "Cure Disease",
+  "rank": "level 14",
+  "kind": "unchanged",
+  "tooltip": "Removes 1 disease from the friendly target."
+ },
+ {
+  "class": "priest",
+  "name": "Heal",
+  "rank": "Rank 4, level 34",
+  "kind": "modified",
+  "tooltip": "Heal your target for 611 to 691."
+ },
+ {
+  "class": "priest",
+  "name": "Chastise",
+  "rank": "Rank 5, level 60",
+  "kind": "added",
+  "tooltip": "Chastise the target, causing 272 to 306 Holy damage and Immobilizing them for up to 2 sec. Only works against Humanoids. This spell causes very low threat"
+ },
+ {
+  "class": "priest",
+  "name": "Fear Ward",
+  "rank": "level 20",
+  "kind": "race",
+  "tooltip": "Wards the friendly target against Fear. The next Fear effect used against the target will fail, using up the ward. Lasts 3 min."
+ },
+ {
+  "class": "priest",
+  "name": "Flash Heal",
+  "rank": "Rank 7, level 56",
+  "kind": "modified",
+  "tooltip": "Heals a friendly target for 757 to 893."
+ },
+ {
+  "class": "priest",
+  "name": "Holy Fire",
+  "rank": "Rank 8, level 60",
+  "kind": "modified",
+  "tooltip": "Consumes the enemy in holy flames that cause 184 to 232 Holy damage and an additional 75 Holy damage over 10 sec."
+ },
+ {
+  "class": "priest",
+  "name": "Holy Nova",
+  "rank": "Rank 6, level 60",
+  "kind": "talent",
+  "tooltip": "Causes an explosion of holy light around the caster, causing 174 to 200 Holy damage to all enemy targets within 10 yards and healing all party members within 10 yards for 288 to 334. These effects cause no threat.\n\nEach time Holy Fire deals damage, you have a 5% chance for your next Holy Nova to cost no Mana."
+ },
+ {
+  "class": "priest",
+  "name": "Binding Heal",
+  "rank": "Rank 6, level 56",
+  "kind": "talent",
+  "tooltip": "Heals a friendly target and the caster for 757 to 893. Low threat."
+ },
+ {
+  "class": "priest",
+  "name": "Prayer of Healing",
+  "rank": "Rank 5, level 60",
+  "kind": "modified",
+  "tooltip": "A powerful prayer that heals the target and their party for 631 to 667. Party members must be within 40 yards of target."
+ },
+ {
+  "class": "priest",
+  "name": "Abolish Disease",
+  "rank": "level 32",
+  "kind": "unchanged",
+  "tooltip": "Attempts to cure 1 disease effect on the target, and 1 more disease effect every 5 seconds for 20 sec."
+ },
+ {
+  "class": "priest",
+  "name": "Greater Heal",
+  "rank": "Rank 5, level 60",
+  "kind": "modified",
+  "tooltip": "A slow casting spell that heals a single target for 1853 to 2067."
+ },
+ {
+  "class": "priest",
+  "name": "Lightwell",
+  "rank": "Rank 3, level 60",
+  "kind": "baseline",
+  "tooltip": "Creates a holy Lightwell near the priest. Members of your raid or party can click the Lightwell to restore 1600 health over 10 sec. Being attacked cancels the effect. Lightwell lasts for 3 min or 5 charges."
+ },
+ {
+  "class": "priest",
+  "name": "Prayer of Mending",
+  "rank": "Rank 3, level 60",
+  "kind": "talent",
+  "tooltip": "Places a spell on the target that heals them for 413 the next time they take damage or receive non-periodic healing. When the heal occurs, Prayer of Mending jumps to a party or raid member within 20 yards. Jumps up to 5 times and lasts 30 sec after each jump. This spell can only be placed on one target at a time per caster."
+ },
+ {
+  "class": "priest",
+  "name": "Shadow Word: Pain",
+  "rank": "Rank 8, level 58",
+  "kind": "modified",
+  "tooltip": "A word of darkness that causes 762 Shadow damage over 18 sec."
+ },
+ {
+  "class": "priest",
+  "name": "Fade",
+  "rank": "Rank 6, level 60",
+  "kind": "unchanged",
+  "tooltip": "Fade out, discouraging enemies from attacking you for 10 sec. More effective than Fade (rank 5)."
+ },
+ {
+  "class": "priest",
+  "name": "Hex of Weakness",
+  "rank": "Rank 6, level 60",
+  "kind": "modified",
+  "tooltip": "Weakens the target enemy, reducing melee attack power by 204 and reducing the effectiveness of any healing by 20%. Lasts 2 min"
+ },
+ {
+  "class": "priest",
+  "name": "Mind Blast",
+  "rank": "Rank 9, level 58",
+  "kind": "modified",
+  "tooltip": "Blasts the target for 472 to 498 Shadow damage, but causes a high amount of threat."
+ },
+ {
+  "class": "priest",
+  "name": "Touch of Weakness",
+  "rank": "Rank 6, level 60",
+  "kind": "modified",
+  "tooltip": "The next melee attack on the caster will cause 56 Shadow damage and reduce the attacker's melee attack power by the attacker by 204 for 2 min."
+ },
+ {
+  "class": "priest",
+  "name": "Psychic Scream",
+  "rank": "Rank 4, level 56",
+  "kind": "unchanged",
+  "tooltip": "The caster lets out a psychic scream, causing 5 enemies within 8 yards to flee for 8 sec. Damage caused may interrupt the effect."
+ },
+ {
+  "class": "priest",
+  "name": "Dark Sacrifice",
+  "rank": "Rank 5, level 60",
+  "kind": "added",
+  "tooltip": "Cannibalize 1600 of your own Health over 15 sec to gain 1600 Mana."
+ },
+ {
+  "class": "priest",
+  "name": "Devouring Plague",
+  "rank": "Rank 6, level 60",
+  "kind": "race",
+  "tooltip": "Afflicts the target with a disease that causes 848 Shadow damage over 24 sec. Damage caused by the Devouring Plague heals the caster."
+ },
+ {
+  "class": "priest",
+  "name": "Mind Flay",
+  "rank": "Rank 6, level 60",
+  "kind": "talent",
+  "tooltip": "Assault the target's mind with Shadow energy, causing 390 Shadow damage over 3 sec and slowing their movement speed by 50%."
+ },
+ {
+  "class": "priest",
+  "name": "Mind Soothe",
+  "rank": "Rank 3, level 52",
+  "kind": "unchanged",
+  "tooltip": "Soothes the target, reducing the range at which it will attack you by 10 yards. Only affects Humanoid targets level 70 or lower. Lasts 15 sec."
+ },
+ {
+  "class": "priest",
+  "name": "Shadowguard",
+  "rank": "Rank 6, level 60",
+  "kind": "modified",
+  "tooltip": "The caster is surrounded by shadows. When a spell, melee or ranged attack hits the caster, the attacker will be struck for 96 Shadow damage. Attackers can only be damaged once every few seconds. This damage causes no threat. 3 charges. Lasts 10 min."
+ },
+ {
+  "class": "priest",
+  "name": "Mind Vision",
+  "rank": "Rank 2, level 44",
+  "kind": "unchanged",
+  "tooltip": "Allows the caster to see through the target's eyes for 1 min. Will not work if the target is in another instance or on another continent."
+ },
+ {
+  "class": "priest",
+  "name": "Mind Control",
+  "rank": "Rank 3, level 58",
+  "kind": "unchanged",
+  "tooltip": "Controls a humanoid mind up to level 62, but increases the time between attacks by 25%. Lasts up to 1 min."
+ },
+ {
+  "class": "priest",
+  "name": "Shadow Protection",
+  "rank": "Rank 3, level 56",
+  "kind": "unchanged",
+  "tooltip": "Increases the target's resistance to Shadow spells by 60 for 10 min."
+ },
+ {
+  "class": "priest",
+  "name": "Shadow Word: Death",
+  "rank": "Rank 4, level 56",
+  "kind": "added",
+  "tooltip": "A word of dark binding that inflicts 434 to 462 Shadow damage to the target. If your target is not killed by Shadow Word: Death, you take backlash damage equal to 10% of your maximum health."
+ },
+ {
+  "class": "priest",
+  "name": "Prayer of Shadow Protection",
+  "rank": "Rank 1, level 56",
+  "kind": "modified",
+  "tooltip": "Power infuses all party and raid members, increasing their Shadow resistance by 60 for 20 min."
+ },
+ {
+  "class": "priest",
+  "name": "Vampiric Embrace",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Afflicts your target with Shadow energy that causes all party members to be healed for 20% of any Shadow spell damage you deal for 30 sec. Vampiric Embrace also grants a chance for your Spirit Tap talent to trigger when enemies afflicted by it die."
+ },
+ {
+  "class": "priest",
+  "name": "Silence",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Silences the target, preventing them from casting spells for 5 sec and interrupting their spellcasts for 3 sec."
+ },
+ {
+  "class": "priest",
+  "name": "Shadowform",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Assume Shadowform, increasing your Shadow damage by 10%, reducing the Mana cost of all Shadow spells by 50%, increasing the critical strike damage bonus of your Shadow spells by 100%, and reducing Physical damage taken by you by 15%. However, you may not cast healing spells while in this form."
+ },
+ {
+  "class": "shaman",
+  "name": "Lightning Bolt",
+  "rank": "Rank 10, level 56",
+  "kind": "modified",
+  "tooltip": "Casts a bolt of lightning at the target for 185 to 207 Nature damage."
+ },
+ {
+  "class": "shaman",
+  "name": "Earth Shock",
+  "rank": "Rank 7, level 60",
+  "kind": "modified",
+  "tooltip": "Instantly shocks the target with concussive force, causing 293 to 309 Nature damage. It also interrupts spellcasting and prevents any spell in that school from being cast for 2 sec. Causes a high amount of threat."
+ },
+ {
+  "class": "shaman",
+  "name": "Earthbind Totem",
+  "rank": "level 6",
+  "kind": "unchanged",
+  "tooltip": "Summons an Earthbind Totem with 5 health at the feet of the caster for 45 sec that slows the movement speed of enemies within 10 yards."
+ },
+ {
+  "class": "shaman",
+  "name": "Stoneclaw Totem",
+  "rank": "Rank 6, level 58",
+  "kind": "unchanged",
+  "tooltip": "Summons a Stoneclaw Totem with 480 health at the feet of the caster for 15 sec that taunts creatures within 8 yards to attack it."
+ },
+ {
+  "class": "shaman",
+  "name": "Flame Shock",
+  "rank": "Rank 6, level 60",
+  "kind": "modified",
+  "tooltip": "Instantly sears the target with fire, causing 166 Fire damage immediately and 176 Fire damage over 12 sec."
+ },
+ {
+  "class": "shaman",
+  "name": "Searing Totem",
+  "rank": "Rank 6, level 60",
+  "kind": "unchanged",
+  "tooltip": "Summons a Searing Totem with 5 health at your feet for 55 sec that repeatedly attacks an enemy within 20 yards for 40 to 54 Fire damage."
+ },
+ {
+  "class": "shaman",
+  "name": "Fire Nova",
+  "rank": "Rank 5, level 52",
+  "kind": "renamed",
+  "tooltip": "Instantly inflicts 396 to 442 fire damage to enemies within 10 yd of your active Fire totem."
+ },
+ {
+  "class": "shaman",
+  "name": "Purge",
+  "rank": "Rank 2, level 32",
+  "kind": "unchanged",
+  "tooltip": "Purges the enemy target, removing 2 beneficial magic effects."
+ },
+ {
+  "class": "shaman",
+  "name": "Call of the Elements",
+  "rank": "level 20",
+  "kind": "added",
+  "tooltip": "Simultaneously places up to 4 totems specified in the Totem Bar."
+ },
+ {
+  "class": "shaman",
+  "name": "Frost Shock",
+  "rank": "Rank 4, level 58",
+  "kind": "modified",
+  "tooltip": "Instantly shocks the target with frost, causing 275 to 291 Frost damage and slowing movement speed by 50%. Lasts 8 sec."
+ },
+ {
+  "class": "shaman",
+  "name": "Totemic Recall",
+  "rank": "level 20",
+  "kind": "added",
+  "tooltip": "Returns your totems to the earth, giving you 25% of the mana required to cast each totem destroyed by Totemic Recall."
+ },
+ {
+  "class": "shaman",
+  "name": "Magma Totem",
+  "rank": "Rank 4, level 56",
+  "kind": "modified",
+  "tooltip": "Summons a Magma Totem with 5 health at the feet of the caster for 20 sec that causes 73 Fire damage to creatures within 8 yards every 2 seconds."
+ },
+ {
+  "class": "shaman",
+  "name": "Call of the Ancestors",
+  "rank": "level 30",
+  "kind": "added",
+  "tooltip": "Simultaneously places up to 4 totems specified in the Totem Bar. Can call different totems than Call of the Elements."
+ },
+ {
+  "class": "shaman",
+  "name": "Chain Lightning",
+  "rank": "Rank 4, level 56",
+  "kind": "modified",
+  "tooltip": "Hurls a lightning bolt at the enemy, dealing 116 to 130 Nature damage and then jumping to additional nearby enemies. Each jump reduces the damage by 30%. Affects 3 total targets."
+ },
+ {
+  "class": "shaman",
+  "name": "Call of the Spirits",
+  "rank": "level 40",
+  "kind": "added",
+  "tooltip": "Simultaneously places up to 4 totems specified in the Totem Bar. Can call different totems than Call of the Elements or Call of the Ancestors."
+ },
+ {
+  "class": "shaman",
+  "name": "Lava Burst",
+  "rank": "Rank 3, level 60",
+  "kind": "talent",
+  "tooltip": "You hurl molten lava at the target, dealing 192 to 248 Fire damage. If your Flame Shock is on the target, Lava Burst deals 20% increased damage."
+ },
+ {
+  "class": "shaman",
+  "name": "Rockbiter Weapon",
+  "rank": "Rank 7, level 54",
+  "kind": "modified",
+  "tooltip": "Imbue the Shaman's weapon, increasing melee attack power by 554 and allowing melee attacks to cause additional threat when using that weapon. Lasts for 60 minutes.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "shaman",
+  "name": "Stoneskin Totem",
+  "rank": "Rank 6, level 54",
+  "kind": "modified",
+  "tooltip": "Summons a Stoneskin Totem with 5 health at the feet of the caster. The totem protects party members within 30 yards, reducing Physical damage taken by 30. Lasts 5 min."
+ },
+ {
+  "class": "shaman",
+  "name": "Lightning Shield",
+  "rank": "Rank 7, level 56",
+  "kind": "modified",
+  "tooltip": "The caster is surrounded by 3 balls of lightning. When a spell, melee or ranged attack hits the caster, the attacker will be struck for 178 Nature damage. This expends one lightning ball. Only one ball will fire every few seconds. Lasts 10 min."
+ },
+ {
+  "class": "shaman",
+  "name": "Flametongue Weapon",
+  "rank": "Rank 6, level 56",
+  "kind": "modified",
+  "tooltip": "Imbue the Shaman's weapon with fire. Each hit causes 31 to 100 additional Fire damage, based on the speed of the weapon. Slower weapons cause more fire damage per swing. When applied to main hand, disables any benefit you personally receive from Flametongue Totem. Lasts for 60 minutes.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "shaman",
+  "name": "Strength of Earth Totem",
+  "rank": "Rank 5, level 60",
+  "kind": "modified",
+  "tooltip": "Summons a Strength of Earth Totem with 5 health at the feet of the caster. The totem increases the strength of party members within 30 yards by 53. Lasts 5 min."
+ },
+ {
+  "class": "shaman",
+  "name": "Frostbrand Weapon",
+  "rank": "Rank 5, level 58",
+  "kind": "modified",
+  "tooltip": "Imbue the Shaman's weapon with frost. Each hit has a chance of causing 158 additional Frost damage and slowing the target's movement speed by 25% for 8 sec. Lasts for 60 minutes.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "shaman",
+  "name": "Ghost Wolf",
+  "rank": "level 20",
+  "kind": "unchanged",
+  "tooltip": "Turns the Shaman into a Ghost Wolf, increasing speed by 40%. Only useable outdoors."
+ },
+ {
+  "class": "shaman",
+  "name": "Totemic Projection",
+  "rank": "level 22",
+  "kind": "added",
+  "tooltip": "Relocates your active totems to the specified location."
+ },
+ {
+  "class": "shaman",
+  "name": "Water Breathing",
+  "rank": "level 22",
+  "kind": "unchanged",
+  "tooltip": "Allows the target to breathe underwater for 10 min."
+ },
+ {
+  "class": "shaman",
+  "name": "Frost Resistance Totem",
+  "rank": "Rank 3, level 54",
+  "kind": "modified",
+  "tooltip": "Summons a Frost Resistance Totem with 5 health at the feet of the caster for 5 min. The totem increases party and raid members' frost resistance by 60, if within 30 yards."
+ },
+ {
+  "class": "shaman",
+  "name": "Far Sight",
+  "rank": "level 26",
+  "kind": "unchanged",
+  "tooltip": "Changes the caster's viewpoint to the targeted location. Lasts 1 min. Only useable outdoors."
+ },
+ {
+  "class": "shaman",
+  "name": "Fire Resistance Totem",
+  "rank": "Rank 3, level 58",
+  "kind": "modified",
+  "tooltip": "Summons a Fire Resistance Totem with 5 health at the feet of the caster for 5 min that increases the fire resistance of party and raid members within 30 yards by 60."
+ },
+ {
+  "class": "shaman",
+  "name": "Flametongue Totem",
+  "rank": "Rank 4, level 58",
+  "kind": "modified",
+  "tooltip": "Summons a Flametongue Totem with 5 health at the feet of the caster. The totem enhances the melee attacks of all party members within 30 yards. Each main hand hit causes 17 to 55 additional Fire damage, based on the speed of the weapon. Slower weapons cause more fire damage per swing. Lasts 5 min."
+ },
+ {
+  "class": "shaman",
+  "name": "Water Walking",
+  "rank": "level 28",
+  "kind": "unchanged",
+  "tooltip": "Allows the friendly target to walk across water for 10 min. Any damage will cancel the effect."
+ },
+ {
+  "class": "shaman",
+  "name": "Astral Recall",
+  "rank": "level 30",
+  "kind": "unchanged",
+  "tooltip": "Yanks the caster through the twisting nether back to your home location. Speak to an Innkeeper in a different place to change your home location."
+ },
+ {
+  "class": "shaman",
+  "name": "Grounding Totem",
+  "rank": "level 30",
+  "kind": "unchanged",
+  "tooltip": "Summons a Grounding Totem with 5 health at the feet of the caster that will redirect one harmful spell cast on a nearby party member to itself every 10 seconds. Will not redirect area of effect spells. Lasts 45 sec."
+ },
+ {
+  "class": "shaman",
+  "name": "Nature Resistance Totem",
+  "rank": "Rank 3, level 60",
+  "kind": "modified",
+  "tooltip": "Summons a Nature Resistance Totem with 5 health at the feet of the caster for 5 min that increases the nature resistance of party and raid members within 30 yards by 60."
+ },
+ {
+  "class": "shaman",
+  "name": "Windfury Weapon",
+  "rank": "Rank 4, level 60",
+  "kind": "modified",
+  "tooltip": "Imbue the Shaman's weapon with wind. Each hit has a 20% chance of granting you 2 extra attacks with 333 extra melee attack power. When applied to main hand, disables any benefit you personally receive from Windfury Totem. Lasts for 60 minutes.\n\nRequires Melee Weapon"
+ },
+ {
+  "class": "shaman",
+  "name": "Windfury Totem",
+  "rank": "Rank 3, level 52",
+  "kind": "modified",
+  "tooltip": "Summons a Windfury Totem with 5 health at the feet of the caster. The totem enhances the melee attacks of all party members within ? yards. Each main hand hit has a 20% chance of granting the attacker 1 extra attack with 246 extra melee attack power. Lasts 5 min."
+ },
+ {
+  "class": "shaman",
+  "name": "Sentry Totem",
+  "rank": "level 34",
+  "kind": "unchanged",
+  "tooltip": "Summons an immobile Sentry Totem with 100 health at your feet for 5 min that allows vision of nearby area and warns of enemies that attack it. Right-Click on buff to switch back and forth between totem sight and shaman sight."
+ },
+ {
+  "class": "shaman",
+  "name": "Windwall Totem",
+  "rank": "Rank 3, level 56",
+  "kind": "modified",
+  "tooltip": "Summons a Windwall Totem with 5 health at the feet of the caster. The totem protects party members within 30 yards, reducing ranged damage taken by 64. Lasts 5 min."
+ },
+ {
+  "class": "shaman",
+  "name": "Grace of Air Totem",
+  "rank": "Rank 3, level 60",
+  "kind": "modified",
+  "tooltip": "Summons a Grace of Air Totem with 5 health at the feet of the caster. The totem increases the agility of party members within 30 yards by 89. Lasts 5 min."
+ },
+ {
+  "class": "shaman",
+  "name": "Stormstrike",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Instantly strike for normal weapon damage and increase the damage you deal to the target with your next Lightning Bolt, Chain Lightning, or Earth Shock spell by 20% for 12 sec."
+ },
+ {
+  "class": "shaman",
+  "name": "Rage of the Farseer",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Increases your melee attack speed and spell casting speed by 30% for 25 sec."
+ },
+ {
+  "class": "shaman",
+  "name": "Healing Wave",
+  "rank": "Rank 10, level 60",
+  "kind": "modified",
+  "tooltip": "Heals a friendly target for 1508 to 1722."
+ },
+ {
+  "class": "shaman",
+  "name": "Ancestral Spirit",
+  "rank": "Rank 5, level 60",
+  "kind": "unchanged",
+  "tooltip": "Returns the spirit to the body, restoring a dead target to life with 600 health and 800 mana. Cannot be cast when in combat."
+ },
+ {
+  "class": "shaman",
+  "name": "Cure Poison",
+  "rank": "level 16",
+  "kind": "unchanged",
+  "tooltip": "Cures 1 poison effects on the target."
+ },
+ {
+  "class": "shaman",
+  "name": "Tremor Totem",
+  "rank": "level 18",
+  "kind": "modified",
+  "tooltip": "Summons a Tremor Totem with 5 health at the feet of the caster that shakes the ground around it, removing Fear, Charm and Sleep effects from party members within 30 yards. Lasts 5 min."
+ },
+ {
+  "class": "shaman",
+  "name": "Healing Stream Totem",
+  "rank": "Rank 5, level 60",
+  "kind": "modified",
+  "tooltip": "Summons a Healing Stream Totem with 5 health at the feet of the caster for 5 min that heals group members within 30 yards for 11 every 2 seconds."
+ },
+ {
+  "class": "shaman",
+  "name": "Lesser Healing Wave",
+  "rank": "Rank 6, level 60",
+  "kind": "modified",
+  "tooltip": "Heals a friendly target for 775 to 865."
+ },
+ {
+  "class": "shaman",
+  "name": "Cure Disease",
+  "rank": "level 22",
+  "kind": "unchanged",
+  "tooltip": "Cures 1 disease on the target."
+ },
+ {
+  "class": "shaman",
+  "name": "Poison Cleansing Totem",
+  "rank": "level 22",
+  "kind": "modified",
+  "tooltip": "Summons a Poison Cleansing Totem with 5 health at the feet of the caster that attempts to remove 1 poison effect from party members within 30 yards every 5 seconds. Lasts 5 min."
+ },
+ {
+  "class": "shaman",
+  "name": "Mana Spring Totem",
+  "rank": "Rank 4, level 56",
+  "kind": "modified",
+  "tooltip": "Summons a Mana Spring Totem with 5 health at the feet of the caster for 5 min that restores 10 mana every 2 seconds to group members within 30 yards."
+ },
+ {
+  "class": "shaman",
+  "name": "Reincarnation",
+  "rank": "level 30",
+  "kind": "unchanged",
+  "tooltip": "Allows you to resurrect yourself upon death with 20% health and mana."
+ },
+ {
+  "class": "shaman",
+  "name": "Disease Cleansing Totem",
+  "rank": "level 38",
+  "kind": "modified",
+  "tooltip": "Summons a Disease Cleansing Totem with 5 health at the feet of the caster that attempts to remove 1 disease effect from party members within 30 yards every 5 seconds. Lasts 2 min."
+ },
+ {
+  "class": "shaman",
+  "name": "Chain Heal",
+  "rank": "Rank 3, level 54",
+  "kind": "modified",
+  "tooltip": "Heals the friendly target for 458 to 522, then jumps to heal additional nearby targets. If cast on a party member, the heal will only jump to other party members. Each jump is 50% as effective as the previous target. Heals 3 total targets."
+ },
+ {
+  "class": "shaman",
+  "name": "Mana Tide Totem",
+  "rank": "Rank 3, level 58",
+  "kind": "talent",
+  "tooltip": "Summons a Mana Tide Totem with 5 health at the feet of the caster for 12 sec that restores 290 mana every 3 seconds to group members within 30 yards."
+ },
+ {
+  "class": "shaman",
+  "name": "Riptide",
+  "rank": "Rank 3, level 60",
+  "kind": "talent",
+  "tooltip": "Heals a friendly target for 799 to 883, an additional 805 over 15 sec, and increases the effectiveness of your Chain Heal casts directly on that target by 25%."
+ },
+ {
+  "class": "shaman",
+  "name": "Water Shield",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "The caster is surrounded by 3 globes of water. When a spell, melee, or ranged attack hits the caster or when one of the caster's healing spells gets a critical result, 2% of maximum mana is restored to the caster, expending one water globe. Only one globe will activate every few seconds. Lasts 10 min.\n\nOnly one Elemental Shield can be active on the Shaman at any one time."
+ },
+ {
+  "class": "shaman",
+  "name": "Nature's Swiftness",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "When activated, your next Nature spell with a casting time less than 10 sec. becomes an instant cast spell."
+ },
+ {
+  "class": "mage",
+  "name": "Arcane Intellect",
+  "rank": "Rank 5, level 56",
+  "kind": "modified",
+  "tooltip": "Increases the target's Intellect by 31 for 1 hr."
+ },
+ {
+  "class": "mage",
+  "name": "Conjure Water",
+  "rank": "Rank 7, level 60",
+  "kind": "unchanged",
+  "tooltip": "Conjures 10 bottles of crystal water, providing the mage and his allies with something to drink.\n\nConjured items disappear if logged out for more than 15 minutes."
+ },
+ {
+  "class": "mage",
+  "name": "Conjure Food",
+  "rank": "Rank 7, level 60",
+  "kind": "unchanged",
+  "tooltip": "Conjures 10 cinnamon rolls, providing the mage and his allies with something to eat.\n\nConjured items disappear if logged out for more than 15 minutes."
+ },
+ {
+  "class": "mage",
+  "name": "Arcane Missiles",
+  "rank": "Rank 8, level 56",
+  "kind": "modified",
+  "tooltip": "Launches Arcane Missiles at the enemy, causing 209 Arcane damage each second for 5 sec."
+ },
+ {
+  "class": "mage",
+  "name": "Polymorph",
+  "rank": "Rank 4, level 60",
+  "kind": "unchanged",
+  "tooltip": "Transforms the enemy into a sheep, forcing it to wander around for up to 50 sec. While wandering, the sheep cannot attack or cast spells but will regenerate very quickly. Any damage will transform the target back into its normal form. Only one target can be polymorphed at a time. Only works on Beasts, Humanoids and Critters."
+ },
+ {
+  "class": "mage",
+  "name": "Dampen Magic",
+  "rank": "Rank 5, level 60",
+  "kind": "modified",
+  "tooltip": "Dampens magic used against the targeted party member, decreasing damage taken from spells by up to 135 and healing spells by up to 270. Lasts 10 min."
+ },
+ {
+  "class": "mage",
+  "name": "Slow Fall",
+  "rank": "level 12",
+  "kind": "unchanged",
+  "tooltip": "Slows falling speed for 30 sec."
+ },
+ {
+  "class": "mage",
+  "name": "Arcane Explosion",
+  "rank": "Rank 6, level 54",
+  "kind": "modified",
+  "tooltip": "Causes an explosion of arcane magic around the caster, causing 232 to 252 Arcane damage to all targets within 10 yards."
+ },
+ {
+  "class": "mage",
+  "name": "Amplify Magic",
+  "rank": "Rank 4, level 54",
+  "kind": "modified",
+  "tooltip": "Amplifies magic used against the targeted party member, increasing damage taken from spells by up to 113 and healing spells by up to 225. Lasts 10 min."
+ },
+ {
+  "class": "mage",
+  "name": "Remove Lesser Curse",
+  "rank": "level 18",
+  "kind": "modified",
+  "tooltip": "Removes 1 Curse or Bane from a friendly target."
+ },
+ {
+  "class": "mage",
+  "name": "Arcane Blast",
+  "rank": "Rank 5, level 60",
+  "kind": "talent",
+  "tooltip": "Blasts the target with energy, dealing 364 to 424 Arcane damage. Each time you cast Arcane Blast, the damage of all your other spells is increased by 10% and the mana cost of Arcane Blast is increased by 175%. Effect stacks up to 4 times and lasts 8 sec or until any other damage spell is cast."
+ },
+ {
+  "class": "mage",
+  "name": "Blink",
+  "rank": "level 20",
+  "kind": "modified",
+  "tooltip": "Teleports the caster 20 yards forward, unless something is in the way. Also frees the caster from Stuns and Immobilizes."
+ },
+ {
+  "class": "mage",
+  "name": "Evocation",
+  "rank": "level 20",
+  "kind": "unchanged",
+  "tooltip": "While channeling this spell, your mana regeneration is active and increased by 1500%. Lasts 8 sec."
+ },
+ {
+  "class": "mage",
+  "name": "Mana Shield",
+  "rank": "Rank 6, level 60",
+  "kind": "unchanged",
+  "tooltip": "Absorbs 570 physical damage, draining mana instead. Drains 2 mana per damage absorbed. Lasts 1 min."
+ },
+ {
+  "class": "mage",
+  "name": "Teleport: Ironforge",
+  "rank": "level 20",
+  "kind": "unchanged",
+  "tooltip": "Teleports the caster to Ironforge."
+ },
+ {
+  "class": "mage",
+  "name": "Teleport: Orgrimmar",
+  "rank": "level 20",
+  "kind": "unchanged",
+  "tooltip": "Teleports the caster to Orgrimmar."
+ },
+ {
+  "class": "mage",
+  "name": "Teleport: Stormwind",
+  "rank": "level 20",
+  "kind": "unchanged",
+  "tooltip": "Teleports the caster to Stormwind."
+ },
+ {
+  "class": "mage",
+  "name": "Teleport: Undercity",
+  "rank": "level 20",
+  "kind": "unchanged",
+  "tooltip": "Teleports the caster to Undercity."
+ },
+ {
+  "class": "mage",
+  "name": "Counterspell",
+  "rank": "level 24",
+  "kind": "unchanged",
+  "tooltip": "Counters the enemy's spellcast, preventing any spell from that school of magic from being cast for 10 sec. Generates a high amount of threat."
+ },
+ {
+  "class": "mage",
+  "name": "Conjure Mana Agate",
+  "rank": "level 28",
+  "kind": "unchanged",
+  "tooltip": "Conjures a mana agate that can be used to instantly restore 375 to 425 mana.\n\nConjured items disappear if logged out for more than 15 minutes."
+ },
+ {
+  "class": "mage",
+  "name": "Teleport: Darnassus",
+  "rank": "level 30",
+  "kind": "unchanged",
+  "tooltip": "Teleports the caster to Darnassus."
+ },
+ {
+  "class": "mage",
+  "name": "Teleport: Thunder Bluff",
+  "rank": "level 30",
+  "kind": "unchanged",
+  "tooltip": "Teleports the caster to Thunder Bluff."
+ },
+ {
+  "class": "mage",
+  "name": "Mage Armor",
+  "rank": "Rank 3, level 58",
+  "kind": "modified",
+  "tooltip": "Increases your resistance to all magic by 15 and allows 50% of your mana regeneration to continue while casting. Only one type of Armor spell can be active on the Mage at any time. Lasts 30 min."
+ },
+ {
+  "class": "mage",
+  "name": "Conjure Mana Jade",
+  "rank": "level 38",
+  "kind": "unchanged",
+  "tooltip": "Conjures a mana jade that can be used to instantly restore 550 to 650 mana.\n\nConjured items disappear if logged out for more than 15 minutes."
+ },
+ {
+  "class": "mage",
+  "name": "Portal: Ironforge",
+  "rank": "level 40",
+  "kind": "unchanged",
+  "tooltip": "Creates a portal, teleporting group members that use it to Ironforge."
+ },
+ {
+  "class": "mage",
+  "name": "Portal: Orgrimmar",
+  "rank": "level 40",
+  "kind": "unchanged",
+  "tooltip": "Creates a portal, teleporting group members that use it to Orgrimmar."
+ },
+ {
+  "class": "mage",
+  "name": "Portal: Stormwind",
+  "rank": "level 40",
+  "kind": "unchanged",
+  "tooltip": "Creates a portal, teleporting group members that use it to Stormwind."
+ },
+ {
+  "class": "mage",
+  "name": "Portal: Undercity",
+  "rank": "level 40",
+  "kind": "unchanged",
+  "tooltip": "Creates a portal, teleporting group members that use it to Undercity."
+ },
+ {
+  "class": "mage",
+  "name": "Conjure Mana Citrine",
+  "rank": "level 48",
+  "kind": "unchanged",
+  "tooltip": "Conjures a mana citrine that can be used to instantly restore 775 to 925 mana.\n\nConjured items disappear if logged out for more than 15 minutes."
+ },
+ {
+  "class": "mage",
+  "name": "Portal: Darnassus",
+  "rank": "level 50",
+  "kind": "unchanged",
+  "tooltip": "Creates a portal, teleporting group members that use it to Darnassus."
+ },
+ {
+  "class": "mage",
+  "name": "Portal: Thunder Bluff",
+  "rank": "level 50",
+  "kind": "unchanged",
+  "tooltip": "Creates a portal, teleporting group members that use it to Thunder Bluff."
+ },
+ {
+  "class": "mage",
+  "name": "Teleport: Dalaran",
+  "rank": "level 50",
+  "kind": "added",
+  "tooltip": "Teleports the caster to Dalaran."
+ },
+ {
+  "class": "mage",
+  "name": "Arcane Brilliance",
+  "rank": "Rank 1, level 56",
+  "kind": "modified",
+  "tooltip": "Infuses the target's party and raid with brilliance, increasing their Intellect by 31 for 1 hr."
+ },
+ {
+  "class": "mage",
+  "name": "Conjure Mana Ruby",
+  "rank": "level 58",
+  "kind": "unchanged",
+  "tooltip": "Conjures a mana ruby that can be used to instantly restore 1000 to 1200 mana.\n\nConjured items disappear if logged out for more than 15 minutes."
+ },
+ {
+  "class": "mage",
+  "name": "Polymorph: Cow",
+  "rank": "level 60",
+  "kind": "unchanged",
+  "tooltip": "Transforms the enemy into a cow, forcing it to wander around for up to 50 sec. While wandering, the cow cannot attack or cast spells but will regenerate very quickly. Any damage will transform the target back into its normal form. Only one target can be polymorphed at a time. Only works on Beasts, Humanoids and Critters."
+ },
+ {
+  "class": "mage",
+  "name": "Presence of Mind",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "When activated, your next Mage spell with a casting time less than 10 sec becomes an instant cast spell."
+ },
+ {
+  "class": "mage",
+  "name": "Arcane Power",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "For the next 15 sec, your spells deal 30% more damage while costing 30% more mana to cast."
+ },
+ {
+  "class": "mage",
+  "name": "Fireball",
+  "rank": "Rank 12, level 60",
+  "kind": "modified",
+  "tooltip": "Hurls a fiery ball that causes 425 to 541 Fire damage and an additional 60 Fire damage over 8 sec."
+ },
+ {
+  "class": "mage",
+  "name": "Fire Blast",
+  "rank": "Rank 7, level 54",
+  "kind": "modified",
+  "tooltip": "Blasts the enemy for 402 to 474 Fire damage."
+ },
+ {
+  "class": "mage",
+  "name": "Flamestrike",
+  "rank": "Rank 6, level 56",
+  "kind": "modified",
+  "tooltip": "Calls down a pillar of fire, burning all enemies within the area for 375 to 459 Fire damage and an additional 332 Fire damage over 8 sec. Only one Flamestrike can be active per Mage at a time."
+ },
+ {
+  "class": "mage",
+  "name": "Fire Ward",
+  "rank": "Rank 5, level 60",
+  "kind": "modified",
+  "tooltip": "Absorbs 913 Fire damage. Lasts 30 sec."
+ },
+ {
+  "class": "mage",
+  "name": "Pyroblast",
+  "rank": "Rank 8, level 60",
+  "kind": "talent",
+  "tooltip": "Hurls an immense fiery boulder that causes 520 to 646 Fire damage and an additional 212 Fire damage over 12 sec."
+ },
+ {
+  "class": "mage",
+  "name": "Scorch",
+  "rank": "Rank 7, level 58",
+  "kind": "modified",
+  "tooltip": "Scorch the enemy for 163 to 193 Fire damage."
+ },
+ {
+  "class": "mage",
+  "name": "Blast Wave",
+  "rank": "Rank 5, level 60",
+  "kind": "talent",
+  "tooltip": "A wave of flame radiates outward from the caster, damaging all enemies caught within the blast for 453 to 533 Fire damage, and Dazing them for 50% reduced movement speed for 6 sec."
+ },
+ {
+  "class": "mage",
+  "name": "Frostfire Bolt",
+  "rank": "Rank 3, level 60",
+  "kind": "added",
+  "tooltip": "Launches a bolt of frostfire at the enemy, causing 270 to 314 Frostfire damage, slowing movement speed by 40% and causing an additional 57 Frostfire damage over 9 sec. This spell will be checked against the lower of the target's Frost and Fire resists and counts as both Frost and Fire damage."
+ },
+ {
+  "class": "mage",
+  "name": "Felfire",
+  "rank": "level 60",
+  "kind": "unchanged",
+  "tooltip": "Blasts the enemy for 500 Fire damage."
+ },
+ {
+  "class": "mage",
+  "name": "Combustion",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "When activated, this spell causes each of your Fire damage spell hits to increase your critical strike chance with Fire damage spells by 10%. This effect lasts until you have caused 4 non-periodic critical strikes with Fire spells."
+ },
+ {
+  "class": "mage",
+  "name": "Frost Armor",
+  "rank": "Rank 3, level 20",
+  "kind": "unchanged",
+  "tooltip": "Increases Armor by 200. If an enemy strikes the caster, they may have their movement slowed by 30% and the time between their attacks increased by 25% for 5 sec. Only one type of Armor spell can be active on the Mage at any time. Lasts 30 min."
+ },
+ {
+  "class": "mage",
+  "name": "Frostbolt",
+  "rank": "Rank 11, level 60",
+  "kind": "modified",
+  "tooltip": "Launches a bolt of frost at the enemy, causing 457 to 493 Frost damage and slowing movement speed by 40% for 9 sec."
+ },
+ {
+  "class": "mage",
+  "name": "Frost Nova",
+  "rank": "Rank 4, level 54",
+  "kind": "modified",
+  "tooltip": "Blasts enemies near the caster for 69 to 77 Frost damage and freezes them in place for up to 8 sec. Damage caused may interrupt the effect."
+ },
+ {
+  "class": "mage",
+  "name": "Blizzard",
+  "rank": "Rank 6, level 60",
+  "kind": "modified",
+  "tooltip": "Ice shards pelt the target area doing 1168 Frost damage over 8 sec."
+ },
+ {
+  "class": "mage",
+  "name": "Ice Lance",
+  "rank": "Rank 6, level 56",
+  "kind": "talent",
+  "tooltip": "Deals 133 to 157 Frost damage to an enemy target. Deals 300% increased damage to Frozen targets."
+ },
+ {
+  "class": "mage",
+  "name": "Frost Ward",
+  "rank": "Rank 5, level 60",
+  "kind": "modified",
+  "tooltip": "Absorbs 913 Frost damage. Lasts 30 sec."
+ },
+ {
+  "class": "mage",
+  "name": "Cone of Cold",
+  "rank": "Rank 5, level 58",
+  "kind": "modified",
+  "tooltip": "Targets in a cone in front of the caster take 325 to 355 Frost damage and are slowed by 40% for 6 sec."
+ },
+ {
+  "class": "mage",
+  "name": "Ice Armor",
+  "rank": "Rank 4, level 60",
+  "kind": "unchanged",
+  "tooltip": "Increases Armor by 560 and frost resistance by 15. If an enemy strikes the caster, they may have their movement slowed by 30% and the time between their attacks increased by 25% for 5 sec. Only one type of Armor spell can be active on the Mage at any time. Lasts 30 min."
+ },
+ {
+  "class": "mage",
+  "name": "Ice Barrier",
+  "rank": "Rank 4, level 58",
+  "kind": "talent",
+  "tooltip": "Instantly shields you, absorbing 811 damage. Lasts 1 min. While the shield holds, your spellcasts will not be interrupted or delayed from taking damage."
+ },
+ {
+  "class": "mage",
+  "name": "Ice Block",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "You become encased in a block of ice, protecting you from all physical attacks and spells for 10 sec, but during that time you cannot attack, move, or cast spells."
+ },
+ {
+  "class": "mage",
+  "name": "Cold Snap",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Finishes the remaining cooldown on all your other Frost spells."
+ },
+ {
+  "class": "mage",
+  "name": "Comprehend Scroll",
+  "rank": "level 6",
+  "kind": "added",
+  "tooltip": "Decipher an untranslated scroll."
+ },
+ {
+  "class": "mage",
+  "name": "Study",
+  "rank": "level 6",
+  "kind": "added",
+  "tooltip": "Perform spell research, resulting in a bundle of scrolls. Requires a suitable library."
+ },
+ {
+  "class": "warlock",
+  "name": "Corruption",
+  "rank": "Rank 7, level 60",
+  "kind": "modified",
+  "tooltip": "Corrupts the target, causing 438 Shadow damage over 18 sec."
+ },
+ {
+  "class": "warlock",
+  "name": "Curse of Weakness",
+  "rank": "Rank 6, level 52",
+  "kind": "modified",
+  "tooltip": "Physical damage caused by the target is reduced by 37 for 2 min. Only one Curse per Warlock can be active on any one target."
+ },
+ {
+  "class": "warlock",
+  "name": "Life Tap",
+  "rank": "Rank 6, level 56",
+  "kind": "modified",
+  "tooltip": "Converts 420 health into 840 Mana for you. Spirit increases the amount of Mana converted. Mana gained is increased by your Spirit."
+ },
+ {
+  "class": "warlock",
+  "name": "Bane of Agony",
+  "rank": "Rank 6, level 58",
+  "kind": "renamed",
+  "tooltip": "Afflicts the target with agony, causing 552 Shadow damage over 24 sec. This damage is dealt slowly at first, and builds up as the Bane reaches its full duration. Only one Bane per Warlock can be active on any one target."
+ },
+ {
+  "class": "warlock",
+  "name": "Fear",
+  "rank": "Rank 3, level 56",
+  "kind": "unchanged",
+  "tooltip": "Strikes fear in the enemy, causing it to run in fear for up to 20 sec. Damage caused may interrupt the effect. Only 1 target can be feared at a time."
+ },
+ {
+  "class": "warlock",
+  "name": "Drain Soul",
+  "rank": "Rank 4, level 52",
+  "kind": "modified",
+  "tooltip": "Drains the soul of the target, causing 420 Shadow damage over 15 sec. Non-trivial targets damaged by Drain Soul have a chance to grant you a Soul Shard. Non-trivial targets killed by Drain Soul will always grant you a Soul shard. Soul Shards are required for other spells."
+ },
+ {
+  "class": "warlock",
+  "name": "Curse of Recklessness",
+  "rank": "Rank 4, level 56",
+  "kind": "modified",
+  "tooltip": "Curses the target with recklessness, reducing the target's armor by 505 for 2 min. Cursed enemies will not flee and will ignore Fear and Horror effects. Only one Curse per Warlock can be active on any one target."
+ },
+ {
+  "class": "warlock",
+  "name": "Drain Life",
+  "rank": "Rank 6, level 54",
+  "kind": "modified",
+  "tooltip": "Transfers 51 health every 1 second from the target to the caster. Lasts 5 sec."
+ },
+ {
+  "class": "warlock",
+  "name": "Curse of the Elements",
+  "rank": "Rank 3, level 40",
+  "kind": "earlier",
+  "tooltip": "Curses the target for 5 min, reducing Magic resistances by 60 and increases Magic damage taken by 8%. Only one Curse per Warlock can be active on any one target."
+ },
+ {
+  "class": "warlock",
+  "name": "Drain Mana",
+  "rank": "Rank 1, level 24",
+  "kind": "modified",
+  "tooltip": "Transfers 42 Mana every 1 sec from the target to the caster. Lasts 5 sec."
+ },
+ {
+  "class": "warlock",
+  "name": "Curse of Tongues",
+  "rank": "Rank 2, level 50",
+  "kind": "modified",
+  "tooltip": "Forces the target to speak in Demonic, increasing the casting time of all spells by 60%. Only one Curse per Warlock can be active on any one target. Lasts 30 sec."
+ },
+ {
+  "class": "warlock",
+  "name": "Siphon Life",
+  "rank": "Rank 4, level 58",
+  "kind": "talent",
+  "tooltip": "Transfers 41 health from the target to the caster every 3 sec. Lasts 30 sec."
+ },
+ {
+  "class": "warlock",
+  "name": "Howl of Terror",
+  "rank": "Rank 2, level 54",
+  "kind": "unchanged",
+  "tooltip": "Howl, causing 5 enemies within 10 yds to flee in terror for 15 sec. Damage caused may interrupt the effect."
+ },
+ {
+  "class": "warlock",
+  "name": "Death Coil",
+  "rank": "Rank 3, level 58",
+  "kind": "modified",
+  "tooltip": "Causes the enemy target to run in horror for 3 sec and causes 454 Shadow damage. The caster gains 100% of the damage caused in health."
+ },
+ {
+  "class": "warlock",
+  "name": "Bane of Doom",
+  "rank": "level 60",
+  "kind": "renamed",
+  "tooltip": "Afflicts the target with impending doom, causing 1742 Shadow damage after 1 min. If the target dies from this damage, there is a chance that a Doomguard will be summoned. Cannot be cast on players. Only one Bane per Warlock can be active on any one target."
+ },
+ {
+  "class": "warlock",
+  "name": "Amplify Curse",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Increases the effect of your next Curse of Weakness or Bane of Agony by 50%, or your next Curse of Exhaustion by 20%. Lasts 30 sec."
+ },
+ {
+  "class": "warlock",
+  "name": "Curse of Exhaustion",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Reduces the target's movement speed by 30% for 12 sec. Only one Curse per Warlock can be active on any one target."
+ },
+ {
+  "class": "warlock",
+  "name": "Wrack",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Tears the target apart from within, dealing 36 Shadow damage every 1 sec and increasing the damage they take from your other Shadow damage over time effects by 10%. Lasts 6 sec."
+ },
+ {
+  "class": "warlock",
+  "name": "Demon Skin",
+  "rank": "Rank 2, level 10",
+  "kind": "modified",
+  "tooltip": "Protects the caster, increasing armor by 120 and increases health regeneration by 5 health per 5 sec. for 30 min."
+ },
+ {
+  "class": "warlock",
+  "name": "Summon Imp",
+  "rank": "level 1",
+  "kind": "unchanged",
+  "tooltip": "Summons an Imp under the command of the Warlock."
+ },
+ {
+  "class": "warlock",
+  "name": "Create Healthstone",
+  "rank": "Rank 5, level 58",
+  "kind": "modified",
+  "tooltip": "Creates a Major Healthstone that can be used to instantly restore 1440 health.\n\nConjured items disappear if logged out for more than 15 minutes."
+ },
+ {
+  "class": "warlock",
+  "name": "Summon Voidwalker",
+  "rank": "level 10",
+  "kind": "unchanged",
+  "tooltip": "Summons a Voidwalker under the command of the Warlock."
+ },
+ {
+  "class": "warlock",
+  "name": "Health Funnel",
+  "rank": "Rank 7, level 60",
+  "kind": "modified",
+  "tooltip": "Gives 153 health to the caster's pet every second for 10 sec as long as the caster channels. Generates reduced threat."
+ },
+ {
+  "class": "warlock",
+  "name": "Unending Breath",
+  "rank": "level 16",
+  "kind": "unchanged",
+  "tooltip": "Allows the target to breathe underwater for 10 min."
+ },
+ {
+  "class": "warlock",
+  "name": "Create Soulstone",
+  "rank": "Rank 5, level 60",
+  "kind": "unchanged",
+  "tooltip": "Creates a Major Soulstone. The Soulstone can be used to store one target's soul. If the target dies while their soul is stored, they will be able to resurrect with 2200 health and 2800 mana.\n\nConjured items disappear if logged out for more than 15 minutes."
+ },
+ {
+  "class": "warlock",
+  "name": "Demon Armor",
+  "rank": "Rank 5, level 60",
+  "kind": "modified",
+  "tooltip": "Protects the caster, increasing armor by 570, Shadow resistance by 15 and increases health regeneration by 15 health per 5 sec. for 30 min."
+ },
+ {
+  "class": "warlock",
+  "name": "Ritual of Summoning",
+  "rank": "level 20",
+  "kind": "unchanged",
+  "tooltip": "Begins a ritual that summons the targeted group member. Requires the caster and 2 additional party members to complete the ritual. In order to participate, all players must be out of combat and right-click the portal and not move until the ritual is complete."
+ },
+ {
+  "class": "warlock",
+  "name": "Summon Incubus",
+  "rank": "level 20",
+  "kind": "unchanged",
+  "tooltip": "Summons an Incubus under the command of the Warlock."
+ },
+ {
+  "class": "warlock",
+  "name": "Summon Succubus",
+  "rank": "level 20",
+  "kind": "unchanged",
+  "tooltip": "Summons a Succubus under the command of the Warlock."
+ },
+ {
+  "class": "warlock",
+  "name": "Eye of Kilrogg",
+  "rank": "level 22",
+  "kind": "unchanged",
+  "tooltip": "Summons an Eye of Kilrogg and binds your vision to it. The eye moves quickly but is very fragile."
+ },
+ {
+  "class": "warlock",
+  "name": "Sense Demons",
+  "rank": "level 24",
+  "kind": "unchanged",
+  "tooltip": "Shows the location of all nearby demons on the minimap until cancelled. Only one type of tracking can be used at a time."
+ },
+ {
+  "class": "warlock",
+  "name": "Detect Invisibility",
+  "rank": "Rank 3, level 50",
+  "kind": "unchanged",
+  "tooltip": "Allows the friendly target to detect greater invisibility for 10 min."
+ },
+ {
+  "class": "warlock",
+  "name": "Banish",
+  "rank": "Rank 2, level 48",
+  "kind": "unchanged",
+  "tooltip": "Banishes the enemy target, preventing all action but making it invulnerable for up to 30 sec. Only one target can be banished at a time. Only works on Demons and Elementals."
+ },
+ {
+  "class": "warlock",
+  "name": "Create Firestone",
+  "rank": "Rank 4, level 56",
+  "kind": "modified",
+  "tooltip": "Creates a Major Firestone which can be used to enchant your weapon with Fire, increasing your spell critical strike chance by 2% and the damage done by your Fire spells by up to 21."
+ },
+ {
+  "class": "warlock",
+  "name": "Subjugate Demon",
+  "rank": "Rank 3, level 58",
+  "kind": "unchanged",
+  "tooltip": "Subjugates the target demon, up to level 62, forcing it to do your bidding. While subjugated, the time between the demon's attacks is increased by 40% and its casting speed is slowed by 30%. Lasts up to 5 min. If you repeatedly subjugate the same demon, it will become more difficult to control with each attempt."
+ },
+ {
+  "class": "warlock",
+  "name": "Summon Felhunter",
+  "rank": "level 30",
+  "kind": "unchanged",
+  "tooltip": "Summons a Felhunter under the command of the Warlock."
+ },
+ {
+  "class": "warlock",
+  "name": "Shadow Ward",
+  "rank": "Rank 4, level 60",
+  "kind": "unchanged",
+  "tooltip": "Absorbs 920 shadow damage. Lasts 30 sec."
+ },
+ {
+  "class": "warlock",
+  "name": "Create Spellstone",
+  "rank": "Rank 3, level 60",
+  "kind": "modified",
+  "tooltip": "Creates a Major Spellstone which can be used to enchant your weapon with Shadow, increasing your spell haste by 2% and the damage done by your Shadow spells by up to 21.\n\nConjured items disappear if logged out for more than 15 minutes."
+ },
+ {
+  "class": "warlock",
+  "name": "Inferno",
+  "rank": "level 50",
+  "kind": "unchanged",
+  "tooltip": "Summons a meteor from the Twisting Nether, causing 200 Fire damage and stunning all enemy targets in the area for 2 sec. An Infernal rises from the crater, under the command of the caster for 5 min. Once control is lost, the Infernal must be Subjugated to maintain control. Can only be used outdoors."
+ },
+ {
+  "class": "warlock",
+  "name": "Portal of Summoning",
+  "rank": "level 60",
+  "kind": "added",
+  "tooltip": "Begins a ritual that creates a summoning portal. The summoning portal can be used by 2 party or raid members to summon a targeted party or raid member. The ritual portal requires the caster and 2 additional party or raid members to complete. In order to participate, all players must be out of combat and right-click the portal and not move until the ritual is complete."
+ },
+ {
+  "class": "warlock",
+  "name": "Ritual of Doom",
+  "rank": "level 60",
+  "kind": "unchanged",
+  "tooltip": "Begins a ritual that sacrifices a random participant to summon a doomguard. The doomguard must be immediately subjugated or it will attack the ritual participants. Requires the caster and 4 additional party members to complete the ritual. In order to participate, all players must right-click the portal and not move until the ritual is complete."
+ },
+ {
+  "class": "warlock",
+  "name": "Demonic Sacrifice",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "When activated, sacrifices your summoned Demon to enhance the opposing aspect of your power, granting you an effect that lasts 2 hr. The effect is canceled if any Demon is summoned.\n\nImp: Increases your Shadow damage by 15%.\n\nVoidwalker: Restores 2% of your total Mana every 4 sec.\n\nSuccubus/Incubus: Increases your Fire damage by 15%.\n\nFelhunter: Restores 3% of your total Health every 4 sec."
+ },
+ {
+  "class": "warlock",
+  "name": "Fel Domination",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Your next Imp, Voidwalker, Succubus, Incubus, or Felhunter Summon spell has its casting time reduced by 5.5 sec and its Mana cost reduced by 50%."
+ },
+ {
+  "class": "warlock",
+  "name": "Soul Link",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "When active, 30% of all damage taken by the caster is taken by your Imp, Voidwalker, Succubus, Incubus, or Felhunter Demon instead. In addition, both the Demon and the master will inflict 3% more damage. Lasts as long as the Demon is active."
+ },
+ {
+  "class": "warlock",
+  "name": "Immolate",
+  "rank": "Rank 8, level 60",
+  "kind": "modified",
+  "tooltip": "Burns the enemy for 158 Fire damage and then an additional 275 Fire damage over 15 sec."
+ },
+ {
+  "class": "warlock",
+  "name": "Shadow Bolt",
+  "rank": "Rank 10, level 60",
+  "kind": "modified",
+  "tooltip": "Sends a shadowy bolt at the enemy, causing 253 to 283 Shadow damage."
+ },
+ {
+  "class": "warlock",
+  "name": "Searing Pain",
+  "rank": "Rank 6, level 58",
+  "kind": "modified",
+  "tooltip": "Inflict searing pain on the enemy target, causing 105 to 123 Fire damage. Causes a high amount of threat."
+ },
+ {
+  "class": "warlock",
+  "name": "Rain of Fire",
+  "rank": "Rank 4, level 58",
+  "kind": "modified",
+  "tooltip": "Calls down a fiery rain to burn enemies in the area of effect for 880 Fire damage over 8 sec."
+ },
+ {
+  "class": "warlock",
+  "name": "Shadowburn",
+  "rank": "Rank 6, level 56",
+  "kind": "talent",
+  "tooltip": "Instantly blasts the target for 251 to 281 Shadow damage. If the target dies within 8 sec of Shadowburn, and yields experience or honor, the caster gains a Soul Shard."
+ },
+ {
+  "class": "warlock",
+  "name": "Conflagrate",
+  "rank": "Rank 4, level 48",
+  "kind": "talent",
+  "tooltip": "Ignites a target that is already afflicted by your Immolate spell, dealing 172 to 216 Fire damage and consuming your Immolate effect."
+ },
+ {
+  "class": "warlock",
+  "name": "Hellfire",
+  "rank": "Rank 3, level 54",
+  "kind": "modified",
+  "tooltip": "Ignites the area surrounding the caster, causing 206 Fire damage to himself and 206 Fire damage to all nearby enemies every 1 sec. Lasts 15 sec."
+ },
+ {
+  "class": "warlock",
+  "name": "Incinerate",
+  "rank": "Rank 3, level 60",
+  "kind": "talent",
+  "tooltip": "Deals 201 to 233 Fire damage to your target and an additional 25% damage if the target is afflicted by Immolate."
+ },
+ {
+  "class": "warlock",
+  "name": "Soul Fire",
+  "rank": "Rank 2, level 56",
+  "kind": "modified",
+  "tooltip": "Burn the enemy's soul, causing 383 to 479 Fire damage."
+ },
+ {
+  "class": "warlock",
+  "name": "Bane of Havoc",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Afflicts the target for 5 min, causing 15% of all damage done by the Warlock to other targets to also be dealt to the cursed target. Bane of Havoc is limited to 1 target, and only one Bane per Warlock can be active on any one target."
+ },
+ {
+  "class": "warlock",
+  "name": "Summon Felsteed",
+  "rank": "level 40",
+  "kind": "modified",
+  "tooltip": "Summons a Felsteed, which serves as a mount for the caster."
+ },
+ {
+  "class": "warlock",
+  "name": "Summon Dreadsteed",
+  "rank": "level 60",
+  "kind": "modified",
+  "tooltip": "Summons a Dreadsteed, which serves as a mount for the caster."
+ },
+ {
+  "class": "druid",
+  "name": "Wrath",
+  "rank": "Rank 8, level 54",
+  "kind": "modified",
+  "tooltip": "Causes 58 to 64 Nature damage to the target."
+ },
+ {
+  "class": "druid",
+  "name": "Moonfire",
+  "rank": "Rank 10, level 58",
+  "kind": "modified",
+  "tooltip": "Burns the enemy for 124 to 146 Arcane damage and then an additional 240 Arcane damage over 12 sec."
+ },
+ {
+  "class": "druid",
+  "name": "Thorns",
+  "rank": "Rank 6, level 54",
+  "kind": "modified",
+  "tooltip": "Thorns sprout from the friendly target causing 22 Nature damage to attackers when hit. Lasts 10 min."
+ },
+ {
+  "class": "druid",
+  "name": "Entangling Roots",
+  "rank": "Rank 6, level 58",
+  "kind": "modified",
+  "tooltip": "Roots the target in place and causes 234 Nature damage over 27 sec. Damage caused may interrupt the effect. You may only have 1 target Rooted at a time."
+ },
+ {
+  "class": "druid",
+  "name": "Nature's Grasp",
+  "rank": "Rank 6, level 58",
+  "kind": "baseline",
+  "tooltip": "The next 1 melee attacks that strike the caster will afflict the attacker with Entangling Roots (Rank 6). Castable while shapeshifted. Lasts 45 sec."
+ },
+ {
+  "class": "druid",
+  "name": "Teleport: Moonglade",
+  "rank": "level 10",
+  "kind": "unchanged",
+  "tooltip": "Teleports the caster to the Moonglade."
+ },
+ {
+  "class": "druid",
+  "name": "Faerie Fire",
+  "rank": "Rank 4, level 54",
+  "kind": "modified",
+  "tooltip": "Decrease the armor of the target by 505 for 40 sec. While affected, the target cannot stealth or turn invisible."
+ },
+ {
+  "class": "druid",
+  "name": "Hibernate",
+  "rank": "Rank 3, level 58",
+  "kind": "unchanged",
+  "tooltip": "Forces the enemy target to sleep for up to 40 sec. Any damage will awaken the target. Only one target can be forced to hibernate at a time. Only works on Beasts and Dragonkin."
+ },
+ {
+  "class": "druid",
+  "name": "Insect Swarm",
+  "rank": "Rank 5, level 60",
+  "kind": "talent",
+  "tooltip": "The enemy target is swarmed by insects, decreasing their chance to hit with attacks by 2% and causing 186 Nature damage over 12 sec."
+ },
+ {
+  "class": "druid",
+  "name": "Omen of Clarity",
+  "rank": "level 20",
+  "kind": "baseline",
+  "tooltip": "Your spells and attacks have a chance to grant you Clearcasting, reducing the Mana, Rage, or Energy cost of your next damage or healing spell or offensive ability by 100%. Clearcasting is not consumed by Wrath or by spells or abilities that cost no resources."
+ },
+ {
+  "class": "druid",
+  "name": "Starfire",
+  "rank": "Rank 7, level 60",
+  "kind": "modified",
+  "tooltip": "Causes 350 to 412 Arcane damage to the target."
+ },
+ {
+  "class": "druid",
+  "name": "Soothe Animal",
+  "rank": "Rank 3, level 54",
+  "kind": "unchanged",
+  "tooltip": "Soothes the target beast, reducing the range at which it will attack you by 10 yards. Only affects Beast targets level 70 or lower. Lasts 15 sec."
+ },
+ {
+  "class": "druid",
+  "name": "Hurricane",
+  "rank": "Rank 3, level 60",
+  "kind": "modified",
+  "tooltip": "Creates a violent storm in the target area causing 132 Nature damage to enemies every 1 sec, and increasing the time between attacks by 20%. Lasts 10 sec. Druid must channel to maintain the spell."
+ },
+ {
+  "class": "druid",
+  "name": "Barkskin",
+  "rank": "level 44",
+  "kind": "modified",
+  "tooltip": "Your skin becomes as tough as bark. Physical damage taken is reduced by 20%. While you are protected, damaging attacks will not cause spellcasting delays. Lasts 15 sec."
+ },
+ {
+  "class": "druid",
+  "name": "Moonkin Form",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Transforms the Druid into Moonkin Form. While in this form, the armor contribution from items is increased by 360%, Omen of Clarity gains 100% increased chance to trigger, and all party members within 45 yards have their critical strike chance increased by 3%, exclusive with Leader of the Pack. The Moonkin cannot cast healing spells while shapeshifted.\n\nThe act of shapeshifting frees the caster of Polymorph and Movement Impairing effects."
+ },
+ {
+  "class": "druid",
+  "name": "Bear Form",
+  "rank": "level 10",
+  "kind": "modified",
+  "tooltip": "Shapeshift into a bear, increasing melee attack power by 30, armor contribution from items by 180%, and health by 180. Also protects the caster from Polymorph effects and allows the use of various bear abilities.\n\nThe act of shapeshifting frees the caster of Polymorph and Movement Impairing effects."
+ },
+ {
+  "class": "druid",
+  "name": "Demoralizing Roar",
+  "rank": "Rank 5, level 52",
+  "kind": "modified",
+  "tooltip": "The druid roars, decreasing nearby enemies' melee attack power by 193. Lasts 30 sec."
+ },
+ {
+  "class": "druid",
+  "name": "Growl",
+  "rank": "level 10",
+  "kind": "modified",
+  "tooltip": "Taunts the target to attack you, but has no effect if the target is already attacking you."
+ },
+ {
+  "class": "druid",
+  "name": "Maul",
+  "rank": "Rank 7, level 58",
+  "kind": "unchanged",
+  "tooltip": "Increases the druid's next attack by 128 damage."
+ },
+ {
+  "class": "druid",
+  "name": "Enrage",
+  "rank": "level 12",
+  "kind": "modified",
+  "tooltip": "Instantly generates 10 Rage and another 20 Rage over 10 sec, but reduces base armor by 27% in Bear Form and 16% in Dire Bear Form. The druid is considered in combat for the duration."
+ },
+ {
+  "class": "druid",
+  "name": "Bash",
+  "rank": "Rank 3, level 46",
+  "kind": "unchanged",
+  "tooltip": "Stuns the target for 4 sec."
+ },
+ {
+  "class": "druid",
+  "name": "Aquatic Form",
+  "rank": "level 16",
+  "kind": "unchanged",
+  "tooltip": "Shapeshift into aquatic form, increasing swim speed by 50% and allowing the druid to breathe underwater. Also protects the caster from Polymorph effects.\n\nThe act of shapeshifting frees the caster of Polymorph and Movement Impairing effects."
+ },
+ {
+  "class": "druid",
+  "name": "Swipe",
+  "rank": "Rank 5, level 54",
+  "kind": "unchanged",
+  "tooltip": "Swipe 3 nearby enemies, inflicting 83 damage."
+ },
+ {
+  "class": "druid",
+  "name": "Cat Form",
+  "rank": "level 20",
+  "kind": "modified",
+  "tooltip": "Shapeshift into cat form, increasing melee attack power by 12 plus Agility. Also protects the caster from Polymorph effects and allows the use of various cat abilities.\n\nThe act of shapeshifting frees the caster of Polymorph and Movement Impairing effects."
+ },
+ {
+  "class": "druid",
+  "name": "Claw",
+  "rank": "Rank 5, level 58",
+  "kind": "modified",
+  "tooltip": "Claw the enemy for 110% normal damage plus 115. Awards 1 combo points."
+ },
+ {
+  "class": "druid",
+  "name": "Prowl",
+  "rank": "Rank 3, level 60",
+  "kind": "unchanged",
+  "tooltip": "Allows the Druid to prowl around, but reduces your movement speed by 30%. Lasts until cancelled."
+ },
+ {
+  "class": "druid",
+  "name": "Rip",
+  "rank": "Rank 6, level 60",
+  "kind": "modified",
+  "tooltip": "Finishing move that causes damage over time. Damage increases per combo point and by your Attack Power:\n1 point : 243 damage over 12 sec.\n2 points: 396 damage over 12 sec.\n3 points: 549 damage over 12 sec.\n4 points: 702 damage over 12 sec.\n5 points: 855 damage over 12 sec."
+ },
+ {
+  "class": "druid",
+  "name": "Shred",
+  "rank": "Rank 5, level 54",
+  "kind": "modified",
+  "tooltip": "Shred the target, causing 155% damage plus 180 to the target. Must be behind the target. Awards 1 combo points."
+ },
+ {
+  "class": "druid",
+  "name": "Rake",
+  "rank": "Rank 4, level 54",
+  "kind": "modified",
+  "tooltip": "Rake the target for 61 damage and an additional 102 damage over 9 sec. Awards 1 combo points."
+ },
+ {
+  "class": "druid",
+  "name": "Tiger's Fury",
+  "rank": "level 24",
+  "kind": "modified",
+  "tooltip": "Requires Cat Form\nIncreases Physical damage done by 15% for 6 sec."
+ },
+ {
+  "class": "druid",
+  "name": "Dash",
+  "rank": "Rank 2, level 46",
+  "kind": "unchanged",
+  "tooltip": "Increases movement speed by 60% for 15 sec. Does not break prowling."
+ },
+ {
+  "class": "druid",
+  "name": "Challenging Roar",
+  "rank": "level 28",
+  "kind": "unchanged",
+  "tooltip": "Forces all nearby enemies to focus attacks on you for 6 sec."
+ },
+ {
+  "class": "druid",
+  "name": "Cower",
+  "rank": "Rank 3, level 52",
+  "kind": "unchanged",
+  "tooltip": "Cower, causing no damage but lowering your threat a large amount, making the enemy less likely to attack you."
+ },
+ {
+  "class": "druid",
+  "name": "Travel Form",
+  "rank": "level 30",
+  "kind": "unchanged",
+  "tooltip": "Transforms the druid into a travel form, increasing movement speed by 40%. Also protects the caster from Polymorph effects. Only useable outdoors.\n\nThe act of shapeshifting frees the caster of Polymorph and Movement Impairing effects."
+ },
+ {
+  "class": "druid",
+  "name": "Ferocious Bite",
+  "rank": "Rank 3, level 48",
+  "kind": "modified",
+  "tooltip": "Finishing move that causes damage per combo point and converts each extra point of energy into 2.0 additional damage. Damage is increased by your Attack Power.\n1 point : 122-162 damage\n2 points: 214-254 damage\n3 points: 306-346 damage\n4 points: 398-438 damage\n5 points: 490-530 damage"
+ },
+ {
+  "class": "druid",
+  "name": "Ravage",
+  "rank": "Rank 4, level 58",
+  "kind": "unchanged",
+  "tooltip": "Ravage the target, causing 350% damage plus 343 to the target. Must be prowling and behind the target. Awards 1 combo points."
+ },
+ {
+  "class": "druid",
+  "name": "Track Humanoids",
+  "rank": "level 32",
+  "kind": "unchanged",
+  "tooltip": "Shows the location of all nearby humanoids on the minimap. Only one type of thing can be tracked at a time."
+ },
+ {
+  "class": "druid",
+  "name": "Pounce",
+  "rank": "Rank 3, level 56",
+  "kind": "unchanged",
+  "tooltip": "Pounce, stunning the target for 2 sec and causing 150 damage over 18 sec. Must be prowling and behind the target. Awards 1 combo points."
+ },
+ {
+  "class": "druid",
+  "name": "Dire Bear Form",
+  "rank": "level 40",
+  "kind": "unchanged",
+  "tooltip": "Shapeshift into a dire bear, increasing melee attack power by 120, armor contribution from items by 360%, and health by 600. Also protects the caster from Polymorph effects and allows the use of various bear abilities.\n\nThe act of shapeshifting frees the caster of Polymorph and Movement Impairing effects."
+ },
+ {
+  "class": "druid",
+  "name": "Feline Grace",
+  "rank": "level 40",
+  "kind": "unchanged",
+  "tooltip": "Reduces damage from falling."
+ },
+ {
+  "class": "druid",
+  "name": "Lacerate",
+  "rank": "Rank 3, level 58",
+  "kind": "added",
+  "tooltip": "Lacerates the enemy target, making them bleed for 75 damage over 15 sec plus 10% weapon damage per existing application of Lacerate on the target. Causes a high amount of threat. This effect stacks up to 5 times on the same target."
+ },
+ {
+  "class": "druid",
+  "name": "Feral Charge",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Requires Bear Form, Dire Bear Form\nCharge an enemy, immobilizing them and interrupting any spell they are casting for 4 sec.\n\nLeap behind an enemy."
+ },
+ {
+  "class": "druid",
+  "name": "Mangle",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Mangle the target for 100% normal damage plus 26."
+ },
+ {
+  "class": "druid",
+  "name": "Berserk",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Requires Cat Form, Bear Form, Dire Bear Form\nCauses your Mangle ability to strike up to 3 targets, removes its cooldown, and increases the critical strike chance of your Combo Point-generating abilities by 100%. Clears and grants immunity to Fear effects for the duration. Lasts 15 sec."
+ },
+ {
+  "class": "druid",
+  "name": "Healing Touch",
+  "rank": "Rank 11, level 60",
+  "kind": "modified",
+  "tooltip": "Heals a friendly target for 2139 to 2525."
+ },
+ {
+  "class": "druid",
+  "name": "Mark of the Wild",
+  "rank": "Rank 7, level 60",
+  "kind": "modified",
+  "tooltip": "Increases the friendly target's armor by 385, all attributes by 16 and all resistances by 27 for 1 hr."
+ },
+ {
+  "class": "druid",
+  "name": "Rejuvenation",
+  "rank": "Rank 11, level 60",
+  "kind": "modified",
+  "tooltip": "Heals the target for 776 over 12 sec."
+ },
+ {
+  "class": "druid",
+  "name": "Regrowth",
+  "rank": "Rank 9, level 60",
+  "kind": "modified",
+  "tooltip": "Heals a friendly target for 965 to 1077 and another 994 over 21 sec."
+ },
+ {
+  "class": "druid",
+  "name": "Revive",
+  "rank": "Rank 5, level 60",
+  "kind": "added",
+  "tooltip": "Brings a dead player back to life with 750 health and 1000 mana. Cannot be cast when in combat."
+ },
+ {
+  "class": "druid",
+  "name": "Cure Poison",
+  "rank": "level 14",
+  "kind": "modified",
+  "tooltip": "Cures 1 poison effects on the target."
+ },
+ {
+  "class": "druid",
+  "name": "Rebirth",
+  "rank": "Rank 5, level 60",
+  "kind": "modified",
+  "tooltip": "Returns the spirit to the body, restoring a dead target to life with 2200 health and 2800 mana."
+ },
+ {
+  "class": "druid",
+  "name": "Remove Curse",
+  "rank": "level 24",
+  "kind": "modified",
+  "tooltip": "Dispels 1 Curse or Bane from a friendly target."
+ },
+ {
+  "class": "druid",
+  "name": "Abolish Poison",
+  "rank": "level 26",
+  "kind": "modified",
+  "tooltip": "Attempts to cure 1 poison effect on the target, and 1 more poison effect every 2 seconds for 8 sec."
+ },
+ {
+  "class": "druid",
+  "name": "Tranquility",
+  "rank": "Rank 4, level 60",
+  "kind": "modified",
+  "tooltip": "Regenerates all nearby party members within 20 yards for 285 every 2 sec for 10 sec. Druid must channel to maintain the spell."
+ },
+ {
+  "class": "druid",
+  "name": "Innervate",
+  "rank": "level 40",
+  "kind": "modified",
+  "tooltip": "Increases the target's Mana regeneration by 400% and allows 100% of the target's Mana regeneration to continue while casting. Lasts 20 sec."
+ },
+ {
+  "class": "druid",
+  "name": "Wild Growth",
+  "rank": "Rank 3, level 60",
+  "kind": "talent",
+  "tooltip": "Heals the target and their party for 679 over 7 sec. Party members must be within 43.5 yards of target. The amount healed is applied quickly at first, and slows down as Wild Growth reaches its full duration."
+ },
+ {
+  "class": "druid",
+  "name": "Gift of the Wild",
+  "rank": "Rank 2, level 60",
+  "kind": "modified",
+  "tooltip": "Gives the Gift of the Wild to all party and raid members, increasing armor by 385, all attributes by 16 and all resistances by 27 for 1 hr."
+ },
+ {
+  "class": "druid",
+  "name": "Swiftmend",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "Instantly heals a target with an active Rejuvenation or Regrowth effect for an amount equal to the full duration of the periodic effect of one of those spells."
+ },
+ {
+  "class": "druid",
+  "name": "Nature's Swiftness",
+  "rank": "",
+  "kind": "talent",
+  "tooltip": "When activated, your next Nature spell becomes an instant cast spell."
+ }
+]

@@ -1,0 +1,2227 @@
+{
+ "source": {
+  "site": "https://www.lozstokes.co.uk/foreversim/forever/ (each spec's own sim page, its Stat Weights window)",
+  "sim": "ForeverSim (github.com/laurencestokes/foreversim), built on the WoWSims simulators (github.com/wowsims/forever) and Elliot Wood's Forever sim (github.com/ElliotWood/Forever); MIT",
+  "run": "2026-09-27, 5000 iterations per run; each run on the build named in its setup (the sim's gear, talent, rotation or build presets; the rest the spec's defaults: consumables, buffs, encounter)",
+  "values": "per metric, stat -> [weight, +- at 90% confidence]: DPS, TPS or DTPS per point of the stat (DTPS: negative is less damage taken), read unrounded from the page; Main Hand DPS, Off Hand DPS and Ranged DPS are per point of the weapon's damage per second. Ratings per point, at 60: 10 hit or haste rating = 1%, 14 crit rating = 1%"
+ },
+ "runs": {
+  "warrior_protection": {
+   "page": "/foreversim/forever/warrior/protection/",
+   "setup": {
+    "presets": [
+     "Launch",
+     "Protection (talents)",
+     "Protection (rotation)"
+    ],
+    "talents": "31--552531233330012531",
+    "hit": "147 (14.70%)"
+   },
+   "iterations": 5000,
+   "included": [
+    "Strength",
+    "Agility",
+    "Stamina",
+    "Attack Power",
+    "Melee Hit Rating",
+    "Melee Crit Rating",
+    "Melee Haste Rating",
+    "Armor Penetration",
+    "Expertise Rating",
+    "Defense Rating",
+    "Block Rating",
+    "Block Value",
+    "Dodge",
+    "Parry",
+    "Armor",
+    "Bonus Armor",
+    "Main Hand DPS"
+   ],
+   "metrics": {
+    "DPS": {
+     "Strength": [
+      0.13075,
+      0.00028483
+     ],
+     "Agility": [
+      0.16137,
+      0.01422
+     ],
+     "Stamina": [
+      -0.031555,
+      0.009269
+     ],
+     "Attack Power": [
+      0.055918,
+      0.00012919
+     ],
+     "Melee Crit Rating": [
+      0.19192,
+      0.006591
+     ],
+     "Melee Haste Rating": [
+      0.15142,
+      0.01839
+     ],
+     "Armor Penetration": [
+      0.048173,
+      8.0451e-05
+     ],
+     "Expertise Rating": [
+      0.64334,
+      0.020149
+     ],
+     "Defense Rating": [
+      0.065014,
+      0.01846
+     ],
+     "Block Rating": [
+      0.15834,
+      0.01616
+     ],
+     "Block Value": [
+      0.14058,
+      0.00044011
+     ],
+     "Dodge": [
+      0.023223,
+      0.015104
+     ],
+     "Parry": [
+      0.051273,
+      0.01253
+     ],
+     "Main Hand DPS": [
+      0.78285,
+      0.0018087
+     ]
+    },
+    "TPS": {
+     "Strength": [
+      0.19547,
+      0.00042582
+     ],
+     "Agility": [
+      0.40575,
+      0.027934
+     ],
+     "Stamina": [
+      -0.09779,
+      0.01366
+     ],
+     "Attack Power": [
+      0.083597,
+      0.00019314
+     ],
+     "Melee Crit Rating": [
+      0.31048,
+      0.010559
+     ],
+     "Melee Haste Rating": [
+      0.26003,
+      0.034904
+     ],
+     "Armor Penetration": [
+      0.084672,
+      0.00013876
+     ],
+     "Expertise Rating": [
+      1.4158,
+      0.037541
+     ],
+     "Defense Rating": [
+      0.3806,
+      0.039767
+     ],
+     "Block Rating": [
+      0.75539,
+      0.035733
+     ],
+     "Block Value": [
+      0.21017,
+      0.00065797
+     ],
+     "Dodge": [
+      0.23868,
+      0.030765
+     ],
+     "Parry": [
+      0.25021,
+      0.025646
+     ],
+     "Main Hand DPS": [
+      1.1704,
+      0.0027039
+     ]
+    },
+    "DTPS": {
+     "Strength": [
+      -0.0024255,
+      2.3553e-05
+     ],
+     "Agility": [
+      -1.1234,
+      0.060348
+     ],
+     "Stamina": [
+      0.0019783,
+      0.0053283
+     ],
+     "Melee Haste Rating": [
+      0.15008,
+      0.049286
+     ],
+     "Expertise Rating": [
+      -0.38188,
+      0.044823
+     ],
+     "Defense Rating": [
+      -2.0844,
+      0.091334
+     ],
+     "Block Rating": [
+      0.084548,
+      0.086722
+     ],
+     "Block Value": [
+      -0.0441,
+      0.00042824
+     ],
+     "Dodge": [
+      -1.0927,
+      0.072008
+     ],
+     "Parry": [
+      -0.80566,
+      0.063133
+     ],
+     "Armor": [
+      -0.17838,
+      0.00033552
+     ],
+     "Bonus Armor": [
+      -0.16215,
+      0.0003042
+     ]
+    },
+    "TMI": {
+     "Strength": [
+      -0.00017457,
+      5.6386e-06
+     ],
+     "Agility": [
+      -0.094613,
+      0.022981
+     ],
+     "Stamina": [
+      -0.32176,
+      0.0025995
+     ],
+     "Melee Haste Rating": [
+      0.010963,
+      0.019698
+     ],
+     "Expertise Rating": [
+      -0.044762,
+      0.017314
+     ],
+     "Defense Rating": [
+      -0.18345,
+      0.034805
+     ],
+     "Block Rating": [
+      0.0041344,
+      0.039016
+     ],
+     "Block Value": [
+      -0.003174,
+      0.00010252
+     ],
+     "Dodge": [
+      -0.031249,
+      0.027799
+     ],
+     "Parry": [
+      -0.033092,
+      0.023796
+     ],
+     "Armor": [
+      -0.028555,
+      8.1316e-05
+     ],
+     "Bonus Armor": [
+      -0.025958,
+      7.3828e-05
+     ]
+    }
+   }
+  },
+  "warrior_fury": {
+   "page": "/foreversim/forever/warrior/dps/",
+   "setup": {
+    "presets": [
+     "Launch",
+     "DPS",
+     "DPS (No Reck)"
+    ],
+    "talents": "30305013-050520035150310051",
+    "hit": "137 (16.70%)"
+   },
+   "iterations": 5000,
+   "included": [
+    "Strength",
+    "Agility",
+    "Attack Power",
+    "Melee Hit Rating",
+    "Melee Crit Rating",
+    "Melee Haste Rating",
+    "Armor Penetration",
+    "Expertise Rating",
+    "Main Hand DPS",
+    "Off Hand DPS"
+   ],
+   "metrics": {
+    "DPS": {
+     "Strength": [
+      0.48256,
+      0.00065976
+     ],
+     "Agility": [
+      0.33015,
+      0.025116
+     ],
+     "Attack Power": [
+      0.21935,
+      0.00029989
+     ],
+     "Melee Hit Rating": [
+      0.39867,
+      0.049841
+     ],
+     "Melee Crit Rating": [
+      0.42377,
+      0.028675
+     ],
+     "Melee Haste Rating": [
+      0.45376,
+      0.051715
+     ],
+     "Armor Penetration": [
+      0.09019,
+      0.00014286
+     ],
+     "Expertise Rating": [
+      0.63835,
+      0.052467
+     ],
+     "Main Hand DPS": [
+      1.447,
+      0.00285
+     ],
+     "Off Hand DPS": [
+      0.92462,
+      0.0017872
+     ]
+    }
+   }
+  },
+  "warrior_arms": {
+   "page": "/foreversim/forever/warrior/dps/",
+   "setup": {
+    "presets": [
+     "Launch (Arms)",
+     "Arms 39/12/0",
+     "DPS (No Reck)"
+    ],
+    "talents": "32305213132515201-5502",
+    "hit": "127 (12.70%)"
+   },
+   "iterations": 5000,
+   "included": [
+    "Strength",
+    "Agility",
+    "Attack Power",
+    "Melee Hit Rating",
+    "Melee Crit Rating",
+    "Melee Haste Rating",
+    "Armor Penetration",
+    "Expertise Rating",
+    "Main Hand DPS",
+    "Off Hand DPS"
+   ],
+   "metrics": {
+    "DPS": {
+     "Strength": [
+      0.27647,
+      0.00052598
+     ],
+     "Agility": [
+      0.18618,
+      0.0078685
+     ],
+     "Attack Power": [
+      0.12567,
+      0.00023908
+     ],
+     "Melee Crit Rating": [
+      0.24311,
+      0.0090622
+     ],
+     "Melee Haste Rating": [
+      0.28716,
+      0.028079
+     ],
+     "Armor Penetration": [
+      0.059247,
+      0.0001152
+     ],
+     "Expertise Rating": [
+      0.48593,
+      0.030954
+     ],
+     "Main Hand DPS": [
+      1.8114,
+      0.0034418
+     ]
+    }
+   }
+  },
+  "druid_bear": {
+   "page": "/foreversim/forever/druid/feralbear/",
+   "setup": {
+    "presets": [
+     "Launch",
+     "Bear Tank 0/31/20"
+    ],
+    "hit": "80 (9.00%)",
+    "talents": "-5003232120132010501-0550325"
+   },
+   "iterations": 5000,
+   "included": [
+    "Strength",
+    "Agility",
+    "Stamina",
+    "Attack Power",
+    "Feral Attack Power",
+    "Melee Hit Rating",
+    "Melee Crit Rating",
+    "Melee Haste Rating",
+    "Armor Penetration",
+    "Expertise Rating",
+    "Defense Rating",
+    "Dodge",
+    "Armor",
+    "Bonus Armor",
+    "Bonus Weapon Damage"
+   ],
+   "metrics": {
+    "DPS": {
+     "Strength": [
+      0.2527,
+      0.00047526
+     ],
+     "Agility": [
+      0.17212,
+      0.019736
+     ],
+     "Stamina": [
+      -0.046455,
+      0.03259
+     ],
+     "Attack Power": [
+      0.12635,
+      0.00023763
+     ],
+     "Feral Attack Power": [
+      0.12635,
+      0.00023763
+     ],
+     "Melee Crit Rating": [
+      0.23582,
+      0.021132
+     ],
+     "Melee Haste Rating": [
+      0.16791,
+      0.035968
+     ],
+     "Armor Penetration": [
+      0.04259,
+      8.2711e-05
+     ],
+     "Expertise Rating": [
+      0.65744,
+      0.038174
+     ],
+     "Defense Rating": [
+      -0.041293,
+      0.017499
+     ],
+     "Dodge": [
+      -0.01381,
+      0.0116
+     ],
+     "Bonus Weapon Damage": [
+      0.86346,
+      0.0015815
+     ]
+    },
+    "TPS": {
+     "Strength": [
+      0.54073,
+      0.0010253
+     ],
+     "Agility": [
+      0.42187,
+      0.039107
+     ],
+     "Stamina": [
+      -0.16671,
+      0.063067
+     ],
+     "Attack Power": [
+      0.27037,
+      0.00051263
+     ],
+     "Feral Attack Power": [
+      0.27037,
+      0.00051263
+     ],
+     "Melee Crit Rating": [
+      0.59048,
+      0.042094
+     ],
+     "Melee Haste Rating": [
+      0.30507,
+      0.070078
+     ],
+     "Armor Penetration": [
+      0.090847,
+      0.00017723
+     ],
+     "Expertise Rating": [
+      1.3974,
+      0.074537
+     ],
+     "Defense Rating": [
+      -0.11706,
+      0.033859
+     ],
+     "Dodge": [
+      -0.022824,
+      0.022083
+     ],
+     "Bonus Weapon Damage": [
+      2.189,
+      0.00439
+     ]
+    },
+    "DTPS": {
+     "Agility": [
+      -1.2012,
+      0.076564
+     ],
+     "Stamina": [
+      -0.030569,
+      0.044339
+     ],
+     "Melee Crit Rating": [
+      -0.014311,
+      0.027973
+     ],
+     "Melee Haste Rating": [
+      0.045551,
+      0.048532
+     ],
+     "Expertise Rating": [
+      -0.58294,
+      0.056283
+     ],
+     "Defense Rating": [
+      -3.5098,
+      0.09335
+     ],
+     "Dodge": [
+      -1.4818,
+      0.095696
+     ],
+     "Armor": [
+      -0.68157,
+      0.0017118
+     ],
+     "Bonus Armor": [
+      -0.71886,
+      0.0018216
+     ]
+    },
+    "TMI": {
+     "Agility": [
+      -0.069256,
+      0.022094
+     ],
+     "Stamina": [
+      -0.22491,
+      0.022139
+     ],
+     "Melee Crit Rating": [
+      -0.01704,
+      0.014754
+     ],
+     "Melee Haste Rating": [
+      -0.0053566,
+      0.026048
+     ],
+     "Expertise Rating": [
+      -0.14218,
+      0.028216
+     ],
+     "Defense Rating": [
+      -0.35037,
+      0.024326
+     ],
+     "Dodge": [
+      -0.029558,
+      0.024139
+     ],
+     "Armor": [
+      -0.093628,
+      0.00035677
+     ],
+     "Bonus Armor": [
+      -0.098328,
+      0.00033653
+     ]
+    }
+   }
+  },
+  "druid_cat": {
+   "page": "/foreversim/forever/druid/feralcat/",
+   "setup": {
+    "presets": [
+     "Feral"
+    ],
+    "talents": "-5521002023132213051-05503"
+   },
+   "iterations": 5000,
+   "included": [
+    "Strength",
+    "Agility",
+    "Attack Power",
+    "Feral Attack Power",
+    "Melee Hit Rating",
+    "Melee Crit Rating",
+    "Melee Haste Rating",
+    "Armor Penetration",
+    "Expertise Rating",
+    "Bonus Weapon Damage"
+   ],
+   "metrics": {
+    "DPS": {
+     "Strength": [
+      0.26886,
+      0.00028069
+     ],
+     "Agility": [
+      0.27709,
+      0.0068784
+     ],
+     "Attack Power": [
+      0.12249,
+      0.00012765
+     ],
+     "Feral Attack Power": [
+      0.11941,
+      0.00013135
+     ],
+     "Melee Hit Rating": [
+      0.21736,
+      0.015702
+     ],
+     "Melee Crit Rating": [
+      0.23278,
+      0.0083983
+     ],
+     "Melee Haste Rating": [
+      0.1074,
+      0.023728
+     ],
+     "Armor Penetration": [
+      0.038627,
+      5.471e-05
+     ],
+     "Expertise Rating": [
+      0.21736,
+      0.015702
+     ],
+     "Bonus Weapon Damage": [
+      1.4739,
+      0.0015786
+     ]
+    }
+   }
+  },
+  "druid_balance": {
+   "page": "/foreversim/forever/druid/balance/",
+   "setup": {
+    "presets": [
+     "Balance"
+    ],
+    "talents": "5532220115001351--505302",
+    "spellHit": "10 (6.00%)"
+   },
+   "iterations": 5000,
+   "included": [
+    "Intellect",
+    "Spell Damage",
+    "Arcane Spell Damage",
+    "Nature Spell Damage",
+    "Spell Hit Rating",
+    "Spell Crit Rating",
+    "Spell Haste Rating",
+    "Spirit",
+    "MP5"
+   ],
+   "metrics": {
+    "DPS": {
+     "Intellect": [
+      0.061722,
+      0.012596
+     ],
+     "Spell Damage": [
+      0.47314,
+      0.00070645
+     ],
+     "Arcane Spell Damage": [
+      0.30419,
+      0.00061719
+     ],
+     "Nature Spell Damage": [
+      0.16895,
+      0.00027261
+     ],
+     "Spell Hit Rating": [
+      0.28369,
+      0.021244
+     ],
+     "Spell Crit Rating": [
+      0.21116,
+      0.011236
+     ],
+     "Spell Haste Rating": [
+      0.21753,
+      0.030297
+     ],
+     "Spirit": [
+      0.0028692,
+      0.0053484
+     ],
+     "MP5": [
+      0.015778,
+      0.012662
+     ]
+    }
+   }
+  },
+  "hunter_mm": {
+   "page": "/foreversim/forever/hunter/dps/",
+   "setup": {
+    "presets": [
+     "Marksmanship 0/39/12"
+    ],
+    "hit": "60 (7.00%)",
+    "talents": "-3050552301503151-50024001"
+   },
+   "iterations": 5000,
+   "included": [
+    "Strength",
+    "Agility",
+    "Intellect",
+    "Attack Power",
+    "Ranged Attack Power",
+    "Melee Hit Rating",
+    "Melee Crit Rating",
+    "Melee Haste Rating",
+    "Armor Penetration",
+    "Expertise Rating",
+    "MP5",
+    "Bonus Weapon Damage",
+    "Ranged DPS"
+   ],
+   "metrics": {
+    "DPS": {
+     "Agility": [
+      0.39531,
+      0.0050431
+     ],
+     "Intellect": [
+      0.49718,
+      0.011909
+     ],
+     "Ranged Attack Power": [
+      0.15373,
+      0.00019326
+     ],
+     "Melee Hit Rating": [
+      0.3935,
+      0.023892
+     ],
+     "Melee Crit Rating": [
+      0.30794,
+      0.0093412
+     ],
+     "Melee Haste Rating": [
+      -0.060117,
+      0.034412
+     ],
+     "Armor Penetration": [
+      0.061954,
+      8.5119e-05
+     ],
+     "MP5": [
+      0.45572,
+      0.01273
+     ],
+     "Bonus Weapon Damage": [
+      0.65278,
+      0.00084594
+     ],
+     "Ranged DPS": [
+      2.1542,
+      0.0027916
+     ]
+    }
+   }
+  },
+  "hunter_bm": {
+   "page": "/foreversim/forever/hunter/dps/",
+   "setup": {
+    "presets": [
+     "Beast Mastery 35/16/0"
+    ],
+    "talents": "5520001505121251-0050551",
+    "hit": "60 (6.00%)"
+   },
+   "iterations": 5000,
+   "included": [
+    "Strength",
+    "Agility",
+    "Intellect",
+    "Attack Power",
+    "Ranged Attack Power",
+    "Melee Hit Rating",
+    "Melee Crit Rating",
+    "Melee Haste Rating",
+    "Armor Penetration",
+    "Expertise Rating",
+    "MP5",
+    "Bonus Weapon Damage",
+    "Ranged DPS"
+   ],
+   "metrics": {
+    "DPS": {
+     "Agility": [
+      0.3496,
+      0.0036751
+     ],
+     "Intellect": [
+      0.14217,
+      0.0003575
+     ],
+     "Ranged Attack Power": [
+      0.14283,
+      0.00017547
+     ],
+     "Melee Hit Rating": [
+      0.34215,
+      0.018238
+     ],
+     "Melee Crit Rating": [
+      0.22534,
+      0.006773
+     ],
+     "Melee Haste Rating": [
+      0.2488,
+      0.030391
+     ],
+     "Armor Penetration": [
+      0.052979,
+      7.266e-05
+     ],
+     "MP5": [
+      -0.0018418,
+      0.00061766
+     ],
+     "Bonus Weapon Damage": [
+      0.58828,
+      0.00076471
+     ],
+     "Ranged DPS": [
+      1.9413,
+      0.0025235
+     ]
+    }
+   }
+  },
+  "hunter_sv": {
+   "page": "/foreversim/forever/hunter/dps/",
+   "setup": {
+    "presets": [
+     "Survival 0/15/36"
+    ],
+    "talents": "-005055-550230031051220151",
+    "hit": "60 (9.00%)"
+   },
+   "iterations": 5000,
+   "included": [
+    "Strength",
+    "Agility",
+    "Intellect",
+    "Attack Power",
+    "Ranged Attack Power",
+    "Melee Hit Rating",
+    "Melee Crit Rating",
+    "Melee Haste Rating",
+    "Armor Penetration",
+    "Expertise Rating",
+    "MP5",
+    "Bonus Weapon Damage",
+    "Ranged DPS"
+   ],
+   "metrics": {
+    "DPS": {
+     "Agility": [
+      0.38071,
+      0.0037586
+     ],
+     "Intellect": [
+      0.12424,
+      0.0014462
+     ],
+     "Ranged Attack Power": [
+      0.13592,
+      0.00012805
+     ],
+     "Melee Crit Rating": [
+      0.22653,
+      0.006902
+     ],
+     "Melee Haste Rating": [
+      0.27635,
+      0.023606
+     ],
+     "Armor Penetration": [
+      0.052945,
+      5.7557e-05
+     ],
+     "Bonus Weapon Damage": [
+      0.55971,
+      0.00056297
+     ],
+     "Ranged DPS": [
+      1.847,
+      0.0018578
+     ]
+    }
+   }
+  },
+  "mage_frost": {
+   "page": "/foreversim/forever/mage/dps/",
+   "setup": {
+    "presets": [
+     "Frost DPS",
+     "Auto"
+    ],
+    "talents": "0502050030003--055500033100030024",
+    "spellHit": "20 (2.00%)"
+   },
+   "iterations": 5000,
+   "included": [
+    "Intellect",
+    "Spell Damage",
+    "Arcane Spell Damage",
+    "Fire Spell Damage",
+    "Frost Spell Damage",
+    "Spell Hit Rating",
+    "Spell Crit Rating",
+    "Spell Haste Rating",
+    "Spell Piercing",
+    "Spirit",
+    "Mana",
+    "MP5",
+    "Spell Hit Arcane",
+    "Spell Hit Fire",
+    "Spell Hit Frost"
+   ],
+   "metrics": {
+    "DPS": {
+     "Intellect": [
+      0.070113,
+      0.0057592
+     ],
+     "Spell Damage": [
+      0.40268,
+      0.00068473
+     ],
+     "Frost Spell Damage": [
+      0.40268,
+      0.00068473
+     ],
+     "Spell Hit Rating": [
+      0.66675,
+      0.026607
+     ],
+     "Spell Crit Rating": [
+      0.29806,
+      0.011669
+     ],
+     "Spell Haste Rating": [
+      0.53034,
+      0.016331
+     ]
+    }
+   }
+  },
+  "mage_fire": {
+   "page": "/foreversim/forever/mage/dps/",
+   "setup": {
+    "presets": [
+     "Fire DPS",
+     "Auto"
+    ],
+    "talents": "0502252000003-23550000130133051-",
+    "spellHit": "20 (2.00%)"
+   },
+   "iterations": 5000,
+   "included": [
+    "Intellect",
+    "Spell Damage",
+    "Arcane Spell Damage",
+    "Fire Spell Damage",
+    "Frost Spell Damage",
+    "Spell Hit Rating",
+    "Spell Crit Rating",
+    "Spell Haste Rating",
+    "Spell Piercing",
+    "Spirit",
+    "Mana",
+    "MP5",
+    "Spell Hit Arcane",
+    "Spell Hit Fire",
+    "Spell Hit Frost"
+   ],
+   "metrics": {
+    "DPS": {
+     "Intellect": [
+      0.21589,
+      0.032871
+     ],
+     "Spell Damage": [
+      0.43388,
+      0.00098109
+     ],
+     "Fire Spell Damage": [
+      0.43388,
+      0.00098109
+     ],
+     "Spell Hit Rating": [
+      0.50009,
+      0.038923
+     ],
+     "Spell Crit Rating": [
+      0.31188,
+      0.027414
+     ],
+     "Spell Haste Rating": [
+      0.26597,
+      0.056969
+     ],
+     "Spirit": [
+      0.10203,
+      0.029436
+     ],
+     "Mana": [
+      0.005152,
+      0.011098
+     ],
+     "MP5": [
+      0.13898,
+      0.034619
+     ]
+    }
+   }
+  },
+  "mage_arcane": {
+   "page": "/foreversim/forever/mage/dps/",
+   "setup": {
+    "presets": [
+     "Arcane DPS",
+     "Auto"
+    ],
+    "talents": "050215003100311531-2305003202003-",
+    "spellHit": "20 (2.00%)"
+   },
+   "iterations": 5000,
+   "included": [
+    "Intellect",
+    "Spell Damage",
+    "Arcane Spell Damage",
+    "Fire Spell Damage",
+    "Frost Spell Damage",
+    "Spell Hit Rating",
+    "Spell Crit Rating",
+    "Spell Haste Rating",
+    "Spell Piercing",
+    "Spirit",
+    "Mana",
+    "MP5",
+    "Spell Hit Arcane",
+    "Spell Hit Fire",
+    "Spell Hit Frost"
+   ],
+   "metrics": {
+    "DPS": {
+     "Intellect": [
+      0.079489,
+      0.0059316
+     ],
+     "Spell Damage": [
+      0.41096,
+      0.00068691
+     ],
+     "Arcane Spell Damage": [
+      0.37964,
+      0.00096652
+     ],
+     "Frost Spell Damage": [
+      0.031315,
+      0.00045887
+     ],
+     "Spell Hit Rating": [
+      0.4839,
+      0.020844
+     ],
+     "Spell Crit Rating": [
+      0.24459,
+      0.0077301
+     ],
+     "Spell Haste Rating": [
+      0.29797,
+      0.0085923
+     ],
+     "Spirit": [
+      0.016237,
+      0.0045964
+     ],
+     "Mana": [
+      0.0003266,
+      0.00075493
+     ],
+     "MP5": [
+      0.022892,
+      0.005828
+     ]
+    }
+   }
+  },
+  "paladin_protection": {
+   "page": "/foreversim/forever/paladin/protection/",
+   "setup": {
+    "presets": [],
+    "talents": "55003-5530513321301501",
+    "hit": "127 (15.70%)"
+   },
+   "iterations": 5000,
+   "included": [
+    "Strength",
+    "Agility",
+    "Stamina",
+    "Intellect",
+    "Spell Damage",
+    "Spell Hit Rating",
+    "Spell Crit Rating",
+    "Attack Power",
+    "Melee Hit Rating",
+    "Melee Crit Rating",
+    "Melee Haste Rating",
+    "Armor Penetration",
+    "Expertise Rating",
+    "Defense Rating",
+    "Block Rating",
+    "Block Value",
+    "Dodge",
+    "Parry",
+    "Armor",
+    "Bonus Armor",
+    "Main Hand DPS"
+   ],
+   "metrics": {
+    "DPS": {
+     "Strength": [
+      0.15311,
+      0.00034457
+     ],
+     "Agility": [
+      0.14063,
+      0.017884
+     ],
+     "Stamina": [
+      -0.00077329,
+      0.0015014
+     ],
+     "Intellect": [
+      0.0016592,
+      0.0010565
+     ],
+     "Spell Damage": [
+      0.25764,
+      0.0004256
+     ],
+     "Spell Hit Rating": [
+      0.014625,
+      0.0012846
+     ],
+     "Spell Crit Rating": [
+      0.0037054,
+      0.00052692
+     ],
+     "Attack Power": [
+      0.069596,
+      0.00015662
+     ],
+     "Melee Crit Rating": [
+      0.20801,
+      0.0056938
+     ],
+     "Melee Haste Rating": [
+      0.20925,
+      0.022018
+     ],
+     "Armor Penetration": [
+      0.01945,
+      4.861e-05
+     ],
+     "Expertise Rating": [
+      0.44447,
+      0.022948
+     ],
+     "Defense Rating": [
+      0.018032,
+      0.023438
+     ],
+     "Block Rating": [
+      0.31896,
+      0.022176
+     ],
+     "Block Value": [
+      -0.00015178,
+      0.00038463
+     ],
+     "Dodge": [
+      -0.010118,
+      0.020441
+     ],
+     "Parry": [
+      0.011165,
+      0.018092
+     ],
+     "Armor": [
+      -7.9686e-05,
+      0.00016122
+     ],
+     "Bonus Armor": [
+      -7.9686e-05,
+      0.00016122
+     ],
+     "Main Hand DPS": [
+      0.97434,
+      0.0021927
+     ]
+    },
+    "TPS": {
+     "Strength": [
+      0.16308,
+      0.00035644
+     ],
+     "Agility": [
+      0.17734,
+      0.025106
+     ],
+     "Stamina": [
+      0.15034,
+      0.0020897
+     ],
+     "Intellect": [
+      0.075843,
+      0.0053654
+     ],
+     "Spell Damage": [
+      0.40281,
+      0.00058972
+     ],
+     "Spell Hit Rating": [
+      0.025952,
+      0.0023009
+     ],
+     "Spell Crit Rating": [
+      0.04023,
+      0.0088471
+     ],
+     "Attack Power": [
+      0.074129,
+      0.00016202
+     ],
+     "Melee Crit Rating": [
+      0.26968,
+      0.0076177
+     ],
+     "Melee Haste Rating": [
+      0.25169,
+      0.029682
+     ],
+     "Armor Penetration": [
+      0.01945,
+      4.861e-05
+     ],
+     "Expertise Rating": [
+      0.53655,
+      0.030614
+     ],
+     "Defense Rating": [
+      0.050116,
+      0.033684
+     ],
+     "Block Rating": [
+      0.61273,
+      0.030634
+     ],
+     "Block Value": [
+      -0.00012982,
+      0.00040641
+     ],
+     "Dodge": [
+      -0.020127,
+      0.028887
+     ],
+     "Parry": [
+      0.0064953,
+      0.025657
+     ],
+     "Armor": [
+      -0.000157,
+      0.00021377
+     ],
+     "Bonus Armor": [
+      -0.00016223,
+      0.00021368
+     ],
+     "Main Hand DPS": [
+      1.0378,
+      0.0022682
+     ]
+    },
+    "DTPS": {
+     "Strength": [
+      -0.012181,
+      5.9358e-05
+     ],
+     "Agility": [
+      -1.4045,
+      0.098354
+     ],
+     "Stamina": [
+      0.005327,
+      0.0077831
+     ],
+     "Intellect": [
+      -0.002492,
+      0.0037142
+     ],
+     "Melee Haste Rating": [
+      -0.091853,
+      0.092376
+     ],
+     "Expertise Rating": [
+      -0.32861,
+      0.099371
+     ],
+     "Defense Rating": [
+      -2.9854,
+      0.14268
+     ],
+     "Block Rating": [
+      -0.046926,
+      0.13029
+     ],
+     "Block Value": [
+      -0.22159,
+      0.0010916
+     ],
+     "Dodge": [
+      -1.4964,
+      0.11852
+     ],
+     "Parry": [
+      -1.1714,
+      0.10636
+     ],
+     "Armor": [
+      -0.28666,
+      0.001
+     ],
+     "Bonus Armor": [
+      -0.26053,
+      0.00097821
+     ]
+    },
+    "TMI": {
+     "Strength": [
+      -0.0011358,
+      1.9547e-05
+     ],
+     "Agility": [
+      -0.088546,
+      0.048357
+     ],
+     "Stamina": [
+      -0.58159,
+      0.0042378
+     ],
+     "Intellect": [
+      -4.7595e-05,
+      0.00016914
+     ],
+     "Melee Haste Rating": [
+      0.020399,
+      0.050208
+     ],
+     "Expertise Rating": [
+      -0.084258,
+      0.052706
+     ],
+     "Defense Rating": [
+      -0.31434,
+      0.069827
+     ],
+     "Block Rating": [
+      -0.015531,
+      0.074432
+     ],
+     "Block Value": [
+      -0.02067,
+      0.00035893
+     ],
+     "Dodge": [
+      -0.071907,
+      0.058742
+     ],
+     "Parry": [
+      -0.032141,
+      0.05207
+     ],
+     "Armor": [
+      -0.051831,
+      0.00045581
+     ],
+     "Bonus Armor": [
+      -0.047156,
+      0.00045168
+     ]
+    }
+   }
+  },
+  "paladin_retribution": {
+   "page": "/foreversim/forever/paladin/retribution/",
+   "setup": {
+    "presets": [],
+    "talents": "550030022001--05225231001330321",
+    "hit": "137 (13.70%)"
+   },
+   "iterations": 5000,
+   "included": [
+    "Strength",
+    "Agility",
+    "Intellect",
+    "Spell Damage",
+    "Attack Power",
+    "Melee Hit Rating",
+    "Melee Crit Rating",
+    "Melee Haste Rating",
+    "Armor Penetration",
+    "Expertise Rating",
+    "Mana",
+    "Main Hand DPS",
+    "Off Hand DPS"
+   ],
+   "metrics": {
+    "DPS": {
+     "Strength": [
+      0.26422,
+      0.00043828
+     ],
+     "Agility": [
+      0.26159,
+      0.0074323
+     ],
+     "Intellect": [
+      0.67214,
+      0.019205
+     ],
+     "Spell Damage": [
+      0.38874,
+      0.00051246
+     ],
+     "Attack Power": [
+      0.11009,
+      0.00018262
+     ],
+     "Melee Crit Rating": [
+      0.33881,
+      0.0084185
+     ],
+     "Melee Haste Rating": [
+      0.33948,
+      0.041178
+     ],
+     "Armor Penetration": [
+      0.030475,
+      5.6256e-05
+     ],
+     "Expertise Rating": [
+      0.42459,
+      0.021878
+     ],
+     "Mana": [
+      0.016555,
+      0.0046248
+     ],
+     "Main Hand DPS": [
+      1.4281,
+      0.0024334
+     ]
+    }
+   }
+  },
+  "priest_shadow": {
+   "page": "/foreversim/forever/priest/dps/",
+   "setup": {
+    "presets": [
+     "Shadow (talents)"
+    ],
+    "talents": "005300231303--505120501201300051",
+    "spellHit": "10 (1.00%)"
+   },
+   "iterations": 5000,
+   "included": [
+    "Intellect",
+    "Spell Damage",
+    "Holy Spell Damage",
+    "Shadow Spell Damage",
+    "Spell Hit Rating",
+    "Spell Crit Rating",
+    "Spell Haste Rating",
+    "Spirit",
+    "Mana",
+    "MP5",
+    "Spell Hit Shadow"
+   ],
+   "metrics": {
+    "DPS": {
+     "Intellect": [
+      0.086319,
+      0.0046717
+     ],
+     "Spell Damage": [
+      0.3688,
+      0.00034628
+     ],
+     "Shadow Spell Damage": [
+      0.3688,
+      0.00034628
+     ],
+     "Spell Hit Rating": [
+      0.41039,
+      0.017675
+     ],
+     "Spell Crit Rating": [
+      0.32982,
+      0.0088145
+     ],
+     "Spell Haste Rating": [
+      0.19391,
+      0.011331
+     ]
+    }
+   }
+  },
+  "priest_smite": {
+   "page": "/foreversim/forever/priest/smite/",
+   "setup": {
+    "presets": [
+     "Smite (talents)"
+    ],
+    "talents": "515330031305001001-30505113002",
+    "spellHit": "70 (7.00%)"
+   },
+   "iterations": 5000,
+   "included": [
+    "Intellect",
+    "Spell Damage",
+    "Holy Spell Damage",
+    "Shadow Spell Damage",
+    "Spell Hit Rating",
+    "Spell Crit Rating",
+    "Spell Haste Rating",
+    "Spirit",
+    "Mana",
+    "MP5",
+    "Spell Hit Shadow"
+   ],
+   "metrics": {
+    "DPS": {
+     "Intellect": [
+      0.62448,
+      0.012005
+     ],
+     "Spell Damage": [
+      0.37075,
+      0.00051284
+     ],
+     "Holy Spell Damage": [
+      0.32852,
+      0.00044343
+     ],
+     "Shadow Spell Damage": [
+      0.04223,
+      0.00011087
+     ],
+     "Spell Hit Rating": [
+      0.064819,
+      0.0087218
+     ],
+     "Spell Crit Rating": [
+      0.12439,
+      0.0040244
+     ],
+     "Spell Haste Rating": [
+      -0.28844,
+      0.015182
+     ],
+     "Spirit": [
+      0.26422,
+      0.010303
+     ],
+     "Mana": [
+      -0.018965,
+      0.0081099
+     ],
+     "MP5": [
+      0.6885,
+      0.012816
+     ]
+    }
+   }
+  },
+  "rogue_backstab": {
+   "page": "/foreversim/forever/rogue/dps/",
+   "setup": {
+    "presets": [
+     "Backstab Pre-BiS",
+     "Backstab (talents)"
+    ],
+    "talents": "005302005-30230320201515231-102",
+    "hit": "53 (8.30%)",
+    "note": "gear Backstab Pre-BiS, talents Backstab, rotation Auto"
+   },
+   "iterations": 5000,
+   "included": [
+    "Strength",
+    "Agility",
+    "Stamina",
+    "Attack Power",
+    "Melee Hit Rating",
+    "Melee Crit Rating",
+    "Melee Haste Rating",
+    "Armor Penetration",
+    "Expertise Rating",
+    "Bonus Weapon Damage",
+    "Main Hand DPS",
+    "Off Hand DPS"
+   ],
+   "metrics": {
+    "DPS": {
+     "Strength": [
+      0.21688,
+      0.00024315
+     ],
+     "Agility": [
+      0.37958,
+      0.005665
+     ],
+     "Attack Power": [
+      0.19716,
+      0.00022105
+     ],
+     "Melee Hit Rating": [
+      0.35661,
+      0.023792
+     ],
+     "Melee Crit Rating": [
+      0.30648,
+      0.0077014
+     ],
+     "Melee Haste Rating": [
+      0.31647,
+      0.028686
+     ],
+     "Armor Penetration": [
+      0.078927,
+      0.00010376
+     ],
+     "Expertise Rating": [
+      0.36277,
+      0.024229
+     ],
+     "Bonus Weapon Damage": [
+      2.286,
+      0.0025553
+     ],
+     "Main Hand DPS": [
+      1.9784,
+      0.0027431
+     ],
+     "Off Hand DPS": [
+      0.70598,
+      0.0012462
+     ]
+    }
+   }
+  },
+  "rogue_ss": {
+   "page": "/foreversim/forever/rogue/dps/",
+   "setup": {
+    "presets": [
+     "Sinister Strike Pre-BiS",
+     "Sinister Strike (talents)"
+    ],
+    "talents": "00530310501-32003311201515231",
+    "hit": "43 (7.30%)",
+    "note": "gear Sinister Strike Pre-BiS, talents Sinister Strike, rotation Auto"
+   },
+   "iterations": 5000,
+   "included": [
+    "Strength",
+    "Agility",
+    "Stamina",
+    "Attack Power",
+    "Melee Hit Rating",
+    "Melee Crit Rating",
+    "Melee Haste Rating",
+    "Armor Penetration",
+    "Expertise Rating",
+    "Bonus Weapon Damage",
+    "Main Hand DPS",
+    "Off Hand DPS"
+   ],
+   "metrics": {
+    "DPS": {
+     "Strength": [
+      0.2302,
+      0.00031957
+     ],
+     "Agility": [
+      0.40583,
+      0.0058041
+     ],
+     "Attack Power": [
+      0.20927,
+      0.00029052
+     ],
+     "Melee Hit Rating": [
+      0.48445,
+      0.035657
+     ],
+     "Melee Crit Rating": [
+      0.33077,
+      0.0078532
+     ],
+     "Melee Haste Rating": [
+      0.27248,
+      0.041795
+     ],
+     "Armor Penetration": [
+      0.078906,
+      0.00011652
+     ],
+     "Expertise Rating": [
+      0.48445,
+      0.035657
+     ],
+     "Bonus Weapon Damage": [
+      1.6202,
+      0.002149
+     ],
+     "Main Hand DPS": [
+      2.3064,
+      0.0038265
+     ],
+     "Off Hand DPS": [
+      0.66713,
+      0.001418
+     ]
+    }
+   }
+  },
+  "rogue_mutilate": {
+   "page": "/foreversim/forever/rogue/dps/",
+   "setup": {
+    "presets": [
+     "Backstab Pre-BiS",
+     "Mutilate (talents)"
+    ],
+    "talents": "00530310551021051-302303202004",
+    "hit": "53 (8.30%)",
+    "note": "gear Backstab Pre-BiS, talents Mutilate, rotation Auto"
+   },
+   "iterations": 5000,
+   "included": [
+    "Strength",
+    "Agility",
+    "Stamina",
+    "Attack Power",
+    "Melee Hit Rating",
+    "Melee Crit Rating",
+    "Melee Haste Rating",
+    "Armor Penetration",
+    "Expertise Rating",
+    "Bonus Weapon Damage",
+    "Main Hand DPS",
+    "Off Hand DPS"
+   ],
+   "metrics": {
+    "DPS": {
+     "Strength": [
+      0.18476,
+      0.00022571
+     ],
+     "Agility": [
+      0.35182,
+      0.0097848
+     ],
+     "Attack Power": [
+      0.16796,
+      0.00020519
+     ],
+     "Melee Hit Rating": [
+      0.50394,
+      0.032092
+     ],
+     "Melee Crit Rating": [
+      0.3212,
+      0.01364
+     ],
+     "Melee Haste Rating": [
+      0.28311,
+      0.038685
+     ],
+     "Armor Penetration": [
+      0.07066,
+      0.00010314
+     ],
+     "Expertise Rating": [
+      0.57034,
+      0.033779
+     ],
+     "Bonus Weapon Damage": [
+      2.0614,
+      0.0024251
+     ],
+     "Main Hand DPS": [
+      1.3516,
+      0.0023669
+     ],
+     "Off Hand DPS": [
+      0.7538,
+      0.0012093
+     ]
+    }
+   }
+  },
+  "shaman_elemental": {
+   "page": "/foreversim/forever/shaman/elemental/",
+   "setup": {
+    "presets": [],
+    "talents": "5505301300103051--503352001",
+    "spellHit": "110 (11.00%)"
+   },
+   "iterations": 5000,
+   "included": [
+    "Intellect",
+    "Spell Damage",
+    "Nature Spell Damage",
+    "Spell Hit Rating",
+    "Spell Crit Rating",
+    "Spell Haste Rating",
+    "MP5",
+    "Spell Hit Nature"
+   ],
+   "metrics": {
+    "DPS": {
+     "Intellect": [
+      0.24707,
+      0.010121
+     ],
+     "Spell Damage": [
+      0.46989,
+      0.00062624
+     ],
+     "Nature Spell Damage": [
+      0.32659,
+      0.00054972
+     ],
+     "Spell Hit Rating": [
+      0.53728,
+      0.032707
+     ],
+     "Spell Crit Rating": [
+      0.28362,
+      0.0089722
+     ],
+     "Spell Haste Rating": [
+      0.32511,
+      0.040047
+     ],
+     "MP5": [
+      0.39937,
+      0.016434
+     ]
+    }
+   }
+  },
+  "shaman_enhancement": {
+   "page": "/foreversim/forever/shaman/enhancement/",
+   "setup": {
+    "presets": [],
+    "talents": "5505301-053030031005112251",
+    "hit": "97 (9.70%)"
+   },
+   "iterations": 5000,
+   "included": [
+    "Strength",
+    "Agility",
+    "Intellect",
+    "Spell Damage",
+    "Nature Spell Damage",
+    "Spell Hit Rating",
+    "Spell Crit Rating",
+    "Attack Power",
+    "Melee Hit Rating",
+    "Melee Crit Rating",
+    "Melee Haste Rating",
+    "Armor Penetration",
+    "Expertise Rating",
+    "Main Hand DPS",
+    "Off Hand DPS"
+   ],
+   "metrics": {
+    "DPS": {
+     "Strength": [
+      0.42151,
+      0.00088858
+     ],
+     "Agility": [
+      0.23601,
+      0.012318
+     ],
+     "Intellect": [
+      0.32334,
+      0.0047956
+     ],
+     "Spell Damage": [
+      0.19812,
+      0.00043557
+     ],
+     "Nature Spell Damage": [
+      0.15308,
+      0.00030003
+     ],
+     "Spell Hit Rating": [
+      0.15365,
+      0.0084298
+     ],
+     "Spell Crit Rating": [
+      0.049861,
+      0.002044
+     ],
+     "Attack Power": [
+      0.21075,
+      0.00044429
+     ],
+     "Melee Hit Rating": [
+      0.44561,
+      0.03556
+     ],
+     "Melee Crit Rating": [
+      0.33191,
+      0.014846
+     ],
+     "Melee Haste Rating": [
+      0.37178,
+      0.039504
+     ],
+     "Armor Penetration": [
+      0.07227,
+      0.00016405
+     ],
+     "Expertise Rating": [
+      0.68075,
+      0.03836
+     ],
+     "Main Hand DPS": [
+      2.1545,
+      0.0056107
+     ],
+     "Off Hand DPS": [
+      0.74423,
+      0.0024923
+     ]
+    }
+   }
+  },
+  "warlock_dsruin": {
+   "page": "/foreversim/forever/warlock/dps/",
+   "setup": {
+    "presets": [],
+    "talents": "233500201332-0340003001-0550105",
+    "spellHit": "10 (4.00%)",
+    "note": "default: talents DS/Ruin 24/11/16, rotation Auto, default gear"
+   },
+   "iterations": 5000,
+   "included": [
+    "Stamina",
+    "Intellect",
+    "Spell Damage",
+    "Fire Spell Damage",
+    "Shadow Spell Damage",
+    "Spell Hit Rating",
+    "Spell Crit Rating",
+    "Spell Haste Rating",
+    "Spell Piercing",
+    "MP5"
+   ],
+   "metrics": {
+    "DPS": {
+     "Intellect": [
+      0.22453,
+      0.034268
+     ],
+     "Spell Damage": [
+      0.53371,
+      0.00091832
+     ],
+     "Fire Spell Damage": [
+      0.061149,
+      0.00012168
+     ],
+     "Shadow Spell Damage": [
+      0.47256,
+      0.00090273
+     ],
+     "Spell Hit Rating": [
+      0.51142,
+      0.038303
+     ],
+     "Spell Crit Rating": [
+      0.4037,
+      0.014576
+     ],
+     "Spell Haste Rating": [
+      0.33221,
+      0.053132
+     ],
+     "MP5": [
+      0.15954,
+      0.03336
+     ]
+    }
+   }
+  },
+  "warlock_demonology": {
+   "page": "/foreversim/forever/warlock/dps/",
+   "setup": {
+    "presets": [
+     "Demonic Pact 2/31/18 (build)"
+    ],
+    "talents": "113-0005003221220311351-0550005",
+    "spellHit": "10 (2.00%)",
+    "note": "build Demonic Pact 2/31/18 (talents, rotation, pet options), default gear"
+   },
+   "iterations": 5000,
+   "included": [
+    "Stamina",
+    "Intellect",
+    "Spell Damage",
+    "Fire Spell Damage",
+    "Shadow Spell Damage",
+    "Spell Hit Rating",
+    "Spell Crit Rating",
+    "Spell Haste Rating",
+    "Spell Piercing",
+    "MP5"
+   ],
+   "metrics": {
+    "DPS": {
+     "Intellect": [
+      0.18236,
+      0.034774
+     ],
+     "Spell Damage": [
+      0.46809,
+      0.00085343
+     ],
+     "Fire Spell Damage": [
+      0.060162,
+      0.00012915
+     ],
+     "Shadow Spell Damage": [
+      0.40793,
+      0.00083122
+     ],
+     "Spell Hit Rating": [
+      0.44492,
+      0.035935
+     ],
+     "Spell Crit Rating": [
+      0.31945,
+      0.013891
+     ],
+     "Spell Haste Rating": [
+      0.32633,
+      0.058304
+     ],
+     "MP5": [
+      0.12693,
+      0.033247
+     ]
+    }
+   }
+  },
+  "warlock_affliction": {
+   "page": "/foreversim/forever/warlock/dps/",
+   "setup": {
+    "presets": [
+     "Deep Affliction 35/0/16 (build)"
+    ],
+    "talents": "2535002013521105--05000551",
+    "note": "build Deep Affliction 35/0/16 (talents, rotation, pet options), default gear"
+   },
+   "iterations": 5000,
+   "included": [
+    "Stamina",
+    "Intellect",
+    "Spell Damage",
+    "Fire Spell Damage",
+    "Shadow Spell Damage",
+    "Spell Hit Rating",
+    "Spell Crit Rating",
+    "Spell Haste Rating",
+    "Spell Piercing",
+    "MP5"
+   ],
+   "metrics": {
+    "DPS": {
+     "Intellect": [
+      0.14116,
+      0.029144
+     ],
+     "Spell Damage": [
+      0.46202,
+      0.00077364
+     ],
+     "Fire Spell Damage": [
+      0.064343,
+      0.00014198
+     ],
+     "Shadow Spell Damage": [
+      0.39768,
+      0.00075039
+     ],
+     "Spell Hit Rating": [
+      0.3825,
+      0.033048
+     ],
+     "Spell Crit Rating": [
+      0.32618,
+      0.011775
+     ],
+     "Spell Haste Rating": [
+      0.37034,
+      0.050189
+     ],
+     "MP5": [
+      0.083744,
+      0.027471
+     ]
+    }
+   }
+  },
+  "warlock_destruction": {
+   "page": "/foreversim/forever/warlock/dps/",
+   "setup": {
+    "presets": [
+     "Shadow and Flame 13/11/27 (build)"
+    ],
+    "talents": "25501-0025003001-055035510010002",
+    "spellHit": "10 (6.00%)",
+    "note": "build Shadow and Flame 13/11/27 (talents, rotation, pet options), default gear"
+   },
+   "iterations": 5000,
+   "included": [
+    "Stamina",
+    "Intellect",
+    "Spell Damage",
+    "Fire Spell Damage",
+    "Shadow Spell Damage",
+    "Spell Hit Rating",
+    "Spell Crit Rating",
+    "Spell Haste Rating",
+    "Spell Piercing",
+    "MP5"
+   ],
+   "metrics": {
+    "DPS": {
+     "Intellect": [
+      0.19818,
+      0.030747
+     ],
+     "Spell Damage": [
+      0.5006,
+      0.00080292
+     ],
+     "Fire Spell Damage": [
+      0.068786,
+      0.00013174
+     ],
+     "Shadow Spell Damage": [
+      0.43182,
+      0.0007883
+     ],
+     "Spell Hit Rating": [
+      0.50411,
+      0.0361
+     ],
+     "Spell Crit Rating": [
+      0.33904,
+      0.013427
+     ],
+     "Spell Haste Rating": [
+      0.36089,
+      0.047513
+     ],
+     "MP5": [
+      0.14549,
+      0.029531
+     ]
+    }
+   }
+  }
+ }
+}

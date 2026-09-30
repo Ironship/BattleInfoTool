@@ -1,0 +1,2 @@
+# Generated Lua must retain reproducible bytes after a fresh Windows checkout.
+Modules/StatsInfo/Weights.lua text eol=lf

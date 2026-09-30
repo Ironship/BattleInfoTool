@@ -1,0 +1,1459 @@
+-- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Core.lua at 8269edd.
+-- Change it there, or in tools/port.py; an edit made here is lost at the next port.
+-- SpellDamageInfo: action button numbers, tooltip lines, settings and /sdi.
+-- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+--
+-- Everything here stays out of Blizzard's way: the numbers are FontStrings of our own on the
+-- action buttons, tooltip lines are added through the tooltip post-call hook, and no Blizzard
+-- global or function is replaced. Values the client may hand out as secret (WoW: Forever hides
+-- spell power in combat) are checked with issecretvalue before any comparison or maths.
+
+local ADDON, BIT = ...
+-- Inside BattleInfoTool its own namespace; loaded on its own, the addon's table as before.
+local ns = BIT.Module and BIT.Module("SpellDamageInfo") or BIT
+local L, Parser, Estimate, Format = ns.L, ns.Parser, ns.Estimate, ns.Format
+
+local DEFAULTS = {
+  estimate = true, button = "total", tooltip = true,
+  reduction = true,     -- show by how much a debuff lowers the enemy's damage, in red
+  size = 100,           -- button number size in percent of the default (SIZE_MIN..SIZE_MAX)
+  position = "bottom",  -- where the number sits on the button: bottom, center or top
+  interfaceLang = "auto",  -- interface language: "auto", "en", "de"
+  weapon = true,        -- potential damage of weapon abilities and attack power spells, in blue
+}
+local BUTTON_MODES = { total = true, direct = true, off = true }
+local POSITIONS = { bottom = true, center = true, top = true }
+local SIZE_MIN, SIZE_MAX = 50, 200
+
+local db = {}
+for k, v in pairs(DEFAULTS) do db[k] = v end
+
+local function isSecret(v)
+  if type(issecretvalue) ~= "function" then return false end
+  local ok, secret = pcall(issecretvalue, v)
+  return ok and secret == true
+end
+
+local function say(msg)
+  if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSpellDamageInfo|r: " .. msg) end
+end
+
+---------------------------------------------------------------------------------------------
+-- Spell data
+---------------------------------------------------------------------------------------------
+
+-- [spellID] = { parsed = table or false, reduction = table or false, weapon = table or false,
+--               text = the description }
+local parsedCache = {}
+
+local function clearCache()
+  for k in pairs(parsedCache) do parsedCache[k] = nil end
+end
+
+local function getDescription(spellID)
+  local fn = (C_Spell and C_Spell.GetSpellDescription) or GetSpellDescription
+  if type(fn) ~= "function" then return nil end
+  local ok, text = pcall(fn, spellID)
+  if not ok or isSecret(text) or type(text) ~= "string" or text == "" then return nil end
+  return text
+end
+
+local loadRequested = {} -- [spellID] = true once the client was asked to load the spell's text
+
+local function requestLoad(spellID)
+  if loadRequested[spellID] then return end
+  loadRequested[spellID] = true
+  if C_Spell and type(C_Spell.RequestLoadSpellData) == "function" then
+    pcall(C_Spell.RequestLoadSpellData, spellID)
+  end
+end
+
+-- A spell's parsed description, read again when its text has changed, looked at no more than every
+-- RECHECK seconds a spell. A text can change with no event saying so: after Resurrection Sickness only a
+-- /reload brought the numbers back, and the one thing a /reload renews that nothing else did is this
+-- cache. (That the sickness is in the text is not proven: no sick description has been read.) A text
+-- that cannot be read now leaves the last one in use.
+local RECHECK = 2
+-- A refresh of the bars reads at most PARSE_BUDGET changed texts (on Retail a buff can change every
+-- one at once, and each read costs about a millisecond); the rest keep their last reading and the
+-- next refresh reads them. parseBudget is nil outside a refresh, so a tooltip is never held back.
+local PARSE_BUDGET = 10
+local parseBudget, parseDeferred = nil, false
+local function textClock()
+  local ok, t = pcall(GetTime)
+  return ok and type(t) == "number" and t or 0
+end
+local function getEntry(spellID)
+  local entry = parsedCache[spellID]
+  if entry and entry.checked and textClock() - entry.checked < RECHECK then return entry end
+  local text = getDescription(spellID)
+  if entry and (text == nil or text == entry.text) then
+    entry.checked = textClock()
+    return entry
+  end
+  if not text then -- not loaded yet; SPELL_TEXT_UPDATE will ask again
+    requestLoad(spellID)
+    return nil
+  end
+  if entry and parseBudget then
+    if parseBudget <= 0 then
+      parseDeferred = true
+      return entry
+    end
+    parseBudget = parseBudget - 1
+  end
+  -- Parser.Read runs every reader and decides what is shown; see there.
+  entry = Parser.Read(text, ns.DescriptionLang(), ns.IsRetail and ns.IsRetail())
+  entry.text = text
+  entry.checked = textClock()
+  parsedCache[spellID] = entry
+  return entry
+end
+
+local function getParsed(spellID)
+  local entry = getEntry(spellID)
+  return entry and entry.parsed or nil
+end
+
+-- Cast time in seconds, or nil when the client does not say.
+local function getCastTime(spellID)
+  if C_Spell and type(C_Spell.GetSpellInfo) == "function" then
+    local ok, info = pcall(C_Spell.GetSpellInfo, spellID)
+    if ok and type(info) == "table" then
+      local ms = info.castTime
+      if not isSecret(ms) and type(ms) == "number" then return ms / 1000 end
+    end
+  end
+  if type(GetSpellInfo) == "function" then
+    local ok, _, _, _, ms = pcall(GetSpellInfo, spellID)
+    if ok and not isSecret(ms) and type(ms) == "number" then return ms / 1000 end
+  end
+  return nil
+end
+
+-- Retail's descriptions already hold the player's spell power and attack power in their
+-- numbers, so there the estimate and the weapon arithmetic would count them twice. Forever
+-- answers WOW_PROJECT_ID like Retail, so the client's version decides: Retail is 10 and up,
+-- Forever 1.60, Classic Era 1.15.
+local function isRetail()
+  if type(GetBuildInfo) ~= "function" then return false end
+  local ok, version = pcall(GetBuildInfo)
+  if not ok or isSecret(version) or type(version) ~= "string" then return false end
+  local major = tonumber(version:match("^(%d+)"))
+  return major ~= nil and major >= 10
+end
+ns.IsRetail = isRetail
+
+-- Which client's spell tables SpellCoefficients.lua holds for this one: "forever" (1.60),
+-- "era" (1.15), or nil for any other client.
+local function coefficientClient()
+  if type(GetBuildInfo) ~= "function" then return nil end
+  local ok, version = pcall(GetBuildInfo)
+  if not ok or isSecret(version) or type(version) ~= "string" then return nil end
+  local major, minor = version:match("^(%d+)%.(%d+)")
+  if tonumber(major) ~= 1 then return nil end
+  return (tonumber(minor) >= 60) and "forever" or "era"
+end
+
+-- The spell's entry in SpellCoefficients for the running client: a table of shares, false (a
+-- totem or trap, whose own spell the tables do not name), or nil when the tables have nothing.
+local function spellCoefficients(spellID)
+  local all, client = ns.SpellCoefficients, coefficientClient()
+  if type(all) ~= "table" or not client or type(spellID) ~= "number" then return nil end
+  local byID = all[client]
+  if type(byID) ~= "table" then return nil end
+  return byID[spellID]
+end
+ns.SpellCoefficientsFor = spellCoefficients
+
+-- The swing time of the form a shapeshift spell turns into (Cat Form 1.0 sec), or nil.
+local function formSpeed(spellID)
+  local all, client = ns.FormSpeeds, coefficientClient()
+  if type(all) ~= "table" or not client or type(all[client]) ~= "table" then return nil end
+  return all[client][spellID]
+end
+
+-- Last readable spell power by school index (2..7) and for healing. In combat the client may
+-- return secret values; then the last value read out of combat stays in use.
+local bonus = { damage = {}, heal = nil }
+
+local function readBonus()
+  if type(GetSpellBonusDamage) == "function" then
+    for i = 2, 7 do
+      local ok, v = pcall(GetSpellBonusDamage, i)
+      if ok and not isSecret(v) and type(v) == "number" then bonus.damage[i] = v end
+    end
+  end
+  if type(GetSpellBonusHealing) == "function" then
+    local ok, v = pcall(GetSpellBonusHealing)
+    if ok and not isSecret(v) and type(v) == "number" then bonus.heal = v end
+  end
+end
+
+-- The player's weapons and the stats the weapon abilities need, as the client reports them:
+-- the average hit (the character sheet's damage, which already holds attack power and form) and
+-- the time between swings for the main hand, the off hand and the ranged weapon, attack power,
+-- maximum health, class and form. WoW: Forever hides attack power in combat and these come from
+-- it, so in combat the last numbers read out of combat stay in use.
+local weaponStats = {}
+
+local function number(v) return not isSecret(v) and type(v) == "number" and v or nil end
+
+local function readWeapon()
+  if type(UnitDamage) == "function" then
+    local ok, lo, hi, olo, ohi = pcall(UnitDamage, "player")
+    if ok then
+      lo, hi, olo, ohi = number(lo), number(hi), number(olo), number(ohi)
+      if lo and hi and hi > 0 then weaponStats.melee = (lo + hi) / 2 end
+      -- a single weapon reports its off hand as nothing, or 0
+      if olo and ohi then weaponStats.offhand = (ohi > 0) and (olo + ohi) / 2 or nil end
+    end
+  end
+  if type(UnitAttackSpeed) == "function" then
+    local ok, speed, off = pcall(UnitAttackSpeed, "player")
+    if ok then
+      speed = number(speed)
+      if speed and speed > 0 then
+        weaponStats.meleeSpeed = speed
+        -- the seal up while the speed was read: Seal of the Crusader's faster attacks are in it
+        weaponStats.speedSeal = ns.ActiveSeal and ns.ActiveSeal() or nil
+      end
+      off = number(off)
+      if off ~= nil or speed then weaponStats.offhandSpeed = (off and off > 0) and off or nil end
+    end
+  end
+  if type(UnitRangedDamage) == "function" then
+    local ok, speed, lo, hi = pcall(UnitRangedDamage, "player")
+    if ok then
+      speed, lo, hi = number(speed), number(lo), number(hi)
+      if speed and lo and hi and speed > 0 and hi > 0 then
+        weaponStats.ranged, weaponStats.rangedSpeed = (lo + hi) / 2, speed
+      end
+    end
+  end
+  if type(UnitAttackPower) == "function" then
+    local ok, base, pos, neg = pcall(UnitAttackPower, "player")
+    if ok then
+      base, pos, neg = number(base), number(pos), number(neg)
+      if base then weaponStats.ap = base + (pos or 0) + (neg or 0) end
+    end
+  end
+  if type(UnitHealthMax) == "function" then
+    local ok, v = pcall(UnitHealthMax, "player")
+    v = ok and number(v) or nil
+    if v and v > 0 then weaponStats.maxHealth = v end
+  end
+  if not weaponStats.class and type(UnitClass) == "function" then
+    local ok, _, file = pcall(UnitClass, "player")
+    if ok and not isSecret(file) and type(file) == "string" then weaponStats.class = file end
+  end
+  if type(GetShapeshiftFormID) == "function" then
+    local ok, form = pcall(GetShapeshiftFormID)
+    if ok and not isSecret(form) then weaponStats.form = (type(form) == "number") and form or nil end
+  end
+end
+
+-- The target's attack speed, for what a lower attack power takes off each of its hits: Classic's
+-- rule, 14 attack power are 1 damage for each second of weapon speed (the rule WeaponView uses for
+-- the player's own weapon). UnitAttackSpeed can be secret in combat (SecretWhenUnitStatsRestricted):
+-- then the speed read before for the same unit, by its GUID when that is not secret too, or none, and
+-- the reduction stays in attack power ("-50 AP").
+local AP_PER_DPS = 14
+local SPEEDS_KEPT = 500 -- GUIDs remembered; past that the list starts again
+local targetSpeed
+local speedByGUID, speedCount = {}, 0
+
+local function readTargetSpeed()
+  targetSpeed = nil
+  if type(UnitExists) ~= "function" or type(UnitAttackSpeed) ~= "function" then return end
+  local ok, exists = pcall(UnitExists, "target")
+  if not ok or isSecret(exists) or not exists then return end
+  if type(UnitCanAttack) == "function" then
+    local okA, can = pcall(UnitCanAttack, "player", "target")
+    if okA and not isSecret(can) and not can then return end -- a friend: no hits to take off
+  end
+  local guid
+  if type(UnitGUID) == "function" then
+    local okG, g = pcall(UnitGUID, "target")
+    if okG and not isSecret(g) and type(g) == "string" then guid = g end
+  end
+  local okS, speed = pcall(UnitAttackSpeed, "target")
+  speed = okS and number(speed) or nil
+  if speed and speed > 0 then
+    targetSpeed = speed
+    if guid then
+      if not speedByGUID[guid] then
+        if speedCount >= SPEEDS_KEPT then speedByGUID, speedCount = {}, 0 end
+        speedCount = speedCount + 1
+      end
+      speedByGUID[guid] = speed
+    end
+  elseif guid then
+    targetSpeed = speedByGUID[guid]
+  end
+end
+ns.ReadTargetSpeed = readTargetSpeed
+function ns.TargetSpeed() return targetSpeed end
+
+-- What a reduction of attack power takes off each hit of the target, or nil: no target speed, a
+-- percentage, or a reduction of damage (per hit already).
+function ns.ReductionPerHit(r)
+  if type(r) ~= "table" or r.stat ~= "attackpower" or r.percent or not targetSpeed then return nil end
+  local v = r.amount * targetSpeed / AP_PER_DPS
+  return v >= 0.5 and v or nil
+end
+
+-- Attack power a point of strength or agility gives, by class (Classic's rules). Agility gives
+-- melee attack power only to rogues and hunters, and to a druid in Cat Form (form 1).
+local STR_AP = { WARRIOR = 2, PALADIN = 2, SHAMAN = 2, DRUID = 2 }
+local AGI_AP = { ROGUE = 1, HUNTER = 1 }
+local CAT_FORM = 1
+
+local function statToAP(stat, stats)
+  if stat == "str" then return STR_AP[stats.class or ""] or 1 end
+  if AGI_AP[stats.class or ""] then return 1 end
+  if stats.class == "DRUID" and stats.form == CAT_FORM then return 1 end
+  return 0
+end
+
+-- What a result of Parser.ParseWeapon is worth per hit with the weapon in stats: a hit
+-- ({ value, ... }) or a gain added to every hit ({ gain, ... }), or nil while a number it needs
+-- is not known. Classic's rule: 14 attack power add 1 damage for each second of weapon speed.
+-- Two things make it an estimate, and the tooltip says so: the speed is the one the client
+-- reports, which haste shortens, and instant attacks count attack power at a normalised weapon
+-- speed rather than the real one; either moves the number by a few percent. Cat Form's
+-- "plus Agility" is left out of the gain and named in the tooltip. formSpeed: the swing time of
+-- the form the spell shifts into (Cat or Bear Form), which its attack power counts in whatever
+-- form the player is in now. sealUp: the speed was read with this seal up, so its faster attacks
+-- are already in it.
+function ns.WeaponView(w, stats, formSpeed, sealUp)
+  if type(w) ~= "table" or type(stats) ~= "table" then return nil end
+  local hit = w.ranged and stats.ranged or stats.melee
+  local speed = w.ranged and stats.rangedSpeed or stats.meleeSpeed
+  if w.kind == "ap" then
+    if formSpeed then speed = formSpeed end
+    if not speed then return nil end
+    -- Seal of the Crusader: its hits come 40% faster, so each counts the attack power over a
+    -- shorter swing; the client's speed has that in it already while the seal is up
+    if w.faster and not sealUp then speed = speed / (1 + w.faster / 100) end
+    return { gain = w.amount / 14 * speed, amount = w.amount, speed = speed, ranged = w.ranged, plusAgility = w.plusAgility,
+      faster = w.faster }
+  end
+  if w.kind == "stat" then
+    local factor = statToAP(w.stat, stats)
+    if not speed or factor == 0 then return nil end
+    return { gain = w.amount * factor / 14 * speed, stat = w.stat, amount = w.amount, factor = factor, speed = speed }
+  end
+  if w.kind == "perhit" then
+    -- Where slower weapons do more per swing, a hit gains in proportion to the weapon's speed (a
+    -- 4.0 sec weapon twice what a 2.0 sec one does, the Seal of Righteousness page says). The
+    -- client's own text puts the range at base / 87 (or / 77) to base / 25, i.e. base x speed / 100
+    -- from about 1.15 (1.3) sec to 4.0 sec, so the top of the range is the 4.0 sec weapon's.
+    if w.bySpeed and stats.meleeSpeed then
+      local gain = w.max * stats.meleeSpeed / 4
+      if gain < w.min then gain = w.min end
+      if gain > w.max then gain = w.max end
+      return { gain = gain, perhit = true, min = w.min, max = w.max, school = w.school, speed = stats.meleeSpeed }
+    end
+    return { gain = (w.min + w.max) / 2, perhit = true, min = w.min, max = w.max, school = w.school }
+  end
+  if w.kind == "appct" then
+    if not stats.ap then return nil end
+    return { value = stats.ap * w.pct / 100 + (w.bonus or 0), appct = true, ap = stats.ap, pct = w.pct, bonus = w.bonus or 0 }
+  end
+  if not hit then return nil end
+  -- Windfury: each extra attack is a normal swing with the extra attack power on top
+  if w.kind == "extra" then
+    if not speed then return nil end
+    local each = hit + w.amount / 14 * speed
+    return { value = w.attacks * each, extra = true, attacks = w.attacks, hit = hit, amount = w.amount, speed = speed }
+  end
+  if w.kind == "dps" then
+    if not speed then return nil end
+    local dps = hit / speed
+    return { value = w.times * dps, times = w.times, dps = dps }
+  end
+  local pct = w.pct or 100
+  local bonusAvg = w.bonusMax and (w.bonus + w.bonusMax) / 2 or w.bonus or 0
+  if w.kind == "both" then
+    local off = stats.offhand
+    local value = hit * pct / 100 + bonusAvg + (off and (off * pct / 100 + bonusAvg) or 0)
+    return { value = value, both = true, hit = hit, off = off, pct = pct, bonus = w.bonus or 0 }
+  end
+  return { value = hit * pct / 100 + bonusAvg, hit = hit, pct = pct, bonus = w.bonus or 0, bonusMax = w.bonusMax,
+    ranged = w.ranged }
+end
+
+-- The seal on the player now. The seal's buff has the seal's own spell id, so the player's buffs
+-- are read and the first one whose description is a seal's is it. Where the client will not say
+-- (a secret aura), the last seal the player cast stands in until it would have run out.
+local sealCast = { id = nil, at = 0, duration = 0 }
+
+local function now()
+  if type(GetTime) ~= "function" then return nil end
+  local ok, t = pcall(GetTime)
+  if ok and not isSecret(t) and type(t) == "number" then return t end
+  return nil
+end
+
+local function buffSpellID(i)
+  -- returns id (or nil), done, unreadable
+  if C_UnitAuras and type(C_UnitAuras.GetBuffDataByIndex) == "function" then
+    local ok, aura = pcall(C_UnitAuras.GetBuffDataByIndex, "player", i)
+    if not ok then return nil, true, false end
+    if isSecret(aura) then return nil, true, true end
+    if type(aura) ~= "table" then return nil, true, false end
+    local id = aura.spellId
+    if isSecret(id) then return nil, false, true end
+    return type(id) == "number" and id or nil, false, false
+  end
+  if type(UnitBuff) == "function" then
+    local ok, name, _, _, _, _, _, _, _, _, id = pcall(UnitBuff, "player", i)
+    if not ok then return nil, true, false end
+    if isSecret(name) or isSecret(id) then return nil, false, true end
+    if name == nil then return nil, true, false end
+    return type(id) == "number" and id or nil, false, false
+  end
+  return nil, true, false
+end
+
+local function activeSeal()
+  local unreadable = false
+  for i = 1, 40 do
+    local id, done, secret = buffSpellID(i)
+    if secret then unreadable = true end
+    if done then break end
+    if id then
+      local e = getEntry(id)
+      if e and e.isSeal then return id end
+    end
+  end
+  local t = now()
+  if unreadable and sealCast.id and t and t - sealCast.at < sealCast.duration then return sealCast.id end
+  return nil
+end
+ns.ActiveSeal = activeSeal
+
+local function noteSealCast(spellID)
+  local e = getEntry(spellID)
+  if not e or not e.isSeal then return end
+  sealCast.id, sealCast.at, sealCast.duration = spellID, now() or 0, e.sealDuration or 30
+end
+
+-- A spell name, or nil.
+local function spellName(spellID)
+  local fn = (C_Spell and C_Spell.GetSpellName) or GetSpellInfo
+  if type(fn) ~= "function" then return nil end
+  local ok, name = pcall(fn, spellID)
+  if ok and not isSecret(name) and type(name) == "string" then return name end
+  return nil
+end
+
+-- The client's own share of spell power where SpellCoefficients has the spell, Classic's rules
+-- otherwise. A totem or trap (false there) shows the description's own number, as a pet's spell
+-- does. noBonus: a chance effect; the cast time rule would give it a share of spell power it does
+-- not get, so without the tables' share for what it triggers it shows the description's number.
+local function withEstimate(parsed, spellID, pet, castTime, noBonus)
+  if pet or not db.estimate or isRetail() then return Estimate.Apply(parsed, nil, nil, nil) end
+  local coef = spellCoefficients(spellID)
+  if coef == false or (noBonus and not coef) then return Estimate.Apply(parsed, nil, nil, nil) end
+  if castTime == nil then castTime = getCastTime(spellID) end
+  return Estimate.Apply(parsed, castTime, Estimate.DamageBonus(parsed.school, bonus.damage), bonus.heal, coef)
+end
+
+local function specialView(s, spellID, pet, noBonus)
+  if s.absorb then return { absorb = s.absorb } end
+  if s.healthCost then return { healthCost = s.healthCost, manaGain = s.manaGain } end
+  if s.healMaxHealth then
+    local mh = weaponStats.maxHealth
+    if pet or not mh then return nil end
+    return { heal = { min = mh, max = mh, added = 0 }, healMax = true }
+  end
+  local view = withEstimate(s, spellID, pet, nil, noBonus)
+  if view then
+    view.perAttack, view.perBlock, view.every, view.perRage, view.hits = s.perAttack, s.perBlock, s.every, s.perRage, s.hits
+    view.perStrike, view.first = s.perStrike, s.first
+  end
+  return view
+end
+
+local function finisherView(f, spellID, pet)
+  local top = f.points[f.top]
+  if not top then return nil end
+  local parsed = { school = "physical" }
+  if f.kind == "dot" then parsed.dot = top else parsed.direct = top end
+  local view = Estimate.Apply(parsed, nil, nil, nil)
+  if view then view.finisher = f end
+  return view
+end
+
+-- Judgement: the active seal's Judgement damage, with the spell power estimate an instant spell
+-- gets; nil without a seal, or with one whose Judgement does no damage.
+local function judgementView(pet)
+  if pet then return nil end
+  local sealID = activeSeal()
+  if not sealID then return nil end
+  local seal = getEntry(sealID)
+  if not seal or not seal.judgement then return nil end
+  local view = withEstimate(seal.judgement, nil, false, 0)
+  if view then view.fromSeal = spellName(sealID) or tostring(sealID) end
+  return view
+end
+
+-- What to show for a spell: a view from Estimate.Apply, a weapon view ({ weapon = ... }), a
+-- shield ({ absorb = n }), or nil. A pet's spell gets the description's numbers only: the pet
+-- has its own spell power, and the player's would be wrong; the player's weapon means nothing to
+-- it either.
+function ns.Compute(spellID, pet)
+  local entry = getEntry(spellID)
+  if not entry then return nil end
+  local show, proc = entry.show, entry.proc
+  local view
+  -- An ability the parser reads as a weapon attack is shown that way or not at all: the number
+  -- Parse finds in some of them ("causing 115 additional damage") is only the part on top.
+  if show == "weapon" then
+    if pet or not db.weapon then return nil end
+    local w = ns.WeaponView(entry.weapon, weaponStats, formSpeed(spellID), weaponStats.speedSeal == spellID)
+    view = w and { weapon = w } or nil
+  elseif show == "judgement" then
+    return judgementView(pet)
+  elseif show == "special" then
+    view = specialView(entry.special, spellID, pet, proc)
+  elseif show == "parsed" then
+    view = withEstimate(entry.parsed, spellID, pet, nil, proc)
+  elseif show == "finisher" then
+    view = finisherView(entry.finisher, spellID, pet)
+  end
+  -- a chance effect: the number is what one trigger does
+  if view and proc then view.proc = proc end
+  return view
+end
+
+-- A seal's Judgement damage, for the seal's own tooltip, or nil.
+function ns.SealJudgement(spellID)
+  local entry = getEntry(spellID)
+  return entry and entry.judgement or nil
+end
+
+function ns.IsJudgementSpell(spellID)
+  local entry = getEntry(spellID)
+  return entry and entry.isJudgement or false
+end
+
+-- How much the spell lowers the enemy's damage or attack power (from Parser.ParseReduction), or nil.
+function ns.Reduction(spellID)
+  local entry = getEntry(spellID)
+  return entry and entry.reduction or nil
+end
+
+---------------------------------------------------------------------------------------------
+-- Action buttons
+---------------------------------------------------------------------------------------------
+
+-- Blizzard's action bars on Classic Era and Forever (ActionButtonUtil lists them where it
+-- exists); BonusActionButton is the old stance/stealth bar of earlier Classic clients, and
+-- MultiCastActionButton Forever's Totem Bar, whose buttons are action buttons that ActionButtonUtil
+-- does not list.
+local BAR_PREFIXES = {
+  "ActionButton", "MultiBarBottomLeftButton", "MultiBarBottomRightButton", "MultiBarLeftButton",
+  "MultiBarRightButton", "MultiBar5Button", "MultiBar6Button", "MultiBar7Button", "BonusActionButton",
+  "MultiCastActionButton",
+}
+
+local buttons = {} -- list of Blizzard action buttons
+local labels = {}  -- [button] = our FontString for the main number
+local sideLabels = {} -- [button] = our smaller FontString for a reduction next to a damage number
+
+local function collectButtons()
+  local prefixes, seenPrefix = {}, {}
+  local function addPrefix(p)
+    if type(p) == "string" and not seenPrefix[p] then
+      seenPrefix[p] = true
+      prefixes[#prefixes + 1] = p
+    end
+  end
+  if type(ActionButtonUtil) == "table" and type(ActionButtonUtil.ActionBarButtonNames) == "table" then
+    for _, p in ipairs(ActionButtonUtil.ActionBarButtonNames) do addPrefix(p) end
+  end
+  for _, p in ipairs(BAR_PREFIXES) do addPrefix(p) end
+
+  local seen = {}
+  for _, b in ipairs(buttons) do seen[b] = true end
+  for _, prefix in ipairs(prefixes) do
+    for i = 1, 12 do
+      local b = _G[prefix .. i]
+      if type(b) == "table" and not seen[b] and type(b.CreateFontString) == "function" then
+        seen[b] = true
+        buttons[#buttons + 1] = b
+      end
+    end
+  end
+end
+
+-- The pet bar: PetActionButton1..10 on Classic Era and Forever (Forever's bar frame is
+-- PetActionBar, as on Retail, and lists its buttons in actionButtons). [button] = pet action slot.
+local petButtons = {}
+local petSlots = {}
+
+local function readID(button)
+  if type(button.GetID) ~= "function" then return nil end
+  local ok, id = pcall(button.GetID, button)
+  if ok and not isSecret(id) and type(id) == "number" and id >= 1 then return id end
+  return nil
+end
+
+local function collectPetButtons()
+  local main = {}
+  for _, b in ipairs(buttons) do main[b] = true end
+  local function add(b, slot)
+    if type(b) == "table" and not petSlots[b] and not main[b] and type(b.CreateFontString) == "function" and slot then
+      petSlots[b] = slot
+      petButtons[#petButtons + 1] = b
+    end
+  end
+  local n = NUM_PET_ACTION_SLOTS
+  if isSecret(n) or type(n) ~= "number" or n < 1 or n > 20 then n = 10 end
+  for i = 1, n do
+    local b = _G["PetActionButton" .. i]
+    if type(b) == "table" then add(b, readID(b) or i) end
+  end
+  for _, bar in ipairs({ PetActionBar, PetActionBarFrame }) do
+    if type(bar) == "table" and type(bar.actionButtons) == "table" then
+      for i, b in ipairs(bar.actionButtons) do
+        if type(b) == "table" then add(b, readID(b) or i) end
+      end
+    end
+  end
+end
+
+-- The number is sized from the button: FONT_SHARE of its height at size 100%, with an outline.
+local FONT_SHARE = 0.45
+local SIDE_SHARE = 0.75 -- the reduction next to a damage number, relative to the main number
+local SIDE_MAX_CHARS = 4 -- "-146", "-10%": longer ones are left out, the damage number wins
+local MIN_FONT = 6
+
+local function readNumber(obj, method)
+  if type(obj[method]) ~= "function" then return nil end
+  local ok, v = pcall(obj[method], obj)
+  if ok and not isSecret(v) and type(v) == "number" and v > 0 then return v end
+  return nil
+end
+
+local function fontFile()
+  local obj = NumberFontNormal or NumberFontNormalSmall
+  if type(obj) == "table" and type(obj.GetFont) == "function" then
+    local ok, file = pcall(obj.GetFont, obj)
+    if ok and not isSecret(file) and type(file) == "string" and file ~= "" then return file end
+  end
+  return "Fonts\\ARIALN.TTF"
+end
+
+-- Font size in points for a button: its height (Blizzard buttons are 36, some bars are
+-- smaller or scaled), the share, and the size setting.
+local function fontSize(button, share)
+  local h = readNumber(button, "GetHeight") or 36
+  local size = math.floor(h * FONT_SHARE * share * db.size / 100 + 0.5)
+  if size < MIN_FONT then size = MIN_FONT end
+  return size
+end
+
+local fontSizes = {} -- [our FontString] = its current size
+
+local function setFont(fs, size)
+  fontSizes[fs] = size
+  pcall(fs.SetFont, fs, fontFile(), size, "OUTLINE")
+end
+
+-- Shrink the text until it fits inside the button.
+local function fitWidth(fs, button)
+  local w = readNumber(button, "GetWidth")
+  if not w or type(fs.GetStringWidth) ~= "function" then return end
+  local size = fontSizes[fs]
+  for _ = 1, 10 do
+    local sw = readNumber(fs, "GetStringWidth")
+    if not sw or sw <= w - 2 or size <= MIN_FONT then return end
+    size = math.max(MIN_FONT, math.min(size - 1, math.floor(size * (w - 2) / sw)))
+    setFont(fs, size)
+  end
+end
+
+-- Does the button show a count (reagents, charges) in its bottom right corner? Blizzard's buttons
+-- draw C_ActionBar.GetActionDisplayCount, "" when there is none; the global GetActionCount exists
+-- on Forever and Classic Era only in a deprecation file that loads when a setting asks for it.
+local function hasCount(slot)
+  if isSecret(slot) or type(slot) ~= "number" then return false end
+  local bar = type(C_ActionBar) == "table" and C_ActionBar or nil
+  if bar and type(bar.GetActionDisplayCount) == "function" then
+    local ok, text = pcall(bar.GetActionDisplayCount, slot)
+    if ok and isSecret(text) then return false end
+    if ok and type(text) == "string" then return text ~= "" end
+  end
+  local get = bar and bar.GetActionUseCount
+  if type(get) ~= "function" then get = GetActionCount end
+  if type(get) ~= "function" then return false end
+  local ok, n = pcall(get, slot)
+  return ok and not isSecret(n) and type(n) == "number" and n > 0
+end
+
+-- Hotkey text is top right and the count bottom right, so the number stays away from the right
+-- edge when the count is shown.
+local function placeMain(fs, button, countShown)
+  fs:ClearAllPoints()
+  if db.position == "center" then
+    fs:SetPoint("CENTER", button, "CENTER", 0, 0)
+    fs:SetJustifyH("CENTER")
+  elseif db.position == "top" then
+    fs:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
+    fs:SetJustifyH("LEFT")
+  elseif countShown then
+    fs:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
+    fs:SetJustifyH("LEFT")
+  else
+    fs:SetPoint("BOTTOM", button, "BOTTOM", 0, 2)
+    fs:SetJustifyH("CENTER")
+  end
+end
+
+local function placeSide(fs, button)
+  fs:ClearAllPoints()
+  if db.position == "top" then
+    fs:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
+  else
+    fs:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
+  end
+  fs:SetJustifyH("LEFT")
+end
+
+local function newLabel(button)
+  local template = NumberFontNormal and "NumberFontNormal" or "GameFontHighlight"
+  return button:CreateFontString(nil, "OVERLAY", template)
+end
+
+local function getLabel(button)
+  local fs = labels[button]
+  if not fs then
+    fs = newLabel(button)
+    labels[button] = fs
+  end
+  return fs
+end
+
+local function getSideLabel(button)
+  local fs = sideLabels[button]
+  if not fs then
+    fs = newLabel(button)
+    sideLabels[button] = fs
+  end
+  return fs
+end
+
+local function hide(fs)
+  if fs then fs:SetText(""); fs:Hide() end
+end
+
+local function spellOnSlot(slot)
+  if isSecret(slot) or type(slot) ~= "number" or type(GetActionInfo) ~= "function" then return nil end
+  local ok, kind, id, sub = pcall(GetActionInfo, slot)
+  if not ok or isSecret(kind) or isSecret(id) or isSecret(sub) then return nil end
+  if kind == "spell" and type(id) == "number" then return id end
+  -- SDI-MACRO: a /cast macro slot reports ("macro", spellID, "spell") - Blizzard reads
+  -- the macro's spell from id (ActionButton.lua:1041), so the number belongs on the button.
+  if kind == "macro" and sub == "spell" and type(id) == "number" then return id end
+  return nil
+end
+ns.SpellOnSlot = spellOnSlot
+
+-- The spell on a pet action slot, or nil for an empty slot, a command (Attack, Follow, Stay and
+-- the stances are tokens) or anything the client hides. GetPetActionInfo returns name, texture,
+-- isToken, isActive, autoCastAllowed, autoCastEnabled, spellID.
+local function petSpellOnSlot(slot)
+  if isSecret(slot) or type(slot) ~= "number" or type(GetPetActionInfo) ~= "function" then return nil end
+  local ok, name, _, isToken, _, _, _, spellID = pcall(GetPetActionInfo, slot)
+  if not ok or isSecret(name) or name == nil or isSecret(isToken) or isToken then return nil end
+  if isSecret(spellID) or type(spellID) ~= "number" or spellID <= 0 then return nil end
+  return spellID
+end
+ns.PetSpellOnSlot = petSpellOnSlot
+
+-- The text on a button for a view from ns.Compute and a reduction from ns.Reduction (either may
+-- be nil), under the current settings: main text, its colour, and the smaller reduction text
+-- next to it (or nil). The options window's preview draws its sample spells through this too.
+local function buttonText(view, reduction)
+  if db.button == "off" then return nil end
+  -- Life Tap: vertical dual-label, green -HP on top, blue +mana below.
+  if view and view.healthCost then
+    local mainText = "-" .. Format.Short(view.healthCost) .. " HP"
+    local sideText
+    if view.manaGain and view.manaGain >= 0.5 then
+      sideText = "+" .. Format.Short(view.manaGain) .. " mana"
+    end
+    return mainText, Format.HEAL_COLOR, sideText, Format.WEAPON_COLOR, "stacked"
+  end
+  if not db.reduction then reduction = nil end
+  local value, kind = Estimate.ButtonValue(view, db.button)
+  if value and value < 0.5 then value = nil end
+
+  local mainText, mainColor, sideText
+  local w = view and view.weapon
+  if w then
+    value = w.gain or w.value
+    if value and value < 0.5 then value = nil end
+  end
+  if value and w then
+    mainText = (w.gain and "+" or "") .. Format.Short(value)
+    mainColor = Format.WEAPON_COLOR
+    if reduction then
+      local perHit = ns.ReductionPerHit(reduction)
+      local t = perHit and Format.ReductionText(reduction, ns.L, perHit) or Format.ReductionAmount(reduction, ns.L)
+      if #t <= SIDE_MAX_CHARS then sideText = t end
+    end
+  elseif value then
+    mainText = Format.Short(value)
+    mainColor = (kind == "heal") and Format.HEAL_COLOR or Format.DAMAGE_COLOR
+    if reduction then
+      -- the small red number beside the damage: per hit where the target's speed is known, else the
+      -- amount alone ("-100 AP" does not fit there)
+      local perHit = ns.ReductionPerHit(reduction)
+      local t = perHit and Format.ReductionText(reduction, ns.L, perHit) or Format.ReductionAmount(reduction, ns.L)
+      if #t <= SIDE_MAX_CHARS then sideText = t end
+    end
+  elseif view and view.absorb and view.absorb >= 0.5 then
+    mainText = Format.Short(view.absorb)
+    mainColor = Format.ABSORB_COLOR
+  elseif reduction then
+    mainText = Format.ReductionText(reduction, ns.L, ns.ReductionPerHit(reduction))
+    mainColor = Format.REDUCTION_COLOR
+  end
+  return mainText, mainColor, sideText
+end
+ns.ButtonText = buttonText
+
+-- Life Tap has two full labels, not a small reduction in the opposite corner. Keep both
+-- below the hotkey even at 200% size; the health cost is always above the mana gained.
+local function drawStacked(button, fs, side, mainText, mainColor, sideText, sideColor)
+  local h = readNumber(button, "GetHeight") or 36
+  local size = math.min(fontSize(button, SIDE_SHARE), math.max(MIN_FONT, math.floor((h - 18) / 2)))
+  local mainY = 2
+  if side and sideText then
+    side:ClearAllPoints()
+    side:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
+    side:SetJustifyH("LEFT")
+    setFont(side, size)
+    local c = sideColor or Format.WEAPON_COLOR
+    side:SetTextColor(c[1], c[2], c[3])
+    side:SetText(sideText)
+    fitWidth(side, button)
+    side:Show()
+    mainY = fontSizes[side] + 3
+  else
+    hide(side)
+  end
+  fs:ClearAllPoints()
+  fs:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, mainY)
+  fs:SetJustifyH("LEFT")
+  setFont(fs, size)
+  fs:SetTextColor(mainColor[1], mainColor[2], mainColor[3])
+  fs:SetText(mainText)
+  fitWidth(fs, button)
+  fs:Show()
+end
+
+-- Draws the text from buttonText on a button: fs is the main FontString, side the reduction's
+-- (may be nil when there is no sideText). countShown: the button shows a count bottom right.
+local function drawNumber(button, fs, side, mainText, mainColor, sideText, countShown, sideColor, layout)
+  if not mainText then
+    hide(fs)
+    hide(side)
+    return
+  end
+  if layout == "stacked" then
+    drawStacked(button, fs, side, mainText, mainColor, sideText, sideColor)
+    return
+  end
+  placeMain(fs, button, countShown)
+  setFont(fs, fontSize(button, 1))
+  fs:SetTextColor(mainColor[1], mainColor[2], mainColor[3])
+  fs:SetText(mainText)
+  fitWidth(fs, button)
+  fs:Show()
+
+  if sideText and side then
+    placeSide(side, button)
+    setFont(side, fontSize(button, SIDE_SHARE))
+    local c = sideColor or Format.REDUCTION_COLOR
+    side:SetTextColor(c[1], c[2], c[3])
+    side:SetText(sideText)
+    side:Show()
+  else
+    hide(side)
+  end
+end
+ns.DrawNumber = drawNumber
+ns.NewLabel = newLabel
+
+-- Spells on the bars that give no number at all, each kept once, so the player's own client
+-- can say which wordings are still not read (/sdi misses). Kept in the saved variables and
+-- capped; /sdi misses clear empties the list. Utility spells land here too, which is fine:
+-- the list is read by a person.
+local MISSES_MAX = 200
+local missSeen, missCount = {}, 0
+
+local function noteMiss(spellID)
+  if missSeen[spellID] or missCount >= MISSES_MAX or type(db.misses) ~= "table" then return end
+  local entry = parsedCache[spellID]
+  -- a seal with nothing per hit shows nothing on purpose: its Judgement is on Judgement's button
+  if not entry or entry.show or entry.reduction or entry.isSeal then return end
+  missSeen[spellID] = true
+  missCount = missCount + 1
+  local build
+  if type(GetBuildInfo) == "function" then
+    local ok, _, b = pcall(GetBuildInfo)
+    if ok and not isSecret(b) then build = b end
+  end
+  db.misses[#db.misses + 1] = { id = spellID, name = spellName(spellID), text = entry.text,
+    lang = ns.DescriptionLang(), build = build }
+end
+
+-- /sdi dump: every spell in the player's spellbook, with the description as this client shows
+-- it and what the addon reads from it, into the saved variables (db.dump). Written to disk at
+-- the next logout or /reload; for testing the parser against the game's own texts rather than
+-- a website's. Spells whose text has not loaded yet are asked for and counted as missing: a
+-- second /sdi dump a moment later has them. /sdi dump all does the same for every rank of every
+-- class ability (SpellIDs.lua), known or not, into db.dumpAll: one character gives the client's
+-- texts for all nine classes. The client holds only the player's own class's spells; the rest
+-- arrive over the next seconds after they are asked for, so dump all reads again every 2 seconds
+-- until no more arrive (ns.DumpAll).
+local function spellbookIDs()
+  local ids = {}
+  if C_SpellBook and type(C_SpellBook.GetNumSpellBookSkillLines) == "function" then
+    local bank = (type(Enum) == "table" and type(Enum.SpellBookSpellBank) == "table" and Enum.SpellBookSpellBank.Player) or 0
+    local okN, n = pcall(C_SpellBook.GetNumSpellBookSkillLines)
+    n = okN and not isSecret(n) and type(n) == "number" and n or 0
+    for line = 1, n do
+      local ok, info = pcall(C_SpellBook.GetSpellBookSkillLineInfo, line)
+      if ok and type(info) == "table" and type(info.itemIndexOffset) == "number" and type(info.numSpellBookItems) == "number" then
+        for i = info.itemIndexOffset + 1, info.itemIndexOffset + info.numSpellBookItems do
+          local ok2, item = pcall(C_SpellBook.GetSpellBookItemInfo, i, bank)
+          if ok2 and type(item) == "table" and not isSecret(item.spellID) and type(item.spellID) == "number" then
+            ids[#ids + 1] = item.spellID
+          end
+        end
+      end
+    end
+  elseif type(GetNumSpellTabs) == "function" and type(GetSpellTabInfo) == "function" and type(GetSpellBookItemInfo) == "function" then
+    local okN, tabs = pcall(GetNumSpellTabs)
+    for tab = 1, (okN and type(tabs) == "number" and tabs or 0) do
+      local ok, _, _, offset, count = pcall(GetSpellTabInfo, tab)
+      if ok and type(offset) == "number" and type(count) == "number" then
+        for i = offset + 1, offset + count do
+          local ok2, kind, id = pcall(GetSpellBookItemInfo, i, "spell")
+          if ok2 and kind == "SPELL" and type(id) == "number" then ids[#ids + 1] = id end
+        end
+      end
+    end
+  end
+  return ids
+end
+
+local function readsAs(entry)
+  local parts = { "show=" .. tostring(entry.show), "lang=" .. tostring(entry.lang) }
+  for _, k in ipairs({ "parsed", "reduction", "weapon", "special", "finisher", "judgement" }) do
+    if entry[k] then parts[#parts + 1] = k end
+  end
+  if entry.isSeal then parts[#parts + 1] = "seal" end
+  if entry.isJudgement then parts[#parts + 1] = "judgement-spell" end
+  if entry.proc then parts[#parts + 1] = "proc=" .. tostring(entry.proc) end
+  return #parts > 0 and table.concat(parts, ",") or "nothing"
+end
+
+function ns.Dump(all)
+  local build
+  if type(GetBuildInfo) == "function" then
+    local ok, v, b = pcall(GetBuildInfo)
+    if ok and not isSecret(b) then build = tostring(v) .. "." .. tostring(b) end
+  end
+  local lang = ns.DescriptionLang()
+  local out = { build = build, lang = lang, class = weaponStats.class, spells = {}, missing = 0 }
+  local ids = {}
+  if all then
+    for id in string.gmatch(ns.AllSpellIDs or "", "%d+") do ids[#ids + 1] = tonumber(id) end
+  else
+    ids = spellbookIDs()
+  end
+  local seen = {}
+  for _, id in ipairs(ids) do
+    if not seen[id] then
+      seen[id] = true
+      -- read here rather than through getEntry: most of these are never on a button
+      local text = getDescription(id)
+      if text then
+        local entry = Parser.Read(text, lang, isRetail())
+        out.spells[#out.spells + 1] = { id = id, name = spellName(id), text = text, reads = readsAs(entry) }
+      else
+        -- asked again on every pass of dump all: a request the client dropped is not remembered
+        if all and C_Spell and type(C_Spell.RequestLoadSpellData) == "function" then
+          pcall(C_Spell.RequestLoadSpellData, id)
+        else
+          requestLoad(id)
+        end
+        out.missing = out.missing + 1
+      end
+    end
+  end
+  if all then db.dumpAll = out else db.dump = out end
+  return out
+end
+
+-- /sdi dump all: a pass every 2 seconds while spells keep arriving, at most 30; stops after three
+-- passes that bring nothing new (spells the client does not have never arrive). Each pass writes
+-- db.dumpAll, so a /reload in between keeps what was read so far. done(list) is called once.
+local dumpAllRun = 0
+function ns.DumpAll(done)
+  dumpAllRun = dumpAllRun + 1
+  local run = dumpAllRun
+  local passes, still, last = 0, 0, nil
+  local function pass()
+    if run ~= dumpAllRun then return end -- a newer dump all took over
+    passes = passes + 1
+    local list = ns.Dump(true)
+    if last and list.missing >= last then still = still + 1 else still = 0 end
+    last = list.missing
+    local timer = C_Timer and type(C_Timer.After) == "function"
+    if list.missing == 0 or still >= 3 or passes >= 30 or not timer then
+      done(list)
+      return
+    end
+    C_Timer.After(2, pass)
+  end
+  pass()
+end
+
+local function updateButton(button, pet)
+  local view, reduction
+  if db.button ~= "off" then
+    local spellID
+    if pet then spellID = petSpellOnSlot(petSlots[button]) else spellID = spellOnSlot(button.action) end
+    if spellID then
+      view = ns.Compute(spellID, pet)
+      if db.reduction then reduction = ns.Reduction(spellID) end
+      noteMiss(spellID)
+    end
+  end
+  local mainText, mainColor, sideText, sideColor, layout = buttonText(view, reduction)
+  if not mainText then
+    hide(labels[button])
+    hide(sideLabels[button])
+    return
+  end
+  local side = sideText and getSideLabel(button) or sideLabels[button]
+  drawNumber(button, getLabel(button), side, mainText, mainColor, sideText, not pet and hasCount(button.action), sideColor, layout)
+end
+
+local function updateAllButtons()
+  for _, b in ipairs(buttons) do updateButton(b, false) end
+  for _, b in ipairs(petButtons) do updateButton(b, true) end
+end
+
+local pending = false
+local function requestUpdate()
+  if pending then return end
+  pending = true
+  local function run()
+    pending = false
+    readBonus()
+    readWeapon()
+    parseBudget, parseDeferred = PARSE_BUDGET, false
+    updateAllButtons()
+    parseBudget = nil
+    if parseDeferred then requestUpdate() end
+  end
+  -- A short delay lets Blizzard's own handlers set button.action after a page change first.
+  if C_Timer and type(C_Timer.After) == "function" then C_Timer.After(0.1, run) else run() end
+end
+ns.Refresh = requestUpdate
+
+---------------------------------------------------------------------------------------------
+-- Tooltip
+---------------------------------------------------------------------------------------------
+
+-- Adds our lines; returns how many. A pet's spell says so at the end of each line.
+local function addTooltipLines(tooltip, spellID, pet)
+  if not db.tooltip or isSecret(spellID) or type(spellID) ~= "number" then return 0 end
+  local view = ns.Compute(spellID, pet)
+  local lines = Format.TooltipLines(view, L)
+  local gray = Format.NOTE_COLOR
+  -- Judgement's number is its seal's; without a seal there is none, and the tooltip says why
+  if not view and not pet and ns.IsJudgementSpell(spellID) then
+    lines[#lines + 1] = { L.NO_SEAL, gray[1], gray[2], gray[3] }
+  end
+  -- a seal's own tooltip also says what its Judgement does
+  local judgement = not pet and ns.SealJudgement(spellID)
+  if judgement then lines[#lines + 1] = Format.JudgementLine(judgement, L) end
+  if db.reduction then
+    local reduction = ns.Reduction(spellID)
+    if reduction then
+      lines[#lines + 1] = Format.ReductionLine(reduction, L, ns.ReductionPerHit(reduction), ns.TargetSpeed())
+    end
+  end
+  for _, line in ipairs(lines) do
+    local text = pet and (line[1] .. " (" .. L.PET .. ")") or line[1]
+    tooltip:AddLine(text, line[2], line[3], line[4])
+  end
+  return #lines
+end
+ns.AddTooltipLines = addTooltipLines
+
+-- The pet action slot of the button a tooltip belongs to, or nil.
+local function ownerPetSlot(tooltip)
+  if type(tooltip.GetOwner) ~= "function" then return nil end
+  local ok, owner = pcall(tooltip.GetOwner, tooltip)
+  if ok and type(owner) == "table" then return petSlots[owner] end
+  return nil
+end
+
+-- Is the tooltip's owner a spell on the spellbook's pet page? Forever's spellbook item keeps its
+-- bank (Enum.SpellBookSpellBank) on the frame that holds the button the tooltip belongs to;
+-- Classic Era's SpellButton reads the page from SpellBookFrame.bookType.
+local function ownerIsPetSpellBook(tooltip)
+  if type(tooltip.GetOwner) ~= "function" then return false end
+  local ok, owner = pcall(tooltip.GetOwner, tooltip)
+  if not ok or type(owner) ~= "table" then return false end
+  local banks = type(Enum) == "table" and Enum.SpellBookSpellBank
+  if type(banks) == "table" and banks.Pet ~= nil then
+    local item = owner
+    if owner.spellBank == nil and type(owner.GetParent) == "function" then
+      local okP, parent = pcall(owner.GetParent, owner)
+      item = okP and parent or nil
+    end
+    if type(item) == "table" and item.spellBank == banks.Pet then return true end
+  end
+  if type(SpellButtonMixin) == "table" and owner.OnEnter ~= nil and owner.OnEnter == SpellButtonMixin.OnEnter
+    and type(SpellBookFrame) == "table" then
+    return SpellBookFrame.bookType == (BOOKTYPE_PET or "pet")
+  end
+  return false
+end
+
+-- A pet action tooltip can reach us twice: through a tooltip data post-call (on clients that
+-- build tooltips from data, and again when the tooltip refreshes) and through the SetPetAction
+-- hook right after it. The post-call marks the tooltip so the hook does not add the lines again.
+local petLinesDone = {} -- [tooltip] = true
+
+local function addPetLines(tooltip, slot)
+  return addTooltipLines(tooltip, petSpellOnSlot(slot), true)
+end
+
+local function hookTooltips()
+  local postCalls = type(TooltipDataProcessor) == "table" and type(TooltipDataProcessor.AddTooltipPostCall) == "function"
+    and type(Enum) == "table" and type(Enum.TooltipDataType) == "table"
+  if postCalls and Enum.TooltipDataType.Spell then
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Spell, function(tooltip, data)
+      local slot = ownerPetSlot(tooltip)
+      if slot then
+        addPetLines(tooltip, slot)
+        petLinesDone[tooltip] = true
+      elseif type(data) == "table" then
+        addTooltipLines(tooltip, data.id, ownerIsPetSpellBook(tooltip))
+      end
+    end)
+  elseif GameTooltip and type(GameTooltip.HookScript) == "function" then
+    GameTooltip:HookScript("OnTooltipSetSpell", function(tooltip)
+      if ownerPetSlot(tooltip) then return end -- the SetPetAction hook below handles it
+      local _, spellID = tooltip:GetSpell()
+      addTooltipLines(tooltip, spellID, ownerIsPetSpellBook(tooltip))
+    end)
+  end
+  if postCalls and Enum.TooltipDataType.PetAction and Enum.TooltipDataType.PetAction ~= Enum.TooltipDataType.Spell then
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.PetAction, function(tooltip)
+      local slot = ownerPetSlot(tooltip)
+      if slot then
+        addPetLines(tooltip, slot)
+        petLinesDone[tooltip] = true
+      end
+    end)
+  end
+  if type(hooksecurefunc) == "function" and GameTooltip and type(GameTooltip.SetPetAction) == "function" then
+    if type(GameTooltip.HookScript) == "function" then
+      -- SetPetAction clears the tooltip before the post-calls run, so a mark left by an earlier
+      -- tooltip is gone by then
+      pcall(GameTooltip.HookScript, GameTooltip, "OnTooltipCleared", function(tooltip) petLinesDone[tooltip] = nil end)
+    end
+    hooksecurefunc(GameTooltip, "SetPetAction", function(tooltip, slot)
+      if petLinesDone[tooltip] then
+        petLinesDone[tooltip] = nil
+        return
+      end
+      if addPetLines(tooltip, slot) > 0 and type(tooltip.Show) == "function" then tooltip:Show() end
+    end)
+  end
+end
+
+---------------------------------------------------------------------------------------------
+-- Settings and /sdi
+---------------------------------------------------------------------------------------------
+
+local function onOff(v) return v and L.ON or L.OFF end
+
+local function toggleArg(arg, current)
+  if arg == "on" or arg == "an" then return true end
+  if arg == "off" or arg == "aus" then return false end
+  if arg == nil or arg == "" then return not current end
+  return nil
+end
+
+-- Is value valid for setting key? Used by the options window; the slash handler checks its own.
+local function validSetting(key, value)
+  if key == "button" then return BUTTON_MODES[value] == true end
+  if key == "position" then return POSITIONS[value] == true end
+  if key == "size" then return type(value) == "number" and value >= SIZE_MIN and value <= SIZE_MAX end
+  if key == "estimate" or key == "tooltip" or key == "reduction" or key == "weapon" then return type(value) == "boolean" end
+  if key == "interfaceLang" then return value == "auto" or value == "en" or value == "de" end
+  return false
+end
+
+-- Settings changed from outside the options window (/sdi): the window, when open, shows them.
+local function settingsChanged()
+  if type(ns.OptionsChanged) == "function" then ns.OptionsChanged() end
+end
+
+-- For Options.lua: the live settings table (loadSettings replaces it), a checked write, and
+-- a reset. Both writes refresh the buttons.
+ns.DEFAULTS, ns.SIZE_MIN, ns.SIZE_MAX = DEFAULTS, SIZE_MIN, SIZE_MAX
+function ns.GetSettings() return db end
+
+function ns.SetSetting(key, value)
+  if not validSetting(key, value) then return false end
+  if key == "size" then value = math.floor(value + 0.5) end
+  db[key] = value
+  requestUpdate()
+  return true
+end
+
+function ns.ResetSettings()
+  for k, v in pairs(DEFAULTS) do db[k] = v end
+  ns.SetInterfaceAndRefreshL(DEFAULTS.interfaceLang)
+  requestUpdate()
+end
+
+-- Is a bar addon built on LibActionButton (Bartender4, ElvUI and others) loaded? Its buttons are
+-- its own, and only Blizzard's get numbers; /sdi status says so.
+local function barAddonLoaded()
+  if type(LibStub) ~= "table" or type(LibStub.IterateLibraries) ~= "function" then return false end
+  local ok, iter, state, key = pcall(LibStub.IterateLibraries, LibStub)
+  if not ok or type(iter) ~= "function" then return false end
+  for name in iter, state, key do
+    if type(name) == "string" and name:find("^LibActionButton%-1%.0") then return true end
+  end
+  return false
+end
+
+local function langLabel(lang)
+  if lang == "en" then return L.LANG_EN end
+  if lang == "de" then return L.LANG_DE end
+  return L.LANG_AUTO
+end
+
+local function slash(msg)
+  msg = type(msg) == "string" and msg:lower() or ""
+  local cmd, arg = msg:match("^%s*(%S*)%s*(%S*)")
+  if (cmd == "" or cmd == "options" or cmd == "config") and type(ns.OpenOptions) == "function" then
+    ns.OpenOptions()
+    return
+  end
+  if cmd == "" or cmd == "help" or cmd == "hilfe" then
+    for _, line in ipairs(L.HELP) do say(line) end
+    return
+  end
+  if cmd == "dump" and arg == "all" then
+    say(L.DUMP_WORKING)
+    ns.DumpAll(function(list) say(string.format(L.DUMP_ALL_DONE, #list.spells, list.missing)) end)
+    return
+  end
+  if cmd == "dump" then
+    local list = ns.Dump()
+    say(string.format(L.DUMP_DONE, #list.spells, list.missing))
+    return
+  end
+  if cmd == "misses" then
+    if arg == "clear" then
+      db.misses = {}
+      missSeen, missCount = {}, 0
+      say(L.MISSES_CLEARED)
+      return
+    end
+    if #db.misses == 0 then say(L.MISSES_NONE) return end
+    say(string.format(L.MISSES_HEAD, #db.misses))
+    for _, m in ipairs(db.misses) do
+      local text = type(m.text) == "string" and m.text:gsub("[\r\n]+", " ") or "?"
+      say(tostring(m.id) .. " " .. tostring(m.name or "?") .. ": " .. text)
+    end
+    return
+  end
+  if cmd == "estimate" or cmd == "tooltip" or cmd == "reduction" or cmd == "weapon" then
+    local v = toggleArg(arg, db[cmd])
+    if v == nil then say(L.BAD_ARG) return end
+    db[cmd] = v
+  elseif cmd == "button" then
+    if not BUTTON_MODES[arg] then say(L.BAD_ARG) return end
+    db.button = arg
+  elseif cmd == "size" then
+    local v = tonumber(arg)
+    if not v or v < SIZE_MIN or v > SIZE_MAX then say(L.BAD_ARG) return end
+    db.size = math.floor(v + 0.5)
+  elseif cmd == "position" then
+    if not POSITIONS[arg] then say(L.BAD_ARG) return end
+    db.position = arg
+  elseif cmd == "lang" then
+    if not (arg == "auto" or arg == "en" or arg == "de") then say(L.BAD_ARG) return end
+    db.interfaceLang = arg
+    ns.SetInterfaceAndRefreshL(arg)
+  elseif cmd ~= "status" then
+    say(L.BAD_ARG)
+    return
+  end
+  say(string.format(L.STATUS, onOff(db.estimate), db.button, onOff(db.tooltip), onOff(db.reduction), onOff(db.weapon),
+    db.size, db.position, langLabel(db.interfaceLang)))
+  if cmd == "status" and barAddonLoaded() then say(L.BAR_ADDON) end
+  requestUpdate()
+  settingsChanged()
+end
+
+SLASH_SPELLDAMAGEINFO1 = "/sdi"
+if type(SlashCmdList) == "table" then
+  SlashCmdList["SPELLDAMAGEINFO"] = function(msg)
+    if BIT.IsRunning and not BIT.IsRunning("SpellDamageInfo") then BIT.SayOff("SpellDamageInfo") return end
+    slash(msg)
+  end
+end
+
+local function loadSettings()
+  if type(BattleInfoTool_SpellDamageInfoDB) ~= "table" then BattleInfoTool_SpellDamageInfoDB = {} end
+  db = BattleInfoTool_SpellDamageInfoDB
+  for k, v in pairs(DEFAULTS) do
+    if db[k] == nil then db[k] = v end
+  end
+  if not BUTTON_MODES[db.button] then db.button = DEFAULTS.button end
+  if type(db.estimate) ~= "boolean" then db.estimate = DEFAULTS.estimate end
+  if type(db.tooltip) ~= "boolean" then db.tooltip = DEFAULTS.tooltip end
+  if type(db.reduction) ~= "boolean" then db.reduction = DEFAULTS.reduction end
+  if type(db.weapon) ~= "boolean" then db.weapon = DEFAULTS.weapon end
+  -- Not a setting: Reset leaves it alone. Rebuilt into the lookup noteMiss uses.
+  if type(db.misses) ~= "table" then db.misses = {} end
+  missSeen, missCount = {}, 0
+  for i = #db.misses, 1, -1 do
+    local m = db.misses[i]
+    if type(m) ~= "table" or type(m.id) ~= "number" or missSeen[m.id] then
+      table.remove(db.misses, i)
+    else
+      missSeen[m.id] = true
+      missCount = missCount + 1
+    end
+  end
+  if not POSITIONS[db.position] then db.position = DEFAULTS.position end
+  if db.interfaceLang ~= "auto" and db.interfaceLang ~= "en" and db.interfaceLang ~= "de" then
+    db.interfaceLang = DEFAULTS.interfaceLang
+  end
+  if type(db.size) ~= "number" or db.size ~= db.size then
+    db.size = DEFAULTS.size
+  elseif db.size < SIZE_MIN then
+    db.size = SIZE_MIN
+  elseif db.size > SIZE_MAX then
+    db.size = SIZE_MAX
+  end
+end
+
+---------------------------------------------------------------------------------------------
+-- Events
+---------------------------------------------------------------------------------------------
+
+local frame = CreateFrame("Frame")
+
+local UPDATE_EVENTS = {
+  "ACTIONBAR_SLOT_CHANGED", "ACTIONBAR_PAGE_CHANGED", "UPDATE_BONUS_ACTIONBAR", "UPDATE_SHAPESHIFT_FORM",
+  "PLAYER_EQUIPMENT_CHANGED", "PLAYER_REGEN_ENABLED", "PET_BAR_UPDATE", "PET_BAR_UPDATE_USABLE",
+}
+local RESET_EVENTS = { "SPELLS_CHANGED", "CHARACTER_POINTS_CHANGED", "PLAYER_TALENT_UPDATE" }
+
+local function register(event)
+  pcall(frame.RegisterEvent, frame, event) -- an event this client does not know is skipped
+end
+
+frame:RegisterEvent("ADDON_LOADED")
+frame:RegisterEvent("PLAYER_LOGIN")
+
+local isReset = {}
+for _, e in ipairs(RESET_EVENTS) do isReset[e] = true end
+
+frame:SetScript("OnEvent", function(_, event, arg1, _, arg3)
+  if event == "ADDON_LOADED" then
+    if arg1 == ADDON then
+      -- switched off in BattleInfoTool: silent
+      if BIT.ShouldRun and not BIT.ShouldRun("SpellDamageInfo") then frame:UnregisterAllEvents() return end
+      ns.DecideLangsAtLoad()
+      loadSettings()
+      ns.InitInterfaceL(db.interfaceLang)
+    end
+  elseif event == "PLAYER_LOGIN" then
+    collectButtons()
+    collectPetButtons()
+    hookTooltips()
+    for _, e in ipairs(UPDATE_EVENTS) do register(e) end
+    for _, e in ipairs(RESET_EVENTS) do register(e) end
+    register("SPELL_TEXT_UPDATE")
+    -- The weapon's numbers change with gear, forms and buffs; these say so for the player.
+    -- A seal cast says which seal Judgement unleashes where the buffs cannot be read.
+    for _, e in ipairs({ "UNIT_AURA", "UNIT_PET", "UNIT_ATTACK_POWER", "UNIT_RANGED_ATTACK_POWER", "UNIT_DAMAGE",
+      "UNIT_ATTACK_SPEED", "UNIT_RANGEDDAMAGE", "UNIT_MAXHEALTH", "UNIT_SPELLCAST_SUCCEEDED" }) do
+      if type(frame.RegisterUnitEvent) == "function" then
+        -- the target's attack speed too, for a reduction of its attack power per hit
+        pcall(frame.RegisterUnitEvent, frame, e, "player", e == "UNIT_ATTACK_SPEED" and "target" or nil)
+      else
+        register(e)
+      end
+    end
+    for _, bar in ipairs({ PetActionBar, PetActionBarFrame }) do
+      if type(bar) == "table" and type(bar.HookScript) == "function" then
+        pcall(bar.HookScript, bar, "OnShow", requestUpdate)
+      end
+    end
+    register("PLAYER_TARGET_CHANGED")
+    readBonus()
+    readWeapon()
+    readTargetSpeed()
+    requestUpdate()
+  elseif event == "PLAYER_TARGET_CHANGED" then
+    readTargetSpeed()
+    requestUpdate()
+  elseif event == "SPELL_TEXT_UPDATE" then
+    if not isSecret(arg1) and type(arg1) == "number" then parsedCache[arg1] = nil end
+    requestUpdate()
+  elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+    if not isSecret(arg1) and arg1 == "player" and not isSecret(arg3) and type(arg3) == "number" then
+      noteSealCast(arg3)
+      requestUpdate()
+    end
+  elseif event == "UNIT_AURA" or event == "UNIT_PET" or event == "UNIT_ATTACK_POWER" or event == "UNIT_RANGED_ATTACK_POWER"
+    or event == "UNIT_DAMAGE" or event == "UNIT_ATTACK_SPEED" or event == "UNIT_RANGEDDAMAGE" or event == "UNIT_MAXHEALTH" then
+    if not isSecret(arg1) and arg1 == "player" then
+      requestUpdate()
+    elseif event == "UNIT_ATTACK_SPEED" and not isSecret(arg1) and arg1 == "target" then
+      readTargetSpeed()
+      requestUpdate()
+    end
+  elseif event == "PET_BAR_UPDATE" then
+    collectPetButtons()
+    requestUpdate()
+  else
+    if isReset[event] then clearCache() end
+    -- out of combat the target's speed can be read again
+    if event == "PLAYER_REGEN_ENABLED" then readTargetSpeed() end
+    requestUpdate()
+  end
+end)
+
+-- For the tests.
+ns._buttons, ns._labels, ns._sideLabels, ns._bonus = buttons, labels, sideLabels, bonus
+ns._petButtons, ns._petSlots = petButtons, petSlots
+ns._settings = function() return db end
+ns._weaponStats, ns._readWeapon = weaponStats, readWeapon
+ns._noteMiss, ns._parsedCache = noteMiss, parsedCache
