@@ -73,6 +73,13 @@ def rd_replay_secret_guid_fix(name, text):
     errors). The standalone repo has not shipped this function yet; where the buggy idiom
     arrives it is replaced exactly once, and any other shape of the helpers stops the port
     (fail closed: a silent pass-through would re-ship the crash at the next port)."""
+    # A source without BIT's target latch would discard this local fix entirely.
+    # Today's standalone Core has no latch: refuse that import before port() can
+    # write any files, instead of silently replacing the reviewed implementation.
+    if ("local function usableGuid(value)" not in text
+            or "local byTarget = Addon.wasFullBy or {}" not in text):
+        sys.exit(f"{name}: upstream lacks the BIT-only target latch; port blocked to "
+                 "preserve local GUID fixes -- update the full replay recipe first")
     buggy = "    if ok then return secret and nil or value end\n"
     fixed = ("    if ok then\n"
              "      if secret then return nil end\n"
