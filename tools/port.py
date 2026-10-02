@@ -229,6 +229,10 @@ def sdi_header(first_line):
 
 SDI_LIB_HEADER = sdi_header('local _, ns = ...\nns = ns or {}\n')
 
+# BattleInfoTool is GPL-3.0-or-later; the standalone repo stays MIT. The port
+# rewrites the header line so regeneration reproduces the shipped bytes.
+SDI_GPL_HEADER = ('MIT licence, see LICENSE', 'GPL-3.0-or-later, see LICENSE')
+
 
 def sdi_move_content(name, text):
     """Options.lua: the preview and the settings go into buildContent(top), which the standalone
@@ -253,11 +257,11 @@ def sdi_move_content(name, text):
 MODULES["SpellDamageInfo"] = {
     "repo": PROJECTS / "SpellDamageInfo",
     "files": [
-        ("Locale.lua", "Locale.lua", [SDI_LIB_HEADER]),
-        ("SpellIDs.lua", "SpellIDs.lua", [SDI_LIB_HEADER]),
-        ("SpellCoefficients.lua", "SpellCoefficients.lua", [SDI_LIB_HEADER]),
-        ("Parser.lua", "Parser.lua", [SDI_LIB_HEADER]),
-        ("Estimate.lua", "Estimate.lua", [SDI_LIB_HEADER]),
+        ("Locale.lua", "Locale.lua", [SDI_LIB_HEADER, SDI_GPL_HEADER]),
+        ("SpellIDs.lua", "SpellIDs.lua", [SDI_LIB_HEADER, SDI_GPL_HEADER]),
+        ("SpellCoefficients.lua", "SpellCoefficients.lua", [SDI_LIB_HEADER, SDI_GPL_HEADER]),
+        ("Parser.lua", "Parser.lua", [SDI_LIB_HEADER, SDI_GPL_HEADER]),
+        ("Estimate.lua", "Estimate.lua", [SDI_LIB_HEADER, SDI_GPL_HEADER]),
         ("Core.lua", "Core.lua", [
             ('local ADDON, ns = ...\n',
              'local ADDON, BIT = ...\n'
@@ -276,6 +280,7 @@ MODULES["SpellDamageInfo"] = {
              '    slash(msg)\n'
              '  end\n'
              'end\n'),
+            SDI_GPL_HEADER,
         ]),
         ("Options.lua", "Options.lua", [
             ('local _, ns = ...\n',
@@ -306,6 +311,7 @@ MODULES["SpellDamageInfo"] = {
              '  BIT.tabWords.sdi = "SpellDamageInfo"\n'
              'end\n\n'
              '-- For the tests.\nns._optionsWindow = function() return window end\n'),
+            SDI_GPL_HEADER,
         ]),
     ],
 }

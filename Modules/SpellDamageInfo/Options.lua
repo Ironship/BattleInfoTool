@@ -2,7 +2,7 @@
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: the settings window (/sdi) and its page in Options > AddOns.
 -- Options window adapted from a standalone DoT addon by Joe Greive (MIT).
--- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+-- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 -- Portions Copyright (c) 2026 Joe Greive, used under the MIT licence; his notice is in LICENSE.
 --
 -- Left: a live preview, three mock action buttons (frames of our own, never real action

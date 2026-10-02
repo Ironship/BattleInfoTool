@@ -1,5 +1,5 @@
 -- BattleInfoTool module StatsInfo: in an item's tooltip, what it changes against what you wear.
--- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+-- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- Written from scratch after the idea of RatingBuster (Whitetooth, GPL), none of whose code or
 -- tables are used. The stats are the game's own: C_Item.GetItemStats, with the client's names for

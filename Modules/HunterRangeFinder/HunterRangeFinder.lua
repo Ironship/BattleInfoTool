@@ -1,5 +1,5 @@
 -- BattleInfoTool module HunterRangeFinder: the hunter's range in seven stacked chevrons.
--- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+-- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- Adapted from the supplied local addon HunterRangeFinder v1.03, version 3.11.6
 -- (C:/Users/Oleg/Downloads/HunterRangeFinder/HunterRangeFinder: HunterRangeFinder.lua,

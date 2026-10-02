@@ -2,7 +2,7 @@
 -- (UnitGetTotalAbsorbs), shown as an overlay on the unit's own health bar -- the player, the
 -- target, the party (classic and compact party/raid frames) and every accessible nameplate --
 -- and as a curved segmented gold aura beside the character when the optional HUD is on.
--- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+-- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- The absorb value the client returns is a secret in combat: it must never be compared,
 -- added, formatted into a string of its own, stored in a table key or saved. It flows raw

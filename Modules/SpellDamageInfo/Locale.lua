@@ -1,7 +1,7 @@
 -- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Locale.lua at 8269edd.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: English and German strings, and number formatting.
--- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+-- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 
 local _, BIT = ...
 -- Inside BattleInfoTool its own namespace; loaded on its own, the addon's table as before.
