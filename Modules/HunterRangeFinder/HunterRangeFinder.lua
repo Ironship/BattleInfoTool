@@ -110,6 +110,13 @@ local function isSecret(v)
     return type(issecretvalue) == "function" and issecretvalue(v) or false
 end
 
+-- Finite numbers only: NaN passes every </> comparison, so clamps alone cannot
+-- catch a corrupted saved value before it reaches SetPoint/SetSize.
+local function finiteNum(v, default)
+    if type(v) ~= "number" or v ~= v or v == math.huge or v == -math.huge then return default end
+    return v
+end
+
 local spellNames = {}
 local function spellName(id)
     if not id then return nil end
@@ -198,18 +205,20 @@ local function detectLongRange()
     detectedLongRange, detectedAutoMax = false, nil
     if type(GetSpellInfo) ~= "function" then return end
     local ok, name, rank, icon, castTime, minRange, maxRange = pcall(GetSpellInfo, 75)
-    if not ok then return end
+    if not ok or isSecret(maxRange) then return end
     if type(maxRange) == "number" and maxRange > 0 then
         detectedAutoMax = maxRange
-        if maxRange > 35 then
-            detectedLongRange = true
-            if settings then settings.longRange = true end
-        end
+        -- A conclusive answer syncs the switch both ways (taking Hawk Eye
+        -- respecs it back down); silence keeps a manual tick. The tab getter
+        -- shows the detected truth either way.
+        local long = maxRange > 35
+        detectedLongRange = long
+        if settings then settings.longRange = long end
     end
 end
 
 local function effectiveSlots()
-    if settings == nil then return 7 end
+    if settings == nil then return 6 end
     if settings.longRange == true or detectedLongRange then return 7 end
     return 6
 end
@@ -219,6 +228,13 @@ local function validTarget()
             and UnitCanAttack("player", "target") and true or false
     end)
     return ok and safeNormalize(valid) == true
+end
+
+-- Cheap guarded target check for driver visibility (no dead/attack probing).
+local function hasTarget()
+    if type(UnitExists) ~= "function" then return false end
+    local ok, exists = pcall(UnitExists, "target")
+    return ok and not isSecret(exists) and exists == true
 end
 
 -- "Y10".."Y35", "MAX" (the seventh slot), "MELEE", "DEAD" (the 5-8 yd dead zone),
@@ -240,9 +256,11 @@ local function currentBand()
     if melee == true then return "MELEE" end
     if auto == nil then auto = spellInRange(75) end
     local thirtyFive
+    local shorterFalse = true
     for i = 1, #ladder do
         local result = anyInRange(ladder[i])
-        if i == #ladder then thirtyFive = result end
+        if i == #ladder then thirtyFive = result
+        elseif result ~= false then shorterFalse = false end
         if result == true then
             if auto == false and i <= 3 then return "DEAD" end
             return ladder[i][1]
@@ -258,13 +276,7 @@ local function currentBand()
     local longMode = effectiveSlots() == 7
     if longMode then
         if thirtyFive == false and auto ~= false then return "MAX" end
-        if thirtyFive ~= true and auto ~= false then
-            local pastThirty = true
-            for i = 1, #ladder - 1 do
-                if anyInRange(ladder[i]) ~= false then pastThirty = false break end
-            end
-            if pastThirty then return "MAX" end
-        end
+        if thirtyFive ~= true and auto ~= false and shorterFalse then return "MAX" end
     end
     if auto == true then return "Y35" end
     return "OOR"
@@ -283,6 +295,9 @@ end
 local hud, driver
 
 local band = nil
+-- Last rendered state: the poll skips a full relayout when nothing changed.
+-- Style edits re-render directly through Subscribe/refreshAll, never the poll.
+local lastRenderedBand, lastRenderedScatter = nil, nil
 local targetSelectionChanged = true
 local acquiringTarget, acquisitionTime, acquisitionBand, acquisitionSamples = false, 0, nil, 0
 local preview = false
@@ -337,6 +352,9 @@ end
 -- RaidTarget assignment). Only native primitives are used.
 -- Pure construction: no gameplay reads, no events, no timers, no sounds.
 local GLOSS_WHITE = "Interface\\Buttons\\WHITE8X8"
+-- Hoisted gradient stops: no per-slot tables on the render path.
+local GLOSS_TOP = { r = 1, g = 1, b = 1, a = 0.55 }
+local GLOSS_BOTTOM = { r = 1, g = 1, b = 1, a = 0 }
 
 -- Nameplate anchor (ResourceDing pattern): the rail rides above the target's
 -- own plate, where the eyes already are, instead of a fixed screen spot.
@@ -349,10 +367,9 @@ local function hunterTargetPlate()
     if type(C_NamePlate) ~= "table" or type(C_NamePlate.GetNamePlateForUnit) ~= "function" then return nil end
     local okPlate, plate = pcall(C_NamePlate.GetNamePlateForUnit, "target")
     if not okPlate or type(plate) ~= "table" then return nil end
-    if type(plate.IsForbidden) == "function" then
-        local okF, forbidden = pcall(plate.IsForbidden, plate)
-        if not okF or forbidden then return nil end
-    end
+    -- The forbidden check itself can throw on a forbidden frame: probe everything.
+    local okF, forbidden = pcall(function() return plate.IsForbidden and plate:IsForbidden() end)
+    if not okF or forbidden or isSecret(forbidden) then return nil end
     return plate
 end
 
@@ -363,12 +380,18 @@ local function hunterHealthBarOf(plate)
     return type(bar) == "table" and bar or plate
 end
 
+-- Last anchor seat: SetParent/SetPoint only move on change, never every poll.
+local reanchorKey, reanchorOffset = nil, nil
+
 local function reanchorHunterHud()
     if not hud or not settings then return end
     local function screenFallback()
-        if hud:GetParent() ~= UIParent then hud:SetParent(UIParent) end
-        hud:ClearAllPoints()
-        hud:SetPoint("CENTER", UIParent, "CENTER", settings.x, settings.y)
+        if reanchorKey ~= "screen" then
+            if hud:GetParent() ~= UIParent then hud:SetParent(UIParent) end
+            hud:ClearAllPoints()
+            hud:SetPoint("CENTER", UIParent, "CENTER", finiteNum(settings.x, DEFAULTS.x), finiteNum(settings.y, DEFAULTS.y))
+            reanchorKey = "screen"
+        end
     end
     if preview or settings.attachToPlate ~= true then
         screenFallback()
@@ -379,11 +402,14 @@ local function reanchorHunterHud()
         screenFallback()
         return
     end
-    local offset = tonumber(settings.plateOffset) or -8
+    local offset = finiteNum(tonumber(settings.plateOffset), -8)
     if offset < -80 then offset = -80 elseif offset > 30 then offset = 30 end
-    if hud:GetParent() ~= plate then hud:SetParent(plate) end
-    hud:ClearAllPoints()
-    hud:SetPoint("TOP", hunterHealthBarOf(plate), "BOTTOM", 0, -offset)
+    if reanchorKey ~= plate or reanchorOffset ~= offset then
+        if hud:GetParent() ~= plate then hud:SetParent(plate) end
+        hud:ClearAllPoints()
+        hud:SetPoint("TOP", hunterHealthBarOf(plate), "BOTTOM", 0, -offset)
+        reanchorKey, reanchorOffset = plate, offset
+    end
 end
 
 -- Blizzard-style orb gloss (hunter-local): a specular highlight over each dot,
@@ -432,8 +458,7 @@ local function paintHunterGloss(frame, style, active, bandName, close)
                 end
                 if type(gloss.SetTexture) == "function" then pcall(gloss.SetTexture, gloss, GLOSS_WHITE) end
                 if type(gloss.SetGradient) == "function" then
-                    pcall(gloss.SetGradient, gloss, "VERTICAL",
-                        { r = 1, g = 1, b = 1, a = 0.55 }, { r = 1, g = 1, b = 1, a = 0 })
+                    pcall(gloss.SetGradient, gloss, "VERTICAL", GLOSS_TOP, GLOSS_BOTTOM)
                 end
                 if type(gloss.SetAlpha) == "function" then pcall(gloss.SetAlpha, gloss, alpha) end
                 if type(gloss.Show) == "function" then pcall(gloss.Show, gloss) end
@@ -779,6 +804,8 @@ local function updateDisplay(_, dt)
     end
     local scatter = updateScatterFlag(band)
     reanchorHunterHud()
+    if band == lastRenderedBand and scatter == lastRenderedScatter then return end
+    lastRenderedBand, lastRenderedScatter = band, scatter
     renderScene(hud, BIT.Style.Resolve(M.moduleName, hunterLegacy), band, scatter)
 end
 
@@ -807,7 +834,7 @@ local function setPreview(value)
     if not hud then return end
     hud:EnableMouse(preview)
     -- Poll only while a target exists or the preview is being dragged.
-    driver:SetShown(preview or UnitExists("target") == true)
+    driver:SetShown(preview or hasTarget())
     if preview then
         renderScene(hud, BIT.Style.Resolve(M.moduleName, hunterLegacy), "PREVIEW", false)
         reanchorHunterHud()
@@ -873,7 +900,7 @@ local function start()
             acquisitionBand, acquisitionSamples = nil, 0
             band = nil
             elapsed = 0.1
-            driver:SetShown(preview or UnitExists("target") == true)
+            driver:SetShown(preview or hasTarget())
         elseif band and band ~= "OOR" and not preview then
             -- Plates recycle between units: re-seat the rail on the new plate.
             reanchorHunterHud()
@@ -943,10 +970,10 @@ loader:SetScript("OnEvent", function(self, event, name)
         and rawHunter.plateScheme ~= 2
     settings = BIT.Settings("HunterRangeFinder", DEFAULTS)
     M.settings = settings
-    if hadOldOffset then settings.plateOffset = -(settings.plateOffset) end
+    if hadOldOffset then settings.plateOffset = -(tonumber(settings.plateOffset) or 0) end
     settings.plateScheme = 2
-    if type(settings.plateOffset) ~= "number" then settings.plateOffset = DEFAULTS.plateOffset
-    elseif settings.plateOffset < -80 then settings.plateOffset = -80
+    settings.plateOffset = finiteNum(tonumber(settings.plateOffset), DEFAULTS.plateOffset)
+    if settings.plateOffset < -80 then settings.plateOffset = -80
     elseif settings.plateOffset > 30 then settings.plateOffset = 30 end
     detectLongRange()
     -- Values out of the sliders' bounds (or of the wrong type) fall back to the defaults.
@@ -954,8 +981,8 @@ loader:SetScript("OnEvent", function(self, event, name)
     settings.opacity = clamp(settings.opacity, DEFAULTS.opacity, 0.1, 1)
     settings.chevronHeight = clamp(settings.chevronHeight, DEFAULTS.chevronHeight, 0.5, 1.5)
     settings.chevronWidth = clamp(settings.chevronWidth, DEFAULTS.chevronWidth, 0.5, 1.5)
-    if type(settings.x) ~= "number" then settings.x = DEFAULTS.x end
-    if type(settings.y) ~= "number" then settings.y = DEFAULTS.y end
+    settings.x = finiteNum(settings.x, DEFAULTS.x)
+    settings.y = finiteNum(settings.y, DEFAULTS.y)
     local _, class = UnitClass("player")
     if class == "HUNTER" then
         start()
@@ -1047,9 +1074,13 @@ local function build(parent)
         y = y - 30
         rows[#rows + 1] = parent.attach
         parent.plateOffset = UI.Slider(parent, "Offset from the health bar (- = above)", -80, 30, 1,
-            function() return settings.plateOffset or -8 end,
+            function()
+                local v = finiteNum(tonumber(settings.plateOffset), -8)
+                if v < -80 then v = -80 elseif v > 30 then v = 30 end
+                return v
+            end,
             function(v)
-                if type(v) ~= "number" then v = DEFAULTS.plateOffset end
+                v = finiteNum(tonumber(v), DEFAULTS.plateOffset)
                 if v < -80 then v = -80 elseif v > 30 then v = 30 end
                 settings.plateOffset = v
                 if hud and band and band ~= "OOR" then reanchorHunterHud() end
@@ -1114,9 +1145,9 @@ local function build(parent)
     hint:SetPoint("RIGHT", -12, 0)
     hint:SetJustifyH("LEFT")
     hint:SetText("The rail rides above the target's nameplate while a living hostile target is "
-        .. "selected (or floats at its saved screen spot when plates are off). The bands are approximate probes: 8-10, 10-15, 15-20, 20-25, 25-30, 30-35, "
-        .. "and beyond 35 yd to Auto Shot's maximum. /bit hunterprobe prints what the client "
-        .. "answers for the probes.")
+        .. "selected (or floats at its saved screen spot when plates are off). Six dots by default; "
+        .. "a seventh past 35 yd only with Hawk Eye (auto-detected, or ticked below). The bands are approximate probes: 8-10, 10-15, 15-20, 20-25, 25-30, 30-35. "
+        .. "/bit hunterprobe prints what the client answers for the probes.")
 
     tabRefresh = function()
         if parent.lockButton then
@@ -1144,7 +1175,7 @@ end
 ----------------------------------------------------------------------------------------------
 BIT.RegisterTab("HunterRangeFinder", {
     title = "Hunter range",
-    summary = "Seven native markers tell a hunter the approximate range, from 8-10 yd to past 35 yd.",
+    summary = "Six native dots tell a hunter the approximate range, 8-10 yd to 30-35 yd; a seventh past 35 yd with Hawk Eye.",
     width = 700, height = 980,
     capabilities = CAPABILITIES,
     legacy = hunterLegacy,
@@ -1186,8 +1217,8 @@ local function rawItemInRange(id)
 end
 
 local function probeValue(value)
-    if value == nil then return "nil" end
     if isSecret(value) then return "secret" end
+    if value == nil then return "nil" end
     if type(value) == "boolean" or type(value) == "number" then return tostring(value) end
     return "unknown"
 end

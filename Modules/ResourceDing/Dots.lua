@@ -261,7 +261,10 @@ end
 
 local function layout(n)
   local db = Addon.db
-  local size, gap = db.dotSize, math.max(2, math.floor(db.dotSize / 4))
+  local size = tonumber(db.dotSize) or 14
+  if size ~= size then size = 14 end
+  if size < 8 then size = 8 elseif size > 24 then size = 24 end
+  local gap = math.max(2, math.floor(size / 4))
   row:SetSize(n * size + (n - 1) * gap, size)
   for i = 1, MAX_DOTS do
     local dot = dots[i] or (i <= n and makeDot(i)) or nil
@@ -290,7 +293,10 @@ function Addon.RefreshDots()
   if not plate then return hide() end
   row:SetParent(plate)
   row:ClearAllPoints()
-  row:SetPoint("TOP", healthBarOf(plate), "BOTTOM", 0, -Addon.db.dotOffset)
+  local dotOffset = tonumber(Addon.db.dotOffset) or 2
+  if dotOffset ~= dotOffset then dotOffset = 2 end
+  if dotOffset < -80 then dotOffset = -80 elseif dotOffset > 30 then dotOffset = 30 end
+  row:SetPoint("TOP", healthBarOf(plate), "BOTTOM", 0, -dotOffset)
   if row.shownFor ~= n or row.sizeFor ~= Addon.db.dotSize then
     layout(n)
     row.shownFor, row.sizeFor = n, Addon.db.dotSize

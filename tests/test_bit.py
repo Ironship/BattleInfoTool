@@ -621,8 +621,19 @@ G.itemStats["club"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 20 }')
 G.itemStats["twig"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 10 }')
 G.itemLoc["club"], G.itemLoc["twig"] = "INVTYPE_2HWEAPON", "INVTYPE_2HWEAPON"
 r = {x.spec.name: [pt.percent for pt in x.parts.values()] for x in si.SpecRatings("club", rt.table_from(["twig"])).values()}
+def mh_triple():
+    got = {}
+    for s in si.SPECS["DRUID"].values():
+        measures = {}
+        for m in ("damage", "threat", "survival"):
+            t = s[m]
+            measures[m] = (t.mainHand if t is not None else None)
+        got[s.name] = measures
+    return ("Cat", got["Cat"]["damage"], "Bear", got["Bear"]["threat"], got["Bear"]["survival"])
 check("in Cat and Bear Form the weapon's damage counts (game-measured: 1 DPS ~= 14 FAP), for damage/threat but not "
       "survival, nor for Balance", (r["Cat"], r["Bear"], r["Balance"]), ([100], [0, 100], [0]))
+check("  feral mainHand is 14 x Feral Attack Power (Cat 6.033, Bear threat 8.972, Bear survival 0)",
+      mh_triple(), ("Cat", 6.033, "Bear", 8.972, 0))
 G.playerClass = "WARRIOR"
 G.itemStats["axe"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 10, ITEM_MOD_STRENGTH_SHORT = 5 }')
 G.itemStats["blade"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 8 }')
@@ -1967,19 +1978,17 @@ check("  tooltip says >300% dmg spec", any(">300%" in l and "dmg" in l for l in 
 check("  no 'like +' currency anywhere", any("like +" in l for l in cap_lines), False)
 
 # ---------------------------------------------------------------------------------------------
-print("-- SDI-PORT: regenerating the module preserves all BIT fixes")
+print("-- SDI-PORT: the port refuses instead of regressing the ahead fork")
 import importlib.util
 port_spec = importlib.util.spec_from_file_location("bit_port", ROOT / "tools" / "port.py")
 port_module = importlib.util.module_from_spec(port_spec)
 port_spec.loader.exec_module(port_module)
-port_drift = []
-for generated_path, generated_data in port_module.port("SpellDamageInfo"):
-    # The first line records the source commit, not runtime behaviour.
-    generated_body = generated_data.decode("utf-8").splitlines()[1:]
-    current_body = generated_path.read_text(encoding="utf-8").splitlines()[1:]
-    if generated_body != current_body:
-        port_drift.append(generated_path.name)
-check("SDI-PORT: Life Tap, macros and Black Arrow survive regeneration", port_drift, [])
+blocked = False
+try:
+    port_module.port("SpellDamageInfo")
+except SystemExit as e:
+    blocked = "BLOCKED" in str(e)
+check("SDI-PORT: port refuses (fork ahead of upstream) instead of regressing", blocked, True)
 
 # ---------------------------------------------------------------------------------------------
 print("-- ENCHANT: an item's enchant is part of its stats (GetItemStats leaves it out)")

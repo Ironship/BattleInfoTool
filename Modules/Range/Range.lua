@@ -302,7 +302,7 @@ local function dimIcon(button)
     if ok and not isSecret(u) and not isSecret(m) then usable, noMana = u, m end
   end
   local r, g, b = 1, 1, 1
-  if not usable then
+  if usable == false then
     if noMana then r, g, b = 0.5, 0.5, 1 else r, g, b = 0.4, 0.4, 0.4 end
   end
   if settings.dimIcons and button.bitOutOfRange then
@@ -327,6 +327,9 @@ local function startDimming()
   end
   hooksecurefunc("ActionButton_UpdateRangeIndicator", function(button, checksRange, inRange)
     if type(button) ~= "table" or isSecret(checksRange) or isSecret(inRange) then return end
+    -- Normalize: Blizzard passes booleans, but 1/0 must read the same (0 is truthy in Lua).
+    checksRange = (checksRange == true or checksRange == 1)
+    inRange = (inRange == true or inRange == 1)
     button.bitOutOfRange = (checksRange and not inRange) and true or false
     if not seen[button] then
       seen[button] = true

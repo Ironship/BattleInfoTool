@@ -176,16 +176,22 @@ function Addon.CreateSettingsPanel(parent)
   panel.dots = checkbox(panel, "BattleInfoTool_ResourceDingDotsCheck", "Show the points as dots under the target's nameplate", -290,
     function() return Addon.db.dots end,
     function(value) Addon.db.dots = value; if Addon.RefreshDots then Addon.RefreshDots() end end)
-  panel.dotSize = slider(panel, "Dot size", -326, 8, 24,
+  panel.dotSize = slider(panel, "Dot / diamond size", -326, 8, 24,
     function() return Addon.db.dotSize end,
     function(value)
+      value = tonumber(value) or 14
+      if value ~= value then value = 14 end
+      if value < 8 then value = 8 elseif value > 24 then value = 24 end
       Addon.db.dotSize = value
       if Addon.RefreshDots then Addon.RefreshDots() end
       if Addon.RefreshShards then Addon.RefreshShards() end -- the diamonds size from dotSize too
     end)
-  panel.dotOffset = slider(panel, "Position above or below health bar", -370, -80, 30,
+  panel.dotOffset = slider(panel, "Offset from the health bar (- = above)", -370, -80, 30,
     function() return Addon.db.dotOffset end,
     function(value)
+      value = tonumber(value) or 2
+      if value ~= value then value = 2 end
+      if value < -80 then value = -80 elseif value > 30 then value = 30 end
       Addon.db.dotOffset = value
       if Addon.RefreshDots then Addon.RefreshDots() end
       if Addon.RefreshShards then Addon.RefreshShards() end -- and anchor from dotOffset

@@ -121,6 +121,10 @@ local function initializeDatabase()
   if type(BattleInfoTool_ResourceDingDB.dotOffset) ~= "number" then BattleInfoTool_ResourceDingDB.dotOffset = defaults.dotOffset
   elseif BattleInfoTool_ResourceDingDB.dotOffset < -80 then BattleInfoTool_ResourceDingDB.dotOffset = -80
   elseif BattleInfoTool_ResourceDingDB.dotOffset > 30 then BattleInfoTool_ResourceDingDB.dotOffset = 30 end
+  local dotSize = tonumber(BattleInfoTool_ResourceDingDB.dotSize)
+  if dotSize ~= dotSize or not dotSize or dotSize < 8 then dotSize = 8
+  elseif dotSize > 24 then dotSize = 24 end
+  BattleInfoTool_ResourceDingDB.dotSize = math.floor(dotSize + 0.5)
   Addon.db = BattleInfoTool_ResourceDingDB
   -- The saved table is shared by every character on the account, but the mana level is per class:
   -- each class keeps its own entry, and manaPercent is this character's copy of it.

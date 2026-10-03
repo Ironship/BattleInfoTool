@@ -72,7 +72,9 @@ function Addon.RefreshShards()
   if not (Addon.db.enabled and Addon.db.shardDiamonds and forWarlock()) or not count or count <= 0 then return hide() end
   local plate = targetPlate()
   if not plate then return hide() end
-  local size = Addon.db.dotSize
+  local size = tonumber(Addon.db.dotSize) or 14
+  if size ~= size then size = 14 end
+  if size < 8 then size = 8 elseif size > 24 then size = 24 end
   local shown = math.min(count, MAX_DIAMONDS)
   for i = 1, MAX_DIAMONDS do
     local d = diamonds[i]
@@ -96,7 +98,10 @@ function Addon.RefreshShards()
   row:SetSize(shown * (size - 2) + 2, size)
   row:SetParent(plate)
   row:ClearAllPoints()
-  row:SetPoint("TOP", healthBarOf(plate), "BOTTOM", 0, -Addon.db.dotOffset)
+  local dotOffset = tonumber(Addon.db.dotOffset) or 2
+  if dotOffset ~= dotOffset then dotOffset = 2 end
+  if dotOffset < -80 then dotOffset = -80 elseif dotOffset > 30 then dotOffset = 30 end
+  row:SetPoint("TOP", healthBarOf(plate), "BOTTOM", 0, -dotOffset)
   row:Show()
 end
 

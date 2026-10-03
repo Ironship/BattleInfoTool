@@ -348,6 +348,43 @@ function M.BagVerdict(link)
   return verdict
 end
 
+-- Bag-arrow diagnostics: /bit bagprobe <shift-clicked item> prints every gate of
+-- the marker pipeline, so a never-showing arrow can be pinned to one cause.
+function M.BagProbe(link)
+  local function say(m) if BIT.Say then BIT.Say("bagprobe: " .. tostring(m)) end end
+  if type(link) ~= "string" or link == "" then
+    say("shift-click an item after the command, e.g. /bit bagprobe [Sword]")
+    return
+  end
+  if isSecret(link) then say("link is secret -> dead (wait for data, then retry)") return end
+  local r = itemReadiness(link)
+  say("readiness=" .. tostring(r))
+  if r ~= "ok" then
+    say(r == "wait" and "data still loading: keep bags open, it retries on arrival"
+      or "item data unusable: check the tooltip loads")
+    return
+  end
+  say("equippable=" .. tostring(ask(C_Item and C_Item.IsEquippableItem, link))
+    .. " usable=" .. tostring(ask(C_Item and C_Item.IsUsableItem, link)))
+  local comparisons = M.Compare(link)
+  if not comparisons then say("no worn slot to compare against -> dead") return end
+  say("paths=" .. tostring(#comparisons))
+  for i, c in ipairs(comparisons) do
+    local v = comparisonVerdict(link, c)
+    say("path" .. tostring(i) .. "=" .. (v and v.verdict or "dead (class has no spec weights)"))
+  end
+  local state, verdict = M.BagVerdictState(link)
+  if state == "ok" and verdict and verdict.verdict == "up" and verdict.beneficiaries then
+    local names = {}
+    for _, u in ipairs(verdict.beneficiaries) do names[#names + 1] = tostring(u.spec and u.spec.name or "?") end
+    say("final=ok/up for: " .. table.concat(names, ", "))
+  else
+    say("final=" .. tostring(state) .. (verdict and ("/" .. tostring(verdict.verdict)) or "")
+      .. (state == "wait" and " (keep bags open)" or state == "dead" and " (see reason above)" or ""))
+  end
+end
+if BIT.RegisterCommand then BIT.RegisterCommand("bagprobe", function(rest) M.BagProbe(rest) end) end
+
 -------------------------------------------------------------------------------------------------
 -- The overlay over a bag button
 -------------------------------------------------------------------------------------------------
