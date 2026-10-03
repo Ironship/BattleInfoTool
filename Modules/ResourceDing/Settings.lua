@@ -183,7 +183,7 @@ function Addon.CreateSettingsPanel(parent)
       if Addon.RefreshDots then Addon.RefreshDots() end
       if Addon.RefreshShards then Addon.RefreshShards() end -- the diamonds size from dotSize too
     end)
-  panel.dotOffset = slider(panel, "Offset from the health bar (- = above)", -370, -80, 30,
+  panel.dotOffset = slider(panel, "Position above or below health bar", -370, -80, 30,
     function() return Addon.db.dotOffset end,
     function(value)
       Addon.db.dotOffset = value
@@ -262,7 +262,129 @@ end
 
 function Addon.OpenSettings() BIT.OpenSettings("ResourceDing") end
 
+-- BIT-only settings sample: fixed dots, silent, independent of target, gear and
+-- sound. This file is port-generated, but the port is fail-closed on the secret-
+-- GUID latch (rd_replay_secret_guid_fix refuses upstream without it), so the seam
+-- is edited directly here; a future port unblock must carry it into the recipe.
+local PREVIEW_DOT_SIZE = 14
+local PREVIEW_GAP = 4
+local PREVIEW_X = 118
+local PREVIEW_WIDTH = 560
+local PREVIEW_TITLE_X = 12
+local PREVIEW_TITLE_TOP = -4
+local PREVIEW_TITLE_WIDTH = 536
+local PREVIEW_LABEL_X = 12
+local PREVIEW_LABEL_WIDTH = 536
+local PREVIEW_ROW_GAP = 10
+local PREVIEW_BOTTOM = 8
+-- Fixed data only: a partial row and a full row. Plain numbers by construction, so the
+-- shared DotColor path paints them with no game reads and no audio.
+local PREVIEW_ROWS = {
+  { label = "3 of 5", count = 3, total = 5 },
+  { label = "5 of 5 (full)", count = 5, total = 5 },
+}
+
+-- Measured caption height: the native wrapped height when the client offers it,
+-- else one honest line at the applied font size. Pure: no game reads.
+local function previewTextHeight(fs, style)
+  if fs ~= nil and type(fs.GetStringHeight) == "function" then
+    local ok, h = pcall(fs.GetStringHeight, fs)
+    if ok and type(h) == "number" and h > 0 then return h end
+  end
+  if style ~= nil and type(style.fontSize) == "number" then return style.fontSize end
+  return 12
+end
+
+local function previewFixWidth(fs, width)
+  if fs == nil then return end
+  if type(fs.SetWidth) == "function" then fs:SetWidth(width) end
+  if type(fs.SetWordWrap) == "function" then fs:SetWordWrap(true) end
+  if type(fs.SetJustifyH) == "function" then fs:SetJustifyH("LEFT") end
+end
+
+-- Honest bounds: the title reserves its actual wrapped height, each row's label
+-- reserves its own, the circles paint below their caption (never under it), and the
+-- scene/scroll height grows while the settings window stays put. Dots keep their
+-- fixed 14px size and 1px chrome edges inside the scene at every font size.
+local function layoutResourceDingPreview(scene, style)
+  if scene == nil or scene.title == nil or scene.rows == nil then return end
+  local y = PREVIEW_TITLE_TOP
+  scene.title:ClearAllPoints()
+  scene.title:SetPoint("TOPLEFT", PREVIEW_TITLE_X, y)
+  y = y - previewTextHeight(scene.title, style) - 8
+  for r, row in ipairs(scene.rows) do
+    row.label:ClearAllPoints()
+    row.label:SetPoint("TOPLEFT", PREVIEW_LABEL_X, y)
+    local dotsTop = y - previewTextHeight(row.label, style) - 4
+    for i, dot in ipairs(row.dots) do
+      dot:ClearAllPoints()
+      dot:SetPoint("TOPLEFT", scene, "TOPLEFT",
+        PREVIEW_X + (i - 1) * (PREVIEW_DOT_SIZE + PREVIEW_GAP), dotsTop)
+    end
+    y = dotsTop - PREVIEW_DOT_SIZE - 2 - PREVIEW_ROW_GAP
+  end
+  local needed = -y + PREVIEW_BOTTOM
+  if needed < 1 then needed = 1 end
+  scene:SetSize(PREVIEW_WIDTH, needed)
+end
+
+local function buildResourceDingPreview(parent)
+  local scene = CreateFrame("Frame", nil, parent)
+  scene:SetSize(PREVIEW_WIDTH, 96)
+  scene.title = scene:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  previewFixWidth(scene.title, PREVIEW_TITLE_WIDTH)
+  scene.title:SetPoint("TOPLEFT", PREVIEW_TITLE_X, PREVIEW_TITLE_TOP)
+  scene.title:SetText("ResourceDing sample (silent, not your target)")
+  scene.rows = {}
+  for r, spec in ipairs(PREVIEW_ROWS) do
+    local label = scene:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    previewFixWidth(label, PREVIEW_LABEL_WIDTH)
+    label:SetPoint("TOPLEFT", PREVIEW_LABEL_X, -30 - (r - 1) * 30)
+    label:SetText(spec.label)
+    local row = { label = label, dots = {} }
+    for i = 1, spec.total do
+      -- The same native circles as the live HUD (Dots.lua), fixed values, never the target.
+      local dot = Addon.MakeCircleDot(scene, PREVIEW_DOT_SIZE)
+      dot:SetPoint("TOPLEFT", scene, "TOPLEFT", PREVIEW_X + (i - 1) * (PREVIEW_DOT_SIZE + PREVIEW_GAP), -32 - (r - 1) * 30)
+      dot:SetMinMaxValues(i - 1, i)
+      dot:SetValue(spec.count)
+      if dot.overlay then
+        dot.overlay:SetMinMaxValues(spec.total - 1, spec.total)
+        dot.overlay:SetValue(spec.count)
+      end
+      row.dots[i] = dot
+    end
+    scene.rows[r] = row
+  end
+  return scene
+end
+
+local function renderResourceDingPreview(scene, style)
+  -- Shared palette only; silent, no game reads, no saved writes. Geometry reflows
+  -- honestly with the font (captions measured, scene grown); colours never move it.
+  BIT.Style.ApplyText(scene.title, style, "text")
+  for r, row in ipairs(scene.rows) do
+    local spec = PREVIEW_ROWS[r]
+    BIT.Style.ApplyText(row.label, style, "text")
+    local full = spec.count >= spec.total
+    for i, dot in ipairs(row.dots) do
+      dot:SetMinMaxValues(i - 1, i)
+      dot:SetValue(spec.count)
+      if dot.overlay then
+        dot.overlay:SetMinMaxValues(spec.total - 1, spec.total)
+        dot.overlay:SetValue(spec.count)
+      end
+      Addon.PaintCircleDot(dot, style, i, spec.total, full)
+    end
+  end
+  layoutResourceDingPreview(scene, style)
+end
+
 BIT.RegisterTab("ResourceDing", {
+  buildPreview = buildResourceDingPreview,
+  previewRender = renderResourceDingPreview,
+  capabilities = { roles = Addon.DotStyleRoles or { "text" }, shapes = false,
+    geometry = false, border = false, font = true, scale = false, opacity = true },
   title = "ResourceDing",
   summary = "A sound when your combo points are full, and the points as dots under the target; for "
     .. "casters a sound when mana climbs to a level, and for warlocks one on each Soul Shard.",

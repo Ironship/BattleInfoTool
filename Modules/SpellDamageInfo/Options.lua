@@ -2,7 +2,7 @@
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: the settings window (/sdi) and its page in Options > AddOns.
 -- Options window adapted from a standalone DoT addon by Joe Greive (MIT).
--- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
+-- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
 -- Portions Copyright (c) 2026 Joe Greive, used under the MIT licence; his notice is in LICENSE.
 --
 -- Left: a live preview, three mock action buttons (frames of our own, never real action
@@ -526,6 +526,44 @@ loader:SetScript("OnEvent", function()
   if not ok then say("Options > AddOns page not added (" .. tostring(err) .. "); /sdi still opens the settings.") end
 end)
 
+-- BIT Minimal OFF-scene sample: static Immolate numbers (279 direct, 510
+-- over 15 sec) as plain text, never live Estimate/DrawNumber output and
+-- never real action buttons. This seam is a BIT-only edit replayed by
+-- tools/port.py from tools/sdi_bit_edits.json on every regeneration;
+-- tools/port.py itself is untouched.
+local function buildSDIPreview(parent)
+  local scene = CreateFrame("Frame", nil, parent)
+  scene:SetSize(560, 120)
+  scene.title = scene:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  scene.title:SetPoint("TOPLEFT", 12, -4)
+  scene.title:SetText("SpellDamageInfo sample (not your buttons)")
+  scene.main = scene:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  scene.main:SetPoint("TOPLEFT", 12, -30)
+  scene.main:SetText("279")
+  scene.main:SetHeight(14)
+  scene.side = scene:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  scene.side:SetPoint("TOPLEFT", 12, -52)
+  scene.side:SetText("510 over 15 sec")
+  scene.side:SetHeight(14)
+  return scene
+end
+
+local function renderSDIPreview(scene, style)
+  BIT.Style.ApplyText(scene.title, style, "text")
+  BIT.Style.ApplyText(scene.main, style, "text")
+  BIT.Style.ApplyText(scene.side, style, "text")
+  -- Native-Y min/max reflow: the two rows derive their depths and the scene
+  -- its height from the shared font size; the window is never resized.
+  local fontSize = style.fontSize or 12
+  local mainDepth = 4 + fontSize + 8
+  local sideDepth = mainDepth + fontSize + 4
+  scene.main:ClearAllPoints()
+  scene.main:SetPoint("TOPLEFT", 12, -mainDepth)
+  scene.side:ClearAllPoints()
+  scene.side:SetPoint("TOPLEFT", 12, -sideDepth)
+  scene:SetSize(560, sideDepth + fontSize + 16)
+end
+
 if BIT.RegisterTab then
   BIT.RegisterTab("SpellDamageInfo", {
     title = "SpellDamageInfo",
@@ -536,6 +574,10 @@ if BIT.RegisterTab then
       buildContent(10)
       changed()
     end,
+    buildPreview = buildSDIPreview,
+    previewRender = renderSDIPreview,
+    capabilities = { roles = { "text" }, shapes = false,
+      geometry = false, border = false, font = true, scale = false, opacity = true },
   })
   BIT.tabWords.sdi = "SpellDamageInfo"
 end

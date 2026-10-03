@@ -1,25 +1,24 @@
 -- BattleInfoTool module ShieldsInfo: the remaining absorb of a unit, as the client reports it
 -- (UnitGetTotalAbsorbs), shown as an overlay on the unit's own health bar -- the player, the
--- target, the party (classic and compact party/raid frames) and every accessible nameplate --
--- and as a curved segmented gold aura beside the character when the optional HUD is on.
--- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
+-- target, the party (classic and compact party/raid frames) and every accessible nameplate.
+-- There is no floating HUD: the shield dots beside the character are retired, and the
+-- legacy hud/numbers/scale/mirror/preview/locked/x/y keys in saved settings are ignored
+-- (never read, never cleaned).
+-- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
 --
 -- The absorb value the client returns is a secret in combat: it must never be compared,
--- added, formatted into a string of its own, stored in a table key or saved. It flows raw
--- into the native display calls only: StatusBar:SetValue, StatusBar:SetMinMaxValues and
--- FontString:SetFormattedText (or C_StringUtil.TruncateWhenZero). Health and absorbs are
--- never saved anywhere; the HUD's best-known maximum lives in a module variable for the
--- session only.
+-- added, formatted into a string of its own, stored in a table key or saved. Presence is
+-- all Lua may learn (via type(), which cannot reveal a value); a reading that is present
+-- flows raw into the native display calls only: StatusBar:SetMinMaxValues and
+-- StatusBar:SetValue. Health and absorbs are never saved anywhere.
 --
--- The curved aura texture is Shield Aura Forever's, used under its MIT licence
--- (LICENSE-ShieldAuraForever.txt in this folder; GitHub: ShieldAuraForever/ShieldAuraForever).
+-- The overlay fill is the native Blizzard WHITE8X8 in the shared absorb colour
+-- (BIT.Style role "absorb"); no custom art is painted on unit frames.
 
 local _, BIT = ...
 local M = BIT.Module("ShieldsInfo")
 
-local MEDIA = "Interface\\AddOns\\BattleInfoTool\\Modules\\ShieldsInfo\\Textures"
-local AURA = MEDIA .. "\\shield_aura.tga"
-local AURA_MIRROR = MEDIA .. "\\shield_aura_mirrored.tga"
+local WHITE = "Interface\\Buttons\\WHITE8X8" -- the native Blizzard fill (the shared style paints it)
 local UPDATE_INTERVAL = 0.2
 local PARTY_UNITS = { "party1", "party2", "party3", "party4" }
 
@@ -28,14 +27,11 @@ local DEFAULTS = {
   target = true,      -- the target frame
   party = true,       -- classic party frames and compact party/raid frames
   nameplates = true,  -- every accessible nameplate
-  hud = false,        -- the curved aura beside the character
-  numbers = true,     -- the absorb number under the HUD aura
-  scale = 1,
-  mirror = false,     -- the aura bows right; mirrored for the left side
-  preview = false,    -- show a fixed sample instead of live absorb
-  locked = true,      -- false: the HUD can be dragged
-  x = 95, y = 20,     -- the HUD's offset from the screen centre
+  overlayAlpha = 1.0, -- the absorb fill translucency (the slider clamps it to 0.2..1.0)
 }
+-- Retired keys (hud, numbers, scale, mirror, preview, locked, x, y) are not
+-- defaults anymore: BIT.Settings leaves saved values untouched, and this
+-- module never reads them, so an old profile loads without a crash or a wipe.
 
 local settings
 
@@ -53,8 +49,7 @@ local function readAbsorb(unit)
 end
 
 -- The client's answer(s), or nothing when the API is missing, errors, or has nothing to
--- say. The answers after the first are preserved too: GetCenter returns x and y together,
--- and the callers that read a single value are unaffected (Lua keeps the first).
+-- say. The answers after the first are preserved too (Lua keeps the first).
 local function ask(fn, ...)
   if type(fn) ~= "function" then return nil end
   local ok, a, b = pcall(fn, ...)
@@ -62,18 +57,11 @@ local function ask(fn, ...)
   return a, b
 end
 
--- A usable number: a real finite one. The client can hand out NaN and infinities while
--- frames are being torn down or re-laid out; such geometry must never reach the saved
--- offsets (or SetPoint).
-local function isFiniteNumber(v)
-  return type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge
-end
-
 ---------------------------------------------------------------------------------------------
 -- Overlays on the Blizzard unit frames
 ---------------------------------------------------------------------------------------------
 
--- healthBar -> { bar = StatusBar, unit = unit, plate = bool, current = bool }
+-- healthBar -> { bar = StatusBar, unit = unit, plate = bool, party = bool, current = bool }
 local overlays = setmetatable({}, { __mode = "k" })
 
 local function hideOverlay(overlay)
@@ -90,6 +78,64 @@ local function usableBar(frame)
   return frame
 end
 
+---------------------------------------------------------------------------------------------
+-- The shared absorb look: the native Blizzard fill in the shared absorb
+-- colour/opacity. Styling only: the bars' raw values and every saved setting
+-- stay untouched, so a style write (even while the settings are closed) never
+-- disturbs gameplay data. Secret-safe by construction: Resolve/Apply never
+-- read the absorb.
+---------------------------------------------------------------------------------------------
+-- Paints one overlay bar in the shared absorb look. The shield translucency
+-- multiplies on top of the shared style: only the absorb fill turns more
+-- transparent, never the underlying unit bar and never any text. Styling only:
+-- every value here is a style number, never the absorb.
+local ALPHA_MIN, ALPHA_MAX = 0.2, 1.0
+
+local function clampAlpha(v)
+  if type(v) ~= "number" or v ~= v then return 1.0 end
+  if v < ALPHA_MIN then return ALPHA_MIN end
+  if v > ALPHA_MAX then return ALPHA_MAX end
+  return v
+end
+
+local function overlayAlpha()
+  return clampAlpha(settings ~= nil and settings.overlayAlpha or 1.0)
+end
+
+local function styleOverlay(bar)
+  if type(BIT.Style) == "table" then
+    local ok, style = pcall(BIT.Style.Resolve, "ShieldsInfo")
+    if ok and type(style) == "table" then
+      pcall(BIT.Style.ApplyBar, bar, style, "absorb")
+      pcall(function()
+        local colors = style.colors
+        local c = type(colors) == "table" and (colors.absorb or colors.text) or nil
+        if type(c) == "table" then
+          local base = type(c[4]) == "number" and c[4] or 1
+          local op = type(style.opacity) == "number" and style.opacity or 1
+          bar:SetStatusBarColor(c[1], c[2], c[3], base * op * overlayAlpha())
+        end
+      end)
+      return
+    end
+  end
+  -- Degraded but visible: the native fill, never an error.
+  pcall(function() bar:SetStatusBarTexture(WHITE) end)
+end
+
+-- Style writes restyle the live overlays even while the settings are closed. Fully
+-- guarded: the subscriber registry calls back without pcall, so nothing here
+-- may error into an unrelated settings write.
+local function restyleOverlays()
+  for _, o in pairs(overlays) do
+    if type(o) == "table" and type(o.bar) == "table" then styleOverlay(o.bar) end
+  end
+end
+
+local function onStyleChanged()
+  pcall(restyleOverlays)
+end
+
 -- The overlay StatusBar on a health bar, created once and reused; nil when the bar is
 -- protected or the client would not accept a child.
 local function overlayFor(healthBar)
@@ -103,17 +149,19 @@ local function overlayFor(healthBar)
   bar:SetOrientation(orientation)
   bar:SetReverseFill(orientation == "VERTICAL")
   bar:SetFrameLevel((healthBar:GetFrameLevel() or 0) + 1)
-  bar:SetStatusBarTexture(AURA, "REPEAT", "REPEAT")
-  bar:SetStatusBarColor(1, 1, 1, 0.55)
+  styleOverlay(bar)
   bar:Hide()
-  o = { bar = bar, unit = nil, plate = false, current = false }
+  o = { bar = bar, unit = nil, plate = false, party = false, current = false }
   overlays[healthBar] = o
   return o
 end
 
 -- One unit's remaining absorb on one health bar. Raw values go to the native setters only;
--- a missing or unusable reading hides the overlay, never invents a value, and an overlay is
--- only ever created when there is a value to show.
+-- a missing reading hides the overlay, never invents a value, and an overlay is
+-- only ever created when there is a value to show. Presence is all Lua may learn:
+-- type() cannot reveal a combat-secret value, so a secret absorb (or health pool)
+-- flows on without one Lua comparison; only a proven-plain reading may be
+-- compared, and a depleted plain shield hides like any missing one.
 local function updateBar(unit, healthBar, enabled)
   local o = type(healthBar) == "table" and overlays[healthBar] or nil
   if type(healthBar) ~= "table" or not enabled or unit == nil then
@@ -121,11 +169,12 @@ local function updateBar(unit, healthBar, enabled)
     return
   end
   local absorb = readAbsorb(unit)
-  if absorb == nil then hideOverlay(o) return end
-  local secret = isSecret(absorb)
-  if not secret and (type(absorb) ~= "number" or absorb <= 0) then hideOverlay(o) return end
+  if type(absorb) == "nil" then hideOverlay(o) return end
+  local plain = nil
+  if not isSecret(absorb) then plain = absorb end
+  if plain ~= nil and (type(plain) ~= "number" or plain <= 0) then hideOverlay(o) return end
   local maxHealth = ask(UnitHealthMax, unit)
-  if maxHealth == nil then hideOverlay(o) return end
+  if type(maxHealth) == "nil" then hideOverlay(o) return end
   if not o then
     o = overlayFor(healthBar)
     if not o then return end
@@ -138,56 +187,163 @@ local function updateBar(unit, healthBar, enabled)
   if not ok then hideOverlay(o) end
 end
 
--- Without the modern path (PlayerFrame.Content...), the classic .healthbar.
+-- The real primary layout (PlayerFrame.Content...HealthBarsContainer.HealthBar; the primary
+-- frame XML nests the bar inside HealthBarsContainer, and PlayerFrameContainer is only a
+-- sibling layer), then the old direct child, then the classic .HealthBar (Era/beta
+-- parentKey="HealthBar"), then the legacy small key, then the global the vanilla
+-- client keeps instead of a frame field.
 local function playerBar()
   local pf = _G.PlayerFrame
-  if type(pf) ~= "table" then return nil end
+  if type(pf) == "table" then
+  if type(pf.PlayerFrameContent) == "table"
+    and type(pf.PlayerFrameContent.PlayerFrameContentMain) == "table"
+    and type(pf.PlayerFrameContent.PlayerFrameContentMain.HealthBarsContainer) == "table"
+    and type(pf.PlayerFrameContent.PlayerFrameContentMain.HealthBarsContainer.HealthBar) == "table" then
+    return pf.PlayerFrameContent.PlayerFrameContentMain.HealthBarsContainer.HealthBar
+  end
   if type(pf.PlayerFrameContent) == "table"
     and type(pf.PlayerFrameContent.PlayerFrameContentMain) == "table"
     and type(pf.PlayerFrameContent.PlayerFrameContentMain.HealthBar) == "table" then
     return pf.PlayerFrameContent.PlayerFrameContentMain.HealthBar
   end
+  if type(pf.HealthBar) == "table" then return pf.HealthBar end
   if type(pf.healthbar) == "table" then return pf.healthbar end
+  end
+  if type(_G.PlayerFrameHealthBar) == "table" then return _G.PlayerFrameHealthBar end
   return nil
 end
 
--- The Forever target layout, then the classic .healthbar.
+-- The Forever target layout, then the classic .HealthBar (Era parentKey="HealthBar"),
+-- then the legacy small key, then the global the vanilla client (no parentKey) keeps
+-- instead of a frame field.
 local function targetBar()
   local tf = _G.TargetFrame
-  if type(tf) ~= "table" then return nil end
+  if type(tf) == "table" then
   if type(tf.TargetFrameContent) == "table"
     and type(tf.TargetFrameContent.TargetFrameContentMain) == "table"
     and type(tf.TargetFrameContent.TargetFrameContentMain.HealthBarsContainer) == "table"
     and type(tf.TargetFrameContent.TargetFrameContentMain.HealthBarsContainer.HealthBar) == "table" then
     return tf.TargetFrameContent.TargetFrameContentMain.HealthBarsContainer.HealthBar
   end
+  if type(tf.HealthBar) == "table" then return tf.HealthBar end
   if type(tf.healthbar) == "table" then return tf.healthbar end
+  end
+  if type(_G.TargetFrameHealthBar) == "table" then return _G.TargetFrameHealthBar end
   return nil
 end
 
--- The classic party frames and the compact pool of the modern party frame: the same units,
--- whichever representation the player uses.
+-- The health bar of one party frame, whichever casing the client uses: the real
+-- classic frames (Classic/PartyFrameTemplates.xml parentKey="HealthBar" on era and
+-- beta) and the era pool members carry .HealthBar, the compact frames .healthBar.
+local function partyBar(frame)
+  if type(frame) ~= "table" then return nil end
+  local bar = frame.HealthBar
+  if type(bar) ~= "table" then bar = frame.healthBar end
+  if type(bar) == "table" then return bar end
+  return nil
+end
+
+-- The members of an era FramePool live in poolFrames below (pairs over the
+-- hash activeObjects, frames as keys or values); this EnumerateActive-first
+-- ipairs variant is retired.
+-- One frame's health bar whichever key the client used: compact frames carry the small
+-- .healthBar, classic templates the big parentKey .HealthBar.
+local function partyBarOf(f)
+  if type(f) ~= "table" then return nil end
+  if type(f.healthBar) == "table" then return f.healthBar end
+  if type(f.HealthBar) == "table" then return f.HealthBar end
+  return nil
+end
+
+-- One member frame into the bars list when it carries a unit and a health bar.
+local function collectMember(f, bars)
+  if type(f) == "table" and type(f.unit) == "string" then
+    local bar = partyBarOf(f)
+    if bar then bars[#bars + 1] = { unit = f.unit, bar = bar } end
+  end
+end
+
+-- Every frame a pool reports: EnumerateActive when it exists (Era Pools.lua iterates
+-- pairs over the hash activeObjects, frame -> dummy), otherwise the activeObjects
+-- table itself -- an array of frames in fixtures, a hash of frame -> dummy on the
+-- client -- so pairs, never ipairs, and frames may be keys or values.
+local function poolFrames(pool, bars)
+  if type(pool) ~= "table" then return end
+  if type(pool.EnumerateActive) == "function" then
+    local ok, iter, state, seed = pcall(function() return pool:EnumerateActive() end)
+    if ok and type(iter) == "function" then
+      local guard = 0
+      for f in iter, state, seed do
+        guard = guard + 1
+        if guard > 400 then break end
+        collectMember(f, bars)
+      end
+      return
+    end
+  end
+  local objects = type(pool.activeObjects) == "table" and pool.activeObjects or pool
+  for k, v in pairs(objects) do
+    if type(v) == "table" and type(v.unit) == "string" then
+      collectMember(v, bars)
+    elseif type(k) == "table" and type(k.unit) == "string" then
+      collectMember(k, bars)
+    end
+  end
+end
+
+-- The raid-style party view the classic tick used to miss: CompactPartyFrame's members
+-- and CompactRaidFrameContainer's members (memberUnitFrames or EnumerateActive). The
+-- compact hooks update the same frames between ticks; this is the plan B when a hook
+-- never fired or a frame refreshed past them.
+local function compactBars(bars)
+  local cpf = _G.CompactPartyFrame
+  if type(cpf) == "table" and type(cpf.memberUnitFrames) == "table" then
+    for _, f in pairs(cpf.memberUnitFrames) do
+      collectMember(f, bars)
+    end
+  end
+  local crc = _G.CompactRaidFrameContainer
+  if type(crc) == "table" then
+    if type(crc.memberUnitFrames) == "table" then
+      for _, f in pairs(crc.memberUnitFrames) do
+        collectMember(f, bars)
+      end
+    else
+      poolFrames(crc, bars)
+    end
+  end
+end
+
+-- The classic party frames, the compact pool of the modern party frame, and the
+-- raid-style compact members: the same units, whichever representation the player
+-- uses. A lone PartyMemberFrameNHealthBar global (the frame object itself gone)
+-- still draws. One bar is listed once no matter how many owners report it.
 local function partyBars()
   local bars = {}
   for i = 1, 4 do
-    local f = _G["PartyMemberFrame" .. i]
-    if type(f) == "table" and type(f.healthBar) == "table" then
-      bars[#bars + 1] = { unit = "party" .. i, bar = f.healthBar }
+    local name = "PartyMemberFrame" .. i
+    local bar = partyBar(_G[name])
+    if type(bar) ~= "table" then
+      local g = _G[name .. "HealthBar"]
+      if type(g) == "table" then bar = g end
+    end
+    if type(bar) == "table" then
+      bars[#bars + 1] = { unit = "party" .. i, bar = bar }
     end
   end
   local pf = _G.PartyFrame
   if type(pf) == "table" then
-    local pool = pf.PartyMemberFramePool
-    if type(pool) == "table" then
-      local objects = type(pool.activeObjects) == "table" and pool.activeObjects or pool
-      for _, f in ipairs(objects) do
-        if type(f) == "table" and type(f.unit) == "string" and type(f.healthBar) == "table" then
-          bars[#bars + 1] = { unit = f.unit, bar = f.healthBar }
-        end
-      end
+    poolFrames(pf.PartyMemberFramePool, bars)
+  end
+  compactBars(bars)
+  local seen, out = {}, {}
+  for _, b in ipairs(bars) do
+    if not seen[b.bar] then
+      seen[b.bar] = true
+      out[#out + 1] = b
     end
   end
-  return bars
+  return out
 end
 
 -- Every nameplate the client hands out, with its health bar; protected plates are skipped.
@@ -213,27 +369,37 @@ local function nameplateBars()
   return out
 end
 
-local updateHUD -- defined below with the HUD, called by updateAll
-
 local function updateAll()
   if not settings then return end
-  updateBar("player", playerBar(), settings.player)
-  updateBar("target", targetBar(), settings.target)
+  local pBar, tBar = playerBar(), targetBar()
+  updateBar("player", pBar, settings.player)
+  updateBar("target", tBar, settings.target)
+  if type(pBar) == "table" then local o = overlays[pBar]; if o then o.party = false end end
+  if type(tBar) == "table" then local o = overlays[tBar]; if o then o.party = false end end
+  local partySeen = {}
   for _, pb in ipairs(partyBars()) do
+    partySeen[pb.bar] = true
     updateBar(pb.unit, pb.bar, settings.party)
+    local o = overlays[pb.bar]
+    if o then o.party = true; o.plate = false end
   end
   local seen = {}
   for _, np in ipairs(nameplateBars()) do
     seen[np.bar] = true
     updateBar(np.unit, np.bar, settings.nameplates)
     local o = overlays[np.bar]
-    if o then o.plate = true end
+    if o then o.plate = true; o.party = false end
   end
   -- plates the client has handed back (recycled or gone): their overlays leave at once
   for bar, o in pairs(overlays) do
     if o.plate and not seen[bar] then hideOverlay(o) end
   end
-  updateHUD()
+  -- party members gone from every enumeration (left the party/raid): their overlays
+  -- leave one by one; player/target/nameplates are never marked party, so only
+  -- departed party bars are touched and overlay objects are kept for reuse
+  for bar, o in pairs(overlays) do
+    if o.party and not partySeen[bar] then hideOverlay(o) end
+  end
 end
 M.Update = updateAll
 
@@ -250,11 +416,16 @@ local function compactUpdate(frame)
   local ok = pcall(function()
     if type(frame) ~= "table" then return end
     if type(frame.IsForbidden) == "function" and frame:IsForbidden() then return end
-    if type(frame.unit) ~= "string" or type(frame.healthBar) ~= "table" then return end
-    updateBar(frame.unit, frame.healthBar, settings ~= nil and settings.party or false)
+    if type(frame.unit) ~= "string" then return end
+    local bar = partyBarOf(frame)
+    if type(bar) ~= "table" then return end
+    updateBar(frame.unit, bar, settings ~= nil and settings.party or false)
+    local o = overlays[bar]
+    if o then o.party = true; o.plate = false end
   end)
-  if not ok and type(frame) == "table" and type(frame.healthBar) == "table" then
-    hideOverlay(overlays[frame.healthBar])
+  if not ok and type(frame) == "table" then
+    local bar = partyBarOf(frame)
+    if bar then hideOverlay(overlays[bar]) end
   end
 end
 
@@ -268,168 +439,6 @@ local function attachCompactHooks()
     hookedHealPrediction = ok
   end
   return hookedUpdateAll, hookedHealPrediction
-end
-
----------------------------------------------------------------------------------------------
--- The HUD: the curved segmented gold aura beside the character, with the remaining absorb
--- number under it. The aura drains with the value the client reports; the best-known maximum
--- is the session-only calibration below (never a secret, never saved).
----------------------------------------------------------------------------------------------
-
-local hud, hudBar, hudText, hudBackdrop, hudLabel
-local runtimeMax   -- plain-number calibrations only
-local hudMaxNative -- the native bar already holds a maximum seeded from a raw reading
-local hudHasData   -- a real value is on the bar
-
-local function hudTexture()
-  return settings ~= nil and settings.mirror and AURA_MIRROR or AURA
-end
-
-local function saveHudPosition()
-  if not hud then return end
-  -- All the client's answers are guarded: without readable geometry the saved position
-  -- keeps its last value. The HUD's centre is normalised into the parent's units by the
-  -- effective/parent scale ratio, so an offset saved at any effective UI scale re-applies
-  -- to the same screen position (the next layout feeds exactly the saved offset back
-  -- through SetPoint).
-  local hx, hy = ask(hud.GetCenter, hud)
-  local ux, uy = ask(UIParent.GetCenter, UIParent)
-  local effective = ask(hud.GetEffectiveScale, hud)
-  local parentScale = ask(UIParent.GetEffectiveScale, UIParent)
-  if isFiniteNumber(hx) and isFiniteNumber(hy) and isFiniteNumber(ux)
-      and isFiniteNumber(uy) and isFiniteNumber(effective) and isFiniteNumber(parentScale)
-      and effective > 0 and parentScale > 0 then
-    local scale = effective / parentScale
-    settings.x = math.floor(hx * scale - ux + 0.5)
-    settings.y = math.floor(hy * scale - uy + 0.5)
-  end
-end
-
-local function applyHudLayout()
-  if not hud then return end
-  local scale = tonumber(settings.scale) or 1
-  if scale < 0.5 then scale = 0.5 elseif scale > 2.5 then scale = 2.5 end
-  hud:SetSize(64 * scale, 158 * scale)
-  hudBar:SetSize(34 * scale, 132 * scale)
-  hudBar:ClearAllPoints()
-  hudBar:SetPoint("TOP", hud, "TOP", 0, -4 * scale)
-  hudBar:SetStatusBarTexture(hudTexture())
-  hudText:ClearAllPoints()
-  hudText:SetPoint("TOP", hudBar, "BOTTOM", 0, 1 * scale)
-  local font = type(STANDARD_TEXT_FONT) == "string" and STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
-  hudText:SetFont(font, math.max(8, 13 * scale), "OUTLINE")
-  hud:ClearAllPoints()
-  -- Corrupt SavedVariables (a string, NaN, an infinity) must not reach SetPoint; a valid
-  -- numeric offset, a numeric string included, is preserved as it is.
-  local x, y = tonumber(settings.x), tonumber(settings.y)
-  if not isFiniteNumber(x) then x = 95 end
-  if not isFiniteNumber(y) then y = 20 end
-  hud:SetPoint("CENTER", UIParent, "CENTER", x, y)
-  hud:EnableMouse(settings.locked ~= true)
-  hudBackdrop:SetShown(settings.locked ~= true)
-  hudLabel:SetShown(settings.locked ~= true)
-  hudText:SetShown(settings.numbers ~= false and hudHasData)
-end
-
-local function setHudNumber(v)
-  if type(C_StringUtil) == "table" and type(C_StringUtil.TruncateWhenZero) == "function" then
-    hudText:SetText(C_StringUtil.TruncateWhenZero(v))
-  else
-    hudText:SetFormattedText("%.0f", v)
-  end
-end
-
-local function hudClearNow()
-  hudBar:Hide()
-  hudText:Hide()
-  hud:Hide()
-  hudHasData = false
-end
-
-updateHUD = function()
-  if not hud then return end
-  if settings.hud ~= true then hudClearNow() return end
-  if settings.preview then
-    pcall(function()
-      hud:Show()
-      -- never disturb a calibrated or seeded native maximum; a virgin bar gets the sample's own
-      if runtimeMax ~= nil then
-        hudBar:SetMinMaxValues(0, runtimeMax)
-      elseif not hudMaxNative then
-        hudBar:SetMinMaxValues(0, 100)
-      end
-      hudBar:SetValue(72)
-      hudHasData = true
-      hudBar:Show()
-      hudText:SetShown(settings.numbers ~= false)
-      if settings.numbers ~= false then setHudNumber(72) end
-    end)
-    return
-  end
-  local absorb = readAbsorb("player")
-  if absorb == nil then hudClearNow() return end
-  local ok = pcall(function()
-    local secret = isSecret(absorb)
-    if secret then
-      -- a fresh combat reading may seed the native maximum with the raw value
-      if runtimeMax == nil and not hudMaxNative then
-        hudBar:SetMinMaxValues(0, absorb)
-        hudMaxNative = true
-      end
-      hudBar:SetValue(absorb)
-    elseif type(absorb) == "number" and absorb > 0 then
-      -- ordinary values calibrate: a new or bigger shield becomes the full bar
-      if not hudMaxNative and (runtimeMax == nil or absorb > runtimeMax) then
-        runtimeMax = absorb
-        hudBar:SetMinMaxValues(0, absorb)
-      end
-      hudBar:SetValue(absorb)
-    else
-      -- depleted: clear the calibration so the next fresh shield fills the bar again
-      runtimeMax = nil
-      hudMaxNative = false
-      hudBar:SetMinMaxValues(0, 1)
-      hudBar:SetValue(0)
-    end
-    hud:Show()
-    hudBar:Show()
-    hudHasData = true
-    hudText:SetShown(settings.numbers ~= false)
-    if settings.numbers ~= false then setHudNumber(absorb) end
-  end)
-  if not ok then hudClearNow() end
-end
-
-local function createHud()
-  hud = CreateFrame("Frame", nil, UIParent)
-  hud:SetMovable(true)
-  hud:SetClampedToScreen(true)
-  hud:RegisterForDrag("LeftButton")
-  hud:SetScript("OnDragStart", function(self)
-    if settings and settings.locked ~= true then self:StartMoving() end
-  end)
-  hud:SetScript("OnDragStop", function(self)
-    self:StopMovingOrSizing()
-    if settings then saveHudPosition(); applyHudLayout() end
-  end)
-  hudBar = CreateFrame("StatusBar", nil, hud)
-  hudBar:SetOrientation("VERTICAL")
-  hudBar:SetReverseFill(false)
-  hudBar:SetStatusBarTexture(AURA)
-  hudBar:SetStatusBarColor(1, 1, 1, 1)
-  hudText = hud:CreateFontString(nil, "OVERLAY")
-  hudText:SetTextColor(1, 0.9, 0.2, 1)
-  hudText:SetShadowOffset(1, -1)
-  hudBackdrop = hud:CreateTexture(nil, "BACKGROUND")
-  hudBackdrop:SetAllPoints()
-  hudBackdrop:SetColorTexture(0.1, 0.1, 0.1, 0.45)
-  hudBackdrop:Hide()
-  hudLabel = hud:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  hudLabel:SetPoint("BOTTOM", hud, "TOP", 0, 3)
-  hudLabel:SetText("Shields - drag to move")
-  hudLabel:Hide()
-  hud:Hide()
-  applyHudLayout()
 end
 
 ---------------------------------------------------------------------------------------------
@@ -463,14 +472,21 @@ local function onEvent(_, event, arg1)
 end
 
 local function start()
-  createHud()
+  -- shared-style writes restyle the live overlays even while the settings are
+  -- closed; the callback touches styling only, never values or settings
+  if type(BIT.Style) == "table" and type(BIT.Style.Subscribe) == "function" then
+    pcall(BIT.Style.Subscribe, "ShieldsInfo", onStyleChanged)
+  end
   driver = CreateFrame("Frame")
   driver:RegisterEvent("PLAYER_LOGIN")
   driver:RegisterEvent("PLAYER_ENTERING_WORLD")
   driver:RegisterEvent("PLAYER_TARGET_CHANGED")
+  driver:RegisterEvent("GROUP_ROSTER_UPDATE")
   driver:RegisterEvent("NAME_PLATE_UNIT_ADDED")
   driver:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
   driver:RegisterUnitEvent("UNIT_ABSORB_AMOUNT_CHANGED", "player", "target", unpack(PARTY_UNITS))
+  driver:RegisterUnitEvent("UNIT_HEALTH", "player", "target", unpack(PARTY_UNITS))
+  driver:RegisterUnitEvent("UNIT_MAXHEALTH", "player", "target", unpack(PARTY_UNITS))
   driver:SetScript("OnEvent", onEvent)
   local since = 0
   driver:SetScript("OnUpdate", function(_, elapsed)
@@ -494,9 +510,53 @@ loader:SetScript("OnEvent", function(self, _, name)
   start()
 end)
 
+-- BIT-only settings sample: a mock bar with a native shield fill and a fixed
+-- absorb number, independent of live bars.
+local function buildShieldsPreview(parent)
+  local scene = CreateFrame("Frame", nil, parent)
+  scene:SetSize(560, 120)
+  scene.title = scene:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  scene.title:SetPoint("TOPLEFT", 12, -4)
+  scene.title:SetText("Shields sample (not your bars)")
+  scene.bar = CreateFrame("Frame", nil, scene)
+  scene.bar:SetSize(180, 20)
+  scene.bar:SetPoint("TOPLEFT", 12, -30)
+  scene.fill = CreateFrame("Frame", nil, scene.bar)
+  scene.fill:SetSize(120, 20)
+  scene.fill:SetPoint("LEFT", scene.bar, "LEFT", 0, 0)
+  scene.number = scene:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  scene.number:SetPoint("TOPLEFT", 12, -56)
+  scene.number:SetText("12400")
+  scene.number:SetHeight(14)
+  return scene
+end
+
+local function renderShieldsPreview(scene, style)
+  BIT.Style.ApplyText(scene.title, style, "text")
+  BIT.Style.ApplyText(scene.number, style, "text")
+  -- Native-Y min/max reflow: title depth, bar height, number row and scene
+  -- height all derive from the shared font size; widths stay fixed because
+  -- this sample has no scale capability. The window is never resized.
+  local fontSize = style.fontSize or 12
+  local barH = math.max(20, fontSize + 6)
+  local barDepth = 4 + fontSize + 8
+  local numDepth = barDepth + barH + 4
+  scene.bar:ClearAllPoints()
+  scene.bar:SetPoint("TOPLEFT", 12, -barDepth)
+  scene.bar:SetSize(180, barH)
+  scene.fill:SetSize(120, barH)
+  scene.number:ClearAllPoints()
+  scene.number:SetPoint("TOPLEFT", 12, -numDepth)
+  scene:SetSize(560, numDepth + fontSize + 16)
+end
+
 BIT.RegisterTab("ShieldsInfo", {
+  buildPreview = buildShieldsPreview,
+  previewRender = renderShieldsPreview,
+  capabilities = { roles = { "text" }, shapes = false,
+    geometry = false, border = false, font = true, scale = false, opacity = true },
   title = "Shields",
-  summary = "The remaining absorb of a shield on your frames and nameplates, and the curved HUD beside your character.",
+  summary = "The remaining absorb of a shield on your frames and nameplates.",
   width = 640, height = 400,
   build = function(parent)
     local UI = BIT.UI
@@ -505,7 +565,6 @@ BIT.RegisterTab("ShieldsInfo", {
     local rows = {}
     local function changed()
       for _, r in ipairs(rows) do if r.Refresh then r:Refresh() end end
-      applyHudLayout()
       updateAll()
     end
     local function set(key) return function(v) settings[key] = v; changed() end end
@@ -525,19 +584,16 @@ BIT.RegisterTab("ShieldsInfo", {
     toggle("target", "On your target frame")
     toggle("party", "On party frames (classic and compact party/raid)")
     toggle("nameplates", "On nameplates")
-    toggle("hud", "HUD: the curved aura beside your character")
-    toggle("numbers", "HUD number")
-    toggle("mirror", "Mirror the HUD curve to the left")
-    toggle("preview", "HUD preview (a fixed sample)")
-    checks.unlocked = UI.Check(parent, "HUD unlocked (drag it to move it)",
-      function() return settings.locked ~= true end,
-      function(v) settings.locked = not v; changed() end)
-    add(checks.unlocked)
-    checks.scale = UI.Slider(parent, "HUD scale", 0.5, 2.5, 0.05, get("scale"), set("scale"))
-    add(checks.scale, 46)
-    local hint = parent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    hint:SetPoint("TOPLEFT", 12, y)
-    hint:SetText("The HUD remembers where you drag it; it drains with the shield that remains.")
+    local function getAlpha() return clampAlpha(settings.overlayAlpha) end
+    local function setAlpha(v)
+      settings.overlayAlpha = clampAlpha(v)
+      restyleOverlays()
+      changed()
+    end
+    local alpha = UI.Slider(parent, "Shield bar opacity", ALPHA_MIN, ALPHA_MAX, 0.05,
+      getAlpha, setAlpha, "%%")
+    M._alpha = alpha
+    add(alpha, 46)
     changed()
   end,
 })
@@ -553,7 +609,3 @@ M._overlayCount = function()
 end
 M._attachCompactHooks = attachCompactHooks
 M._hooksAttached = function() return hookedUpdateAll, hookedHealPrediction end
-M._applyLayout = applyHudLayout
-M._hud = function() return hud end
-M._hudBar = function() return hudBar end
-M._hudText = function() return hudText end

@@ -1,5 +1,5 @@
--- BattleInfoTool module ResourceDing: ported by tools/port.py from ResourceDing/Core.lua at 540b462.
--- Change it there, or in tools/port.py; an edit made here is lost at the next port.
+-- BattleInfoTool ResourceDing: originally ported from ResourceDing/Core.lua at 540b462.
+-- Frozen in BIT: edit this module directly; tools/port.py protects its local gameplay fixes.
 local addonName, BIT = ...
 -- Inside BattleInfoTool its own namespace; loaded on its own, the addon's table as before.
 local Addon = BIT.Module and BIT.Module("ResourceDing") or BIT
@@ -229,32 +229,51 @@ local function displayedComboPoints()
 end
 Addon.DisplayedComboPoints = displayedComboPoints
 
+-- A target switch invalidates fading highlights until Blizzard redraws them.
+-- This flag is plain addon state; it never compares or caches secret GUIDs.
+local comboDisplayReady = true
+
+-- Whether the native combo updater can repaint at all. Blizzard's
+-- ComboFrame_Update runs `if (not self.maxComboPoints) then return end`
+-- (classic-era ComboFrame.lua lines 65-70) and ONLY that missing maximum makes
+-- the body return before touching the display. This reads the same plain
+-- frame field the native body checks, before any comparison or arithmetic on
+-- display values; when it cannot be read, whether the body repainted is
+-- unknown. Either way the display-only sound fallback fails closed. The dots
+-- never pass through here: they forward the raw target count unchanged.
+local function nativeCanRepaintCombo()
+  local frame = _G.ComboFrame
+  if type(frame) ~= "table" then return false end
+  local ok, maximum = pcall(function() return frame.maxComboPoints end)
+  return ok and maximum ~= nil
+end
+
 function Addon.GetResourceState()
   local resource = Addon.GetResource()
   if not resource then return nil, 0, 0 end
-  local current = known(UnitPower("player", resource.power))
+  local rawCurrent = UnitPower("player", resource.power)
   local maximum = known(UnitPowerMax("player", resource.power)) or 0
-  -- On the Classic client a rogue's or a cat druid's combo points belong to the
-  -- target rather than to the player, and UnitPower reports none of them.
-  -- GetComboPoints is the call that answers there. Retail is left alone: this
-  -- is only reached when UnitPower has already said there is no such bar.
-  -- Only on the client where combo points belong to the target. A Retail druid
-  -- out of cat form reports a maximum of zero too, and this branch then read
-  -- combo points off the target and reported a bar that spec does not have.
-  if maximum <= 0 and resource.comboPoints and isClassic()
+  -- Classic/Forever points belong to the selected target, even when the
+  -- Retail-based client advertises a five-point player bar. UnitPower can
+  -- retain A's points after selecting B; a nonzero maximum does not prove
+  -- that its current value belongs to B. Retail still uses player-owned power.
+  if resource.comboPoints and isClassic()
       and type(GetComboPoints) == "function" then
-    -- The target's count, when the client gives it plainly. Forever keeps it
-    -- secret in combat, and then the answer is nil: unknown, not zero.
-    current = known(GetComboPoints("player", "target"))
-    maximum = MAX_COMBO_POINTS or 5
+    rawCurrent = GetComboPoints("player", "target")
+    if maximum <= 0 then maximum = MAX_COMBO_POINTS or 5 end
   end
-  -- Whichever call answered, a secret is a secret: on Forever UnitPower does
-  -- report a maximum of five and then withholds the count in combat. Where
-  -- the client draws the classic display, that says what the number would.
-  if current == nil and resource.comboPoints then
+  local current = known(rawCurrent)
+  -- Whichever call answered, a secret is a secret. The native combo display
+  -- can supply a readable count for sounds; HUD dots receive rawCurrent from
+  -- the same target-specific read instead of copying fading UI highlights.
+  -- The display is trusted only after a native redraw that really repainted:
+  -- when the native body early-returns (its maximum is gone) the highlights
+  -- are stale for whichever target the UI last drew.
+  if current == nil and resource.comboPoints and comboDisplayReady
+      and nativeCanRepaintCombo() then
     current = displayedComboPoints()
   end
-  return resource, current, maximum
+  return resource, current, maximum, rawCurrent
 end
 
 -- Plays the sound of that key. Falls through to whatever sound this client does have. The filter
@@ -403,14 +422,20 @@ if type(ComboFrame) == "table" and type(ComboFrame.HookScript) == "function" the
   -- immediate look is the ComboFrame_Update hook's, which fires inside that
   -- same dispatch; on a client without that global, do the look here instead.
   Addon.hooks.frame = (pcall(ComboFrame.HookScript, ComboFrame, "OnEvent", function()
-    if not Addon.hooks.update then lookAtDisplay() end
+    if not Addon.hooks.update and nativeCanRepaintCombo() then
+      comboDisplayReady = true
+      lookAtDisplay()
+    end
     lookAgainLater()
   end))
 end
 if type(hooksecurefunc) == "function" then
   if type(ComboFrame_Update) == "function" then
     hooksecurefunc("ComboFrame_Update", function()
-      lookAtDisplay()
+      if nativeCanRepaintCombo() then
+        comboDisplayReady = true
+        lookAtDisplay()
+      end
       lookAgainLater()
     end)
     Addon.hooks.update = true
@@ -427,6 +452,7 @@ listenFor("PLAYER_ENTERING_WORLD")
 listenFor("PLAYER_SPECIALIZATION_CHANGED")
 listenFor("UPDATE_SHAPESHIFT_FORM")
 listenFor("PLAYER_TARGET_CHANGED")
+listenFor("COMBO_TARGET_CHANGED")
 -- Entering combat is itself worth a check: the resource may have filled a
 -- moment earlier, while the sound was still being held back.
 listenFor("PLAYER_REGEN_DISABLED")
@@ -453,6 +479,9 @@ events:SetScript("OnEvent", function(_, event, arg1)
   elseif event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "UPDATE_SHAPESHIFT_FORM" or event == "UNIT_MAXPOWER" then
     C_Timer.After(0, Addon.ResetPowerState)
   else
+    if event == "PLAYER_TARGET_CHANGED" or event == "COMBO_TARGET_CHANGED" then
+      comboDisplayReady = false
+    end
     Addon.CheckPower(false)
   end
 end)

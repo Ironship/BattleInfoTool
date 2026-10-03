@@ -1,5 +1,5 @@
 -- BattleInfoTool module StatsInfo: in an item's tooltip, what it changes against what you wear.
--- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
+-- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
 --
 -- Written from scratch after the idea of RatingBuster (Whitetooth, GPL), none of whose code or
 -- tables are used. The stats are the game's own: C_Item.GetItemStats, with the client's names for
@@ -18,6 +18,8 @@ local DEFAULTS = {
   worth = true,   -- under each difference, what it gives the character
   specs = true,   -- how each spec of the class rates the item (Weights.lua)
   icons = true,   -- icons and one line each, instead of words
+  bagMarkers = true,   -- the small green/red arrows over the game's own bag buttons
+  bagSpecIcons = true, -- on an up arrow, the beneficiary spec's icon (+N for the rest)
 }
 
 -- Inventory slots an item of an equip location goes into. Two slots: compared with each.
@@ -87,7 +89,9 @@ local function itemStats(link)
   if type(stats) ~= "table" then stats = ask(GetItemStats, link) end
   if type(stats) == "table" then
     for k, v in pairs(stats) do
-      if type(k) == "string" and statName(k) and not isSecret(v) and type(v) == "number" and v ~= 0 then out[k] = v end
+      -- NaN (NaN ~= 0 in Lua) and infinities must never reach the weights arithmetic
+      if type(k) == "string" and statName(k) and not isSecret(v) and type(v) == "number"
+          and v ~= 0 and v == v and v ~= math.huge and v ~= -math.huge then out[k] = v end
     end
   end
   local plain = withoutEnchant(link)
@@ -95,7 +99,8 @@ local function itemStats(link)
   if type(clean) ~= "table" then clean = ask(GetItemStats, plain) end
   if type(clean) == "table" then
     for k, v in pairs(tooltipEnchant(link)) do
-      if type(k) == "string" and statName(k) and type(v) == "number" and v ~= 0 then
+      if type(k) == "string" and statName(k) and type(v) == "number" and v ~= 0
+          and v == v and v ~= math.huge and v ~= -math.huge then
         local base = clean[k]
         -- A secret clean stat (the client hides the value in combat, marking it with
         -- issecretvalue -- the value may still be a number) is never arithmetic'd on or
@@ -120,6 +125,16 @@ end
 local function equipped(slot)
   local link = ask(GetInventoryItemLink, "player", slot)
   return type(link) == "string" and link or nil
+end
+
+-- Whether the client's answers for link can be trusted yet. The new link has this guard in
+-- Compare; a worn link needs it too: an heirloom whose stats are not cached yet reads as {},
+-- and its block would print the new item's full stats under the worn item's name (a duplicated
+-- recommendation). Uncached worn stats skip the block; the tooltip is rebuilt on arrival.
+local function itemCached(link)
+  local id = ask(C_Item and C_Item.GetItemInfoInstant, link)
+  if not id or not (C_Item and C_Item.IsItemDataCachedByID) then return true end -- cannot tell: old behavior
+  return ask(C_Item.IsItemDataCachedByID, id) ~= false
 end
 
 -- What wearing link instead of what is in its slot changes: a list of { key, diff }, sorted,
@@ -147,9 +162,13 @@ function M.Compare(link)
     for _, slot in ipairs(slots) do
       local worn = equipped(slot)
       if worn then
+        local wornStats = itemStats(worn)
+        if next(wornStats) == nil and not itemCached(worn) then
+          return -- stats still loading: no invented block; the tooltip rebuilds on arrival
+        end
         names[#names + 1] = worn
         wornSlots[#wornSlots + 1] = slot
-        for k, v in pairs(itemStats(worn)) do old[k] = (old[k] or 0) + v end
+        for k, v in pairs(wornStats) do old[k] = (old[k] or 0) + v end
       end
     end
     local diffs = {}
@@ -161,6 +180,12 @@ function M.Compare(link)
       -- SI-124: a diff that renders as +0.0 (e.g. +0.04 DPS) is noise, not a line.
       if d ~= 0 and math.abs(d) >= 0.05 then diffs[#diffs + 1] = { key = k, diff = d } end
     end
+    -- A named comparison with no worn stats behind it would print the new item's full
+    -- numbers under the worn item's name (a duplicated recommendation): the worn data was
+    -- unavailable (uncached heirloom, an answer the parser does not name). The block is
+    -- skipped; the empty-slot block carries the same numbers honestly. An all-empty
+    -- comparison ("the same stats") stays: it is true either way.
+    if #names > 0 and next(old) == nil and #diffs > 0 then return end
     table.sort(diffs, function(a, b)
       local ra, rb = RANK[a.key] or 100, RANK[b.key] or 100
       if ra ~= rb then return ra < rb end
@@ -954,10 +979,62 @@ loader:SetScript("OnEvent", function(self, event, name)
   end
 end)
 
+-- A settings-only sample: an explicit mock tooltip, not the live GameTooltip and
+-- not the character's gear. No measurement, hooks or SavedVariables are touched.
+local function buildStatsPreview(parent)
+  local scene = CreateFrame("Frame", nil, parent)
+  scene:SetSize(560, 150)
+  scene.title = scene:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  scene.title:SetPoint("TOPLEFT", 12, -4)
+  scene.title:SetText("StatsInfo sample (not your gear)")
+  scene.tip = CreateFrame("Frame", nil, scene)
+  scene.tip:SetSize(300, 80)
+  scene.tip:SetPoint("TOPLEFT", 12, -30)
+  scene.lines = {}
+  local data = {
+    { "Embossed Leather Vest (sample)", 1, 1, 1 },
+    { "Against Worn Leather Vest", 0.4, 0.73, 1 },
+    { "+8 Armor   +2 Stamina", 1, 1, 1 },
+  }
+  for i, entry in ipairs(data) do
+    local line = scene:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    line:SetPoint("TOPLEFT", 20, -34 - (i - 1) * 18)
+    line:SetText(entry[1])
+    line:SetTextColor(entry[2], entry[3], entry[4])
+    line:SetHeight(14)
+    scene.lines[i] = line
+  end
+  return scene
+end
+
+local function renderStatsPreview(scene, style)
+  -- Reserve the painted row bounds, not just the text: native Y is positive
+  -- upwards, so large fonts need headroom below the title and between rows.
+  local titleHeight = style.fontSize * 2 + 8
+  local lineHeight = style.fontSize + 8
+  local step = math.max(18 * style.scale, lineHeight + 4)
+  scene.title:SetHeight(titleHeight)
+  BIT.Style.ApplyText(scene.title, style, "text")
+  local cursor = 4 + titleHeight + 8
+  for i, line in ipairs(scene.lines) do
+    line:ClearAllPoints()
+    line:SetPoint("TOPLEFT", 20, -cursor)
+    line:SetHeight(lineHeight)
+    BIT.Style.ApplyText(line, style, "text")
+    cursor = cursor + step
+  end
+  scene:SetHeight(cursor + 8)
+end
+
 BIT.RegisterTab("StatsInfo", {
+  buildPreview = buildStatsPreview,
+  previewRender = renderStatsPreview,
+  capabilities = { roles = { "text" }, shapes = false,
+    geometry = false, border = false, font = true, scale = true, opacity = true },
   title = "StatsInfo",
   summary = "In an item's tooltip: what its stats change against the item you wear in that slot.",
-  width = 640, height = 470,
+  -- taller since 0.8.1: the two bag-marker boxes sit between the icons box and the legend
+  width = 640, height = 530,
   build = function(parent)
     local UI = BIT.UI
     local compare = UI.Check(parent, "Show what the item changes against the equipped one",
@@ -973,9 +1050,30 @@ BIT.RegisterTab("StatsInfo", {
       function() return settings.icons end, function(v) settings.icons = v end)
     icons:SetPoint("TOPLEFT", 12, -100)
 
+    -- The bag-markers boxes are independent of the tooltip toggles: the tooltip's
+    -- compare/specs settings do not have to be on for the arrows to work.
+    -- (Labels are deliberately SHORT: the core UI.Check label has no width/wrap, and the
+    -- details live in the legend below -- see the r1b label-width check.)
+    local bagMarkers = UI.Check(parent,
+      "Arrows on bag items: green up for an upgrade, red down only when every path is worse",
+      function() return settings.bagMarkers end,
+      function(v)
+        settings.bagMarkers = v
+        if v then M.EnableBagMarkers() else M.DisableBagMarkers() end
+      end)
+    bagMarkers:SetPoint("TOPLEFT", 12, -130)
+    local bagSpecIcons = UI.Check(parent,
+      "The beneficiary spec icon on an up arrow (+N for the rest, ~ for the approximate score)",
+      function() return settings.bagSpecIcons end,
+      function(v)
+        settings.bagSpecIcons = v
+        M.RefreshBags(true)
+      end)
+    bagSpecIcons:SetPoint("TOPLEFT", 12, -160)
+
     -- what the icons stand for
     local legend = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    legend:SetPoint("TOPLEFT", 16, -136)
+    legend:SetPoint("TOPLEFT", 16, -196)
     legend:SetPoint("RIGHT", -14, 0)
     legend:SetJustifyH("LEFT")
     local words = {}
@@ -992,7 +1090,13 @@ BIT.RegisterTab("StatsInfo", {
           .. "1 x +Healing, 1 x Spell Power, 0.5 x Intellect, 0.5 x Spirit and 2 x MP5; a weapon's damage per second, "
           .. "the physical stats, damage-only spell stats and the schools' spell damage count for nothing to it, "
           .. "and crit, haste, procs, talents, spell ranks, overheal and cast uptime are not modelled. "
-          .. "The other healers have no spec here: the simulator does not model healing.")
+          .. "The other healers have no spec here: the simulator does not model healing."
+          .. "\n\nBag arrows (on the game's own bags and on the Baganator bag grid): always against what you wear in that slot, never a BiS verdict. "
+          .. "Green up: at least one spec's score is outright better and none of it worse. Red down: every replacement "
+          .. "path is strictly worse for every spec. Mixed, equal or unknown: no arrow. Stats the simulator does not "
+          .. "model (e.g. armor only on a damage class) are compared conservatively by the raw differences, with no "
+          .. "spec icon; the healer's approximate score gets a ~ icon. While the client hides stats (in combat) or the "
+          .. "item's data has not arrived, no arrow is shown.")
         local about = parent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         about:SetPoint("TOPLEFT", legend, "BOTTOMLEFT", 0, -8)
         about:SetPoint("RIGHT", -14, 0)
@@ -1031,6 +1135,8 @@ BIT.RegisterTab("StatsInfo", {
       worth:Refresh()
       specs:Refresh()
       icons:Refresh()
+      bagMarkers:Refresh()
+      bagSpecIcons:Refresh()
     end)
   end,
 })

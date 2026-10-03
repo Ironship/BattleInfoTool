@@ -2,7 +2,7 @@
 -- files load. Each tab starts with the module's Enable switch; below it the module builds its own
 -- settings (BIT.RegisterTab), the first time the tab is shown, and only while the module runs:
 -- a module that is off never ran its code, so it has nothing to show settings for.
--- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
+-- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
 --
 -- The window is made of plain frames (no secure templates, no protected calls), so it opens in
 -- combat too.
@@ -15,6 +15,9 @@ local TAB_HEIGHT = 26
 local SWITCH_HEIGHT = 36
 local MARGIN = 10
 local DEFAULT_TAB = { width = 640, height = 360 }
+local MAX_CONTENT_HEIGHT = 470 -- the window stays bounded; taller tabs scroll inside it
+local MODULE_PREVIEW_GAP = 12 -- OFF-page gap between the appearance editor and a module's own preview scene
+local MODULE_PREVIEW_BOTTOM = 8 -- OFF-page bottom allowance below a module's preview scene
 
 local window
 local tabButtons, pages = {}, {}
@@ -24,7 +27,7 @@ local current
 -- Widgets shared by the modules of the core (StatsInfo, Range)
 ---------------------------------------------------------------------------------------------
 
-local UI = {}
+local UI = BIT.UI or {} -- Appearance.lua (loaded before this file) may have added members
 BIT.UI = UI
 
 function UI.Backdrop(frame, shade, alpha)
@@ -90,7 +93,23 @@ function UI.Slider(parent, labelText, min, max, step, get, set, format)
   track:SetHeight(6)
   holder.value = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   holder.value:SetPoint("LEFT", bar, "RIGHT", 8, 0)
-  local function show(v) holder.value:SetText(string.format(format or "%d", v)) end
+  local function show(v) holder.value:SetText(UI.SliderLabel(format, v)) end
+  -- The label of a slider value. A format ending in a literal "%" means the value is a fraction
+  -- or multiplier: the label shows the percent (0.5 -> 50%). Without a format, whole values stay
+  -- plain and fractional values are multipliers, shown with an x (1.25 -> 1.25x). A function
+  -- formats the value itself. The stored value is never changed by the label.
+  function UI.SliderLabel(format, v)
+    if type(format) == "function" then return format(v) end
+    if type(format) == "string" then
+      if string.find(format, "%%", 1, true) then
+        return string.format("%d%%", math.floor(v * 100 + 0.5))
+      end
+      return string.format(format, v)
+    end
+    if v == math.floor(v) then return string.format("%d", v) end
+    local s = string.format("%.2f", v):gsub("0+$", ""):gsub("%.$", "")
+    return s .. "x"
+  end
   bar:SetScript("OnValueChanged", function(_, v)
     v = math.floor(v / step + 0.5) * step
     show(v)
@@ -121,6 +140,7 @@ local function tabSize()
       h = math.max(h, tab.height or 0)
     end
   end
+  h = math.min(h, MAX_CONTENT_HEIGHT)
   return w, h
 end
 
@@ -169,24 +189,100 @@ local function buildPage(name)
   end)
   page.reload:SetPoint("TOPRIGHT", -4, -7)
 
-  page.content = CreateFrame("Frame", nil, page)
-  page.content:SetPoint("TOPLEFT", 0, -SWITCH_HEIGHT)
-  page.content:SetPoint("BOTTOMRIGHT", 0, 0)
+  -- The content area is bounded and scrollable: the module's own controls (or the note and
+  -- the appearance editor while the module is off) live in the scroll child, and the window
+  -- itself stays at the bounded tab size, so nothing overflows past the tabs at any UI scale.
+  local scroll = CreateFrame("ScrollFrame", nil, page)
+  scroll:SetPoint("TOPLEFT", 0, -SWITCH_HEIGHT)
+  scroll:SetPoint("BOTTOMRIGHT", 0, 0)
+  scroll:EnableMouseWheel(true)
+  scroll:SetScript("OnMouseWheel", function(_, delta)
+    scroll:SetVerticalScroll(scroll:GetVerticalScroll() - delta * 24)
+  end)
+  local content = CreateFrame("Frame", nil, scroll)
+  -- SetScrollChild owns the child's anchors: the native API replaces them with
+  -- TOPLEFT, so an opposing RIGHT anchor set before it cannot supply a width.
+  -- Give the child explicit geometry, as Blizzard's scroll frames do.
+  content:SetWidth(window:GetWidth() - 2 * MARGIN)
+  scroll:SetScrollChild(content)
+  scroll:SetScript("OnSizeChanged", function(_, width)
+    if width > 0 then content:SetWidth(width) end
+  end)
+  page.scroll, page.content = scroll, content
+
+  -- The scroll child is at least as tall as the module's declared tab and the viewport.
+  local viewport = window:GetHeight() - HEADER_HEIGHT - TAB_HEIGHT - SWITCH_HEIGHT - 2 * MARGIN
+  local function layoutContent()
+    local needed = tab.height or DEFAULT_TAB.height
+    if page.appearance then
+      needed = math.max(needed, 74 + page.appearance:GetHeight())
+      if page.modulePreview then
+        needed = math.max(needed, 74 + page.appearance:GetHeight() + MODULE_PREVIEW_GAP
+          + page.modulePreview:GetHeight() + MODULE_PREVIEW_BOTTOM)
+      end
+    end
+    content:SetHeight(math.max(needed, viewport))
+  end
 
   if BIT.IsRunning(name) and type(tab.build) == "function" then
-    local ok, err = pcall(tab.build, page.content)
+    local ok, err = pcall(tab.build, content)
     if not ok then
       BIT.Say("the " .. name .. " settings could not be built: " .. tostring(err))
     end
   else
-    local note = page.content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local note = content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     note:SetPoint("TOPLEFT", 8, -8)
     note:SetPoint("RIGHT", -8, 0)
     note:SetJustifyH("LEFT")
     note:SetText((tab.summary and (tab.summary .. "\n\n") or "")
-      .. "Its settings are here while it runs.")
+      .. "Its settings are here while it runs; its appearance and a sample preview are below"
+      .. " -- they need no module runtime.")
     page.offNote = note
+    -- The shared appearance editor works without the module's runtime: no events, no
+    -- gameplay, no mechanics data. Its preview is the panel's own fictitious sample.
+    -- Optional pure per-module preview seam: a tab may supply buildPreview(parent)
+    -- for a static fictitious scene frame and previewRender(scene, style) for its
+    -- pure render. The editor's own refresh path re-renders that SAME scene with the
+    -- freshly resolved MODULE style (module overrides keep winning); no second
+    -- subscription is added and no runtime is started.
+    local refreshModulePreview = nil
+    if type(tab.buildPreview) == "function" or type(tab.previewRender) == "function" then
+      refreshModulePreview = function()
+        local scene = page.modulePreview
+        if scene == nil then return end
+        if type(tab.previewRender) == "function" then
+          local okRender, err = pcall(tab.previewRender, scene, BIT.Style.Resolve(name, tab.legacy))
+          if not okRender then
+            BIT.Say("the " .. name .. " preview could not render: " .. tostring(err))
+          end
+        end
+        layoutContent()
+      end
+    end
+    page.appearance = BIT.UI.Appearance(content, name, tab.capabilities, refreshModulePreview, tab.legacy)
+    page.appearance:SetPoint("TOPLEFT", 8, -74)
+    -- The scene itself: built once through the optional builder and retained as
+    -- page.modulePreview. A nil result is a silent static fallback; a builder
+    -- error is reported and the ordinary editor stays usable.
+    if type(tab.buildPreview) == "function" then
+      local ok, scene = pcall(tab.buildPreview, content)
+      if ok and type(scene) == "table"
+        and type(scene.SetPoint) == "function" and type(scene.GetHeight) == "function" then
+        page.modulePreview = scene
+        scene:SetPoint("TOPLEFT", page.appearance, "BOTTOMLEFT", 0, -MODULE_PREVIEW_GAP)
+        if type(tab.previewRender) == "function" then
+          local okRender, err = pcall(tab.previewRender, scene, BIT.Style.Resolve(name, tab.legacy))
+          if not okRender then
+            BIT.Say("the " .. name .. " preview could not render: " .. tostring(err))
+          end
+        end
+      elseif not ok then
+        BIT.Say("the " .. name .. " preview could not be built: " .. tostring(scene))
+      end
+    end
   end
+
+  layoutContent()
   refreshSwitch(page)
   return page
 end

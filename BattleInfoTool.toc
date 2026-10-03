@@ -2,10 +2,11 @@
 ## Title: BattleInfoTool
 ## Notes: Spell damage on your action buttons, DoTs that will kill your target, stats against what you wear, sounds for full combo points, mana and Soul Shards, and a range mark over your target. Every part can be switched off. /bit
 ## Author: Ironship
-## Version: 0.8.0
+## Version: 0.9.18-test
 ## SavedVariables: BattleInfoToolDB, BattleInfoTool_SpellDamageInfoDB, BattleInfoTool_DoTInfoDB, BattleInfoTool_ResourceDingDB
 
 Core\Init.lua
+Core\Appearance.lua
 Core\Settings.lua
 
 # SpellDamageInfo, from the addon of that name
@@ -25,6 +26,7 @@ Modules\DoTInfo\Nameplates.lua
 
 Modules\StatsInfo\Weights.lua
 Modules\StatsInfo\StatsInfo.lua
+Modules\StatsInfo\BagMarkers.lua
 
 # ResourceDing, from the addon of that name
 Modules\ResourceDing\Core.lua
@@ -35,7 +37,7 @@ Modules\ResourceDing\Settings.lua
 
 Modules\Range\Range.lua
 
-# Remaining absorbs on unit frames, nameplates and the optional curved HUD
+# Remaining absorbs on unit frames and nameplates (no floating HUD)
 Modules\ShieldsInfo\ShieldsInfo.lua
 
 # Hunter-specific range ladder, beside the existing class range marker

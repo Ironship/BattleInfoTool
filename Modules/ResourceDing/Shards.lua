@@ -54,8 +54,10 @@ end
 
 local function healthBarOf(plate)
   local unitFrame = type(plate.UnitFrame) == "table" and plate.UnitFrame or nil
-  local bar = unitFrame and (unitFrame.healthBar or (type(unitFrame.HealthBarsContainer) == "table"
-    and unitFrame.HealthBarsContainer.healthBar)) or nil
+  local container = unitFrame and type(unitFrame.HealthBarsContainer) == "table"
+    and unitFrame.HealthBarsContainer or nil
+  local bar = unitFrame and (unitFrame.healthBar or unitFrame.HealthBar
+    or (container and (container.healthBar or container.HealthBar))) or nil
   return type(bar) == "table" and bar or plate
 end
 

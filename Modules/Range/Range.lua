@@ -1,6 +1,6 @@
 -- BattleInfoTool module Range: a red X over the target while it is out of range, a green
 -- checkmark while it is in range.
--- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
+-- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
 --
 -- In range means: one of the spells the range is measured by reaches the target. By default
 -- those are the class's main attacks (below); the settings take a spell of the player's own
@@ -351,7 +351,90 @@ loader:SetScript("OnEvent", function(self, _, name)
   startDimming()
 end)
 
+-- A settings-only sample. These are fictitious frames, not live nameplates or
+-- TargetFrame, and no measurement/runtime is started (also available while OFF).
+local function buildRangePreview(parent)
+  local scene = CreateFrame("Frame", nil, parent)
+  scene:SetSize(560, 180)
+  scene.title = scene:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  scene.title:SetPoint("TOPLEFT", 12, -4)
+  scene.title:SetText("Range sample (not your target)")
+  scene.cases = {}
+  for i, kind in ipairs({ "nameplate", "targetFrame" }) do
+    local sample = { kind = kind }
+    local y = i == 1 and -50 or -120
+    sample.frame = CreateFrame("Frame", nil, scene)
+    sample.frame:SetSize(180, 20)
+    sample.frame:SetPoint("TOPLEFT", 12, y)
+    sample.health = CreateFrame("StatusBar", nil, sample.frame)
+    sample.health:SetAllPoints(sample.frame)
+    sample.health:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
+    sample.health:SetStatusBarColor(0.15, 0.25, 0.35, 1)
+    sample.health:SetMinMaxValues(0, 100)
+    sample.health:SetValue(i == 1 and 72 or 46)
+    sample.icon = scene:CreateTexture(nil, "OVERLAY")
+    sample.icon:SetTexture(i == 1 and ICON["in"] or ICON.out)
+    sample.icon:SetSize(26, 26)
+    if i == 1 then
+      sample.icon:SetPoint("BOTTOM", sample.frame, "TOP", 0, 4)
+    else
+      sample.icon:SetPoint("LEFT", sample.frame, "RIGHT", 2, 8)
+    end
+    sample.label = scene:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    sample.label:SetPoint("TOPLEFT", 240, y)
+    sample.label:SetText(i == 1 and "In range - above nameplate" or "Out of range - beside target frame")
+    scene.cases[i] = sample
+  end
+  return scene
+end
+
+local function renderRangePreview(scene, style)
+  -- Allocate the painted marker bounds, not just the mock frame. Native WoW Y
+  -- is positive upwards; large nameplate markers need headroom above the bar.
+  local size = 26 * style.scale
+  local titleHeight, labelHeight = style.fontSize * 3 + 8, style.fontSize * 4 + 8
+  scene.title:ClearAllPoints()
+  scene.title:SetPoint("TOPLEFT", scene, "TOPLEFT", 12, -4)
+  scene.title:SetPoint("TOPRIGHT", scene, "TOPRIGHT", -12, -4)
+  scene.title:SetHeight(titleHeight)
+  scene.title:SetJustifyH("LEFT")
+  BIT.Style.ApplyText(scene.title, style, "text")
+  local cursor = 4 + titleHeight + 12
+  for i, sample in ipairs(scene.cases) do
+    local clusterHeight = i == 1 and size + 24 or math.max(size, 20)
+    local barOffset = i == 1 and size + 4 or (clusterHeight - 20) / 2
+    sample.frame:ClearAllPoints()
+    sample.frame:SetPoint("TOPLEFT", scene, "TOPLEFT", 12, -(cursor + barOffset))
+    sample.icon:ClearAllPoints()
+    if i == 1 then
+      -- The in-range icon is centered above a fixed 180px mock bar. Once the
+      -- icon outgrows the bar (size > 180 at large scale), a centered anchor
+      -- would paint left of the scene (native frames do not clip), so shift
+      -- it right exactly enough to keep its left edge on the mock bar.
+      sample.icon:SetPoint("BOTTOM", sample.frame, "TOP", math.max(0, (size - 180) / 2), 4)
+    else
+      sample.icon:SetPoint("LEFT", sample.frame, "RIGHT", 2, 0)
+    end
+    sample.icon:SetSize(size, size)
+    sample.icon:SetAlpha(style.opacity)
+    local labelY = -(cursor + clusterHeight + 8)
+    sample.label:ClearAllPoints()
+    sample.label:SetPoint("TOPLEFT", scene, "TOPLEFT", 12, labelY)
+    sample.label:SetPoint("TOPRIGHT", scene, "TOPRIGHT", -12, labelY)
+    sample.label:SetHeight(labelHeight)
+    sample.label:SetJustifyH("LEFT")
+    BIT.Style.ApplyText(sample.label, style, i == 1 and "good" or "bad")
+    BIT.Style.ApplyBar(sample.health, style, "muted")
+    cursor = cursor + clusterHeight + 8 + labelHeight + 16
+  end
+  scene:SetHeight(cursor + 4)
+end
+
 BIT.RegisterTab("Range", {
+  buildPreview = buildRangePreview,
+  previewRender = renderRangePreview,
+  capabilities = { roles = { "good", "bad", "muted", "text" }, shapes = false,
+    geometry = false, border = false, font = true, scale = true, opacity = true },
   title = "Range",
   summary = "A red X over your target while it is out of range, a green checkmark while it is in range.",
   width = 640, height = 330,
