@@ -104,7 +104,7 @@ local defaults = {
   sound = "auction",
   dots = true,     -- combo points as dots under the target's nameplate (Dots.lua)
   dotSize = 14,
-  dotOffset = 2,   -- below the plate's health bar
+  dotOffset = 2,   -- vertical offset from the health bar (negative = above)
   shards = true,         -- a warlock's Soul Shard coming in plays the sound (Shards.lua)
   shardDiamonds = true,  -- and they show as purple diamonds under the target's nameplate
   mana = true,           -- a sound when mana climbs to manaPercent (Mana.lua); manaPercent is
@@ -118,6 +118,9 @@ local function initializeDatabase()
     if BattleInfoTool_ResourceDingDB[key] == nil then BattleInfoTool_ResourceDingDB[key] = value end
   end
   if not Addon.SOUNDS[BattleInfoTool_ResourceDingDB.sound] then BattleInfoTool_ResourceDingDB.sound = defaults.sound end
+  if type(BattleInfoTool_ResourceDingDB.dotOffset) ~= "number" then BattleInfoTool_ResourceDingDB.dotOffset = defaults.dotOffset
+  elseif BattleInfoTool_ResourceDingDB.dotOffset < -80 then BattleInfoTool_ResourceDingDB.dotOffset = -80
+  elseif BattleInfoTool_ResourceDingDB.dotOffset > 30 then BattleInfoTool_ResourceDingDB.dotOffset = 30 end
   Addon.db = BattleInfoTool_ResourceDingDB
   -- The saved table is shared by every character on the account, but the mana level is per class:
   -- each class keeps its own entry, and manaPercent is this character's copy of it.

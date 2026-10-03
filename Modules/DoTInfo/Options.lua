@@ -1001,7 +1001,7 @@ local function createWindow()
     window:SetScript("OnDragStart", window.StartMoving)
     window:SetScript("OnDragStop", window.StopMovingOrSizing)
     setBackdrop(window, 0.06, 0.97)
-    table.insert(UISpecialFrames, "BattleInfoTool_DoTInfoOptions") -- Escape closes it
+    if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "BattleInfoTool_DoTInfoOptions") end -- Escape closes it
 
     local title = window:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 16, -18)

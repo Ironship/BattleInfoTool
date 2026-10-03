@@ -183,7 +183,7 @@ function Addon.CreateSettingsPanel(parent)
       if Addon.RefreshDots then Addon.RefreshDots() end
       if Addon.RefreshShards then Addon.RefreshShards() end -- the diamonds size from dotSize too
     end)
-  panel.dotOffset = slider(panel, "Distance below the health bar", -370, 0, 30,
+  panel.dotOffset = slider(panel, "Offset from the health bar (- = above)", -370, -80, 30,
     function() return Addon.db.dotOffset end,
     function(value)
       Addon.db.dotOffset = value

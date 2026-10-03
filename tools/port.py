@@ -108,7 +108,7 @@ MODULES["ResourceDing"] = {
              '-- Inside BattleInfoTool its own namespace; loaded on its own, the addon\'s table as before.\n'
              'local Addon = BIT.Module and BIT.Module("ResourceDing") or BIT\n'
              'if not BIT.Module then _G.ResourceDing = Addon end\n'),
-            ('ResourceDingDB', 'BattleInfoTool_ResourceDingDB', 7),
+            ('ResourceDingDB', 'BattleInfoTool_ResourceDingDB', 13),
             ('    if arg1 ~= addonName then return end\n    initializeDatabase()\n'
              '    if Addon.CreateSettingsPanel then Addon.CreateSettingsPanel() end\n',
              '    if arg1 ~= addonName then return end\n'
