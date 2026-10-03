@@ -38,7 +38,7 @@ local BOTH_HANDS = { INVTYPE_2HWEAPON = true }
 -- The stats shown first, in this order; any other stat an item has comes after them.
 local FIRST = {
   "ITEM_MOD_STRENGTH_SHORT", "ITEM_MOD_AGILITY_SHORT", "ITEM_MOD_STAMINA_SHORT", "ITEM_MOD_INTELLECT_SHORT",
-  "ITEM_MOD_SPIRIT_SHORT", "RESISTANCE0_NAME",
+  "ITEM_MOD_SPIRIT_SHORT", "RESISTANCE0_NAME", "ITEM_MOD_SPELL_POWER_SHORT", "ITEM_MOD_SPELL_DAMAGE_DONE_SHORT",
 }
 local RANK = {}
 for i, key in ipairs(FIRST) do RANK[key] = i end
@@ -529,6 +529,8 @@ function M.WorthParts(key, n)
     if per and per > 0 then add("regen", math.floor(per * n * 50 + 0.5) / 10) end
   elseif key == "ITEM_MOD_SPELL_HEALING_DONE_SHORT" then
     add("healing", n)
+  elseif key == "ITEM_MOD_SPELL_POWER_SHORT" or key == "ITEM_MOD_SPELL_DAMAGE_DONE_SHORT" then
+    add("spellpower", n)
   elseif RATINGS[key] then
     -- the game's own conversion at this level, as its character sheet does it
     local kind, name, number = RATINGS[key][1], RATINGS[key][2], RATINGS[key][3]
@@ -543,6 +545,7 @@ local WORTH_WORDS = {
   armor = "armor", ap = "attack power", crit = "crit", dodge = "dodge", health = "health", mana = "mana",
   spellcrit = "spell crit", regen = "mana per 5 sec. when not casting", hit = "hit", haste = "haste",
   expertise = "expertise", parry = "parry", block = "block", defense = "defense", healing = "healing",
+  spellpower = "spell power",
 }
 local PERCENT_KINDS = { crit = true, dodge = true, spellcrit = true, hit = true, haste = true, expertise = true,
   parry = true, block = true }
@@ -550,7 +553,7 @@ local PERCENT_KINDS = { crit = true, dodge = true, spellcrit = true, hit = true,
 local WORTH_SHORT = {
   armor = "armor", ap = "AP", crit = "crit", dodge = "dodge", health = "health", mana = "mana",
   spellcrit = "spell crit", regen = "mana/5s", hit = "hit", haste = "haste", expertise = "expertise",
-  parry = "parry", block = "block", defense = "defense", healing = "healing",
+  parry = "parry", block = "block", defense = "defense", healing = "healing", spellpower = "spell power",
 }
 local function worthValue(kind, value) return PERCENT_KINDS[kind] and percent(value) or signed(value) end
 
@@ -689,7 +692,7 @@ local ICONS = {
   hit = "Interface\\Icons\\Ability_Hunter_SniperShot", haste = "Interface\\Icons\\Spell_Nature_Bloodlust",
   expertise = "Interface\\Icons\\Ability_Warrior_Revenge", parry = "Interface\\Icons\\Ability_Parry",
   block = "Interface\\Icons\\Ability_Defend", defense = "Interface\\Icons\\Ability_Warrior_ShieldWall",
-  healing = "Interface\\Icons\\Spell_Holy_Heal",
+  healing = "Interface\\Icons\\Spell_Holy_Heal", spellpower = "Interface\\Icons\\Spell_Nature_Lightning",
 }
 M.ICONS = ICONS
 local DIVIDER = "|TInterface\\Common\\UI-TooltipDivider-Transparent:8:200|t"
