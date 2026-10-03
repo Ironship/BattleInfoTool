@@ -1,7 +1,7 @@
 -- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Core.lua at 8269edd.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: action button numbers, tooltip lines, settings and /sdi.
--- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
+-- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
 --
 -- Everything here stays out of Blizzard's way: the numbers are FontStrings of our own on the
 -- action buttons, tooltip lines are added through the tooltip post-call hook, and no Blizzard
@@ -143,6 +143,39 @@ local function isRetail()
   return major ~= nil and major >= 10
 end
 ns.IsRetail = isRetail
+
+-- The player's combo points on the selected target, as the client says: a count 0..5 and true,
+-- or nil and false when the client cannot say (no API, a failed call, a secret value, or a
+-- count outside 0..5: NaN, infinite, negative, fractional). Classic/Forever keep the count on
+-- the target: GetComboPoints("player", "target") is the authority, whatever the player's own
+-- UnitPowerMax says (a zero combo bar must not gate the read, and no target GUID is looked at).
+-- Retail keeps it on the player: UnitPower("player", combo points), and the target's
+-- GetComboPoints is never asked there. The raw value is guarded with issecretvalue before any
+-- comparison, arithmetic, formatting or use as a table key.
+local COMBO_POWER_TYPE = (Enum and Enum.PowerType and Enum.PowerType.ComboPoints) or 4
+-- The UNIT_POWER_UPDATE / UNIT_POWER_FREQUENT events hand the powerType over as a cstring,
+-- and the combo resource's token is "COMBO_POINTS" (pinned UnitDocumentation.lua payload
+-- tables; CombatText.lua compares data == "COMBO_POINTS"). COMBO_POWER_TYPE above is the
+-- numeric Enum.PowerType.ComboPoints that the UnitPower API itself takes -- never the shape
+-- an event payload arrives in.
+local COMBO_EVENT_TOKEN = "COMBO_POINTS"
+local function comboPoints()
+  local raw
+  if isRetail() then
+    if type(UnitPower) ~= "function" then return nil, false end
+    local ok, value = pcall(UnitPower, "player", COMBO_POWER_TYPE)
+    if not ok then return nil, false end
+    raw = value
+  else
+    if type(GetComboPoints) ~= "function" then return nil, false end
+    local ok, value = pcall(GetComboPoints, "player", "target")
+    if not ok then return nil, false end
+    raw = value
+  end
+  if isSecret(raw) or type(raw) ~= "number" then return nil, false end
+  if raw ~= raw or raw < 0 or raw > 5 or raw % 1 ~= 0 then return nil, false end
+  return raw, true
+end
 
 -- Which client's spell tables SpellCoefficients.lua holds for this one: "forever" (1.60),
 -- "era" (1.15), or nil for any other client.
@@ -480,9 +513,28 @@ end
 local function finisherView(f, spellID, pet)
   local top = f.points[f.top]
   if not top then return nil end
-  local parsed = { school = "physical" }
-  if f.kind == "dot" then parsed.dot = top else parsed.direct = top end
-  local view = Estimate.Apply(parsed, nil, nil, nil)
+  -- The damage of a finisher belongs to the combo points the selected target has right now,
+  -- not to the highest row the description lists: pick that exact parsed row. When there is no
+  -- row for the count, or the client cannot say what the count is, no precise amount is shown:
+  -- the tooltip then explains the parsed table as a static preview.
+  local n, known = comboPoints()
+  local picked = known and n >= 1 and n <= f.top and f.points[n]
+  local view
+  if picked then
+    local parsed = { school = "physical" }
+    if f.kind == "dot" then parsed.dot = picked else parsed.direct = picked end
+    view = Estimate.Apply(parsed, nil, nil, nil)
+    if view then view.finisherAt = { n = n, known = true } end
+  elseif known and n == 0 then
+    -- zero combo points (or no selected target): the button hides the amount, the tooltip
+    -- explains the table without pretending a count
+    view = { finisherAt = { n = 0, known = true } }
+  else
+    -- secret, failed or invalid count, or a count the parsed rows do not reach: a neutral
+    -- placeholder on the button, and an explicitly static preview in the tooltip -- never the
+    -- top row pretending to be current
+    view = { finisherAt = { n = nil, known = false } }
+  end
   if view then view.finisher = f end
   return view
 end
@@ -526,6 +578,49 @@ function ns.Compute(spellID, pet)
   end
   -- a chance effect: the number is what one trigger does
   if view and proc then view.proc = proc end
+  return view
+end
+
+-- The use-effect spell of an item (a potion's "Use:" spell), or nil when the item
+-- casts none or the client does not say. GetItemSpell answers (name, spellID); the
+-- raw values are guarded with issecretvalue before anything is read from them.
+local function itemUseSpell(itemID)
+  if isSecret(itemID) or type(itemID) ~= "number" or type(GetItemSpell) ~= "function" then return nil end
+  local ok, name, id = pcall(GetItemSpell, itemID)
+  if not ok or isSecret(name) or isSecret(id) then return nil end
+  if type(id) == "number" then return id end
+  if type(name) == "number" then return name end
+  return nil
+end
+
+-- What to show for a consumable on the bar: its raw instant healing or mana,
+-- or a bandage's stated total (no estimate; a consumable's amount is fixed),
+-- or nil. Damage wordings are never read here, so the damage numbers cannot
+-- move. Anything over time except a Heals/Heilt bandage stays unread.
+function ns.ComputeItem(itemID)
+  if isSecret(itemID) or type(itemID) ~= "number" then return nil end
+  local spellID = itemUseSpell(itemID)
+  if not spellID then return nil end
+  local text = getDescription(spellID)
+  if not text then -- not loaded yet; SPELL_TEXT_UPDATE asks again
+    requestLoad(spellID)
+    return nil
+  end
+  local parsed = Parser.ParseItemHeal(text, ns.DescriptionLang())
+  if not parsed then return nil end
+  local view
+  if parsed.heal then
+    view = view or {}
+    view.heal = { min = parsed.heal.min, max = parsed.heal.max, added = 0 }
+  end
+  if parsed.hot then
+    view = view or {}
+    view.hot = { total = parsed.hot.total, duration = parsed.hot.duration, added = 0 }
+  end
+  if parsed.mana then
+    view = view or {}
+    view.mana = { min = parsed.mana.min, max = parsed.mana.max, added = 0 }
+  end
   return view
 end
 
@@ -763,6 +858,22 @@ local function spellOnSlot(slot)
 end
 ns.SpellOnSlot = spellOnSlot
 
+-- The item on an action slot (a potion on the bar reports kind "item", a /use
+-- macro reports ("macro", itemID, "item") just as a /cast macro reports
+-- ("macro", spellID, "spell") above), or nil for anything else or anything the
+-- client hides. Mirrors spellOnSlot: the raw values are guarded with
+-- issecretvalue before any comparison.
+local function itemOnSlot(slot)
+  if isSecret(slot) or type(slot) ~= "number" or type(GetActionInfo) ~= "function" then return nil end
+  local ok, kind, id, sub = pcall(GetActionInfo, slot)
+  if not ok or isSecret(kind) or isSecret(id) or isSecret(sub) then return nil end
+  if kind == "item" and type(id) == "number" then return id end
+  -- SDI-MACRO-ITEM: a /use macro's item, same slot shape as /cast above.
+  if kind == "macro" and sub == "item" and type(id) == "number" then return id end
+  return nil
+end
+ns.ItemOnSlot = itemOnSlot
+
 -- The spell on a pet action slot, or nil for an empty slot, a command (Attack, Follow, Stay and
 -- the stances are tokens) or anything the client hides. GetPetActionInfo returns name, texture,
 -- isToken, isActive, autoCastAllowed, autoCastEnabled, spellID.
@@ -809,7 +920,11 @@ local function buttonText(view, reduction)
     end
   elseif value then
     mainText = Format.Short(value)
-    mainColor = (kind == "heal") and Format.HEAL_COLOR or Format.DAMAGE_COLOR
+    -- Mana consumables read in the established mana blue (Life Tap's +mana);
+    -- healing stays green, damage stays gold.
+    if kind == "heal" then mainColor = Format.HEAL_COLOR
+    elseif kind == "mana" then mainColor = Format.WEAPON_COLOR
+    else mainColor = Format.DAMAGE_COLOR end
     if reduction then
       -- the small red number beside the damage: per hit where the target's speed is known, else the
       -- amount alone ("-100 AP" does not fit there)
@@ -820,6 +935,10 @@ local function buttonText(view, reduction)
   elseif view and view.absorb and view.absorb >= 0.5 then
     mainText = Format.Short(view.absorb)
     mainColor = Format.ABSORB_COLOR
+  elseif view and view.finisher and view.finisherAt and not view.finisherAt.known then
+    -- the combo count the client cannot say: a neutral placeholder, never a precise amount
+    mainText = "?"
+    mainColor = Format.NOTE_COLOR
   elseif reduction then
     mainText = Format.ReductionText(reduction, ns.L, ns.ReductionPerHit(reduction))
     mainColor = Format.REDUCTION_COLOR
@@ -1037,6 +1156,13 @@ local function updateButton(button, pet)
       view = ns.Compute(spellID, pet)
       if db.reduction then reduction = ns.Reduction(spellID) end
       noteMiss(spellID)
+    elseif not pet then
+      -- SDI-ITEM-HEAL: a consumable on the bar (kind "item", or a /use macro):
+      -- its raw healing, bandage total or mana, through the same button text
+      -- as spells (Format.Short; healing green, mana blue). No reduction
+      -- and no miss tracking: those read spell wordings only.
+      local itemID = itemOnSlot(button.action)
+      if itemID then view = ns.ComputeItem(itemID) end
     end
   end
   local mainText, mainColor, sideText, sideColor, layout = buttonText(view, reduction)
@@ -1076,6 +1202,76 @@ ns.Refresh = requestUpdate
 -- Tooltip
 ---------------------------------------------------------------------------------------------
 
+-- The lines we added to each tooltip, so a combo change can rewrite them in place (never
+-- append a second set): [tooltip] = { spellID = id, rows = the indices our rows occupy }.
+-- AddLine documents no return (blank wowless binding), so no row handles are kept: the owned
+-- rows are found back by index through the documented GetLeftLine accessor and rewritten
+-- with SetText/SetTextColor, which never deletes a row and never touches rows that other
+-- addons put there. New rows grow the set by an AddLine at the end; surplus rows are blanked,
+-- not deleted. A native rebuild (ClearLines) drops the bookkeeping through OnTooltipCleared,
+-- so nothing stale is rewritten or hidden later.
+local tooltipLines = {}
+local tooltipClearedHooked = {}
+-- A pet action tooltip can reach us twice: through a tooltip data post-call (on clients that
+-- build tooltips from data, and again when the tooltip refreshes) and through the SetPetAction
+-- hook right after it. The post-call marks the tooltip so the hook does not add the lines again.
+local petLinesDone = {} -- [tooltip] = true
+
+-- Forget our rows when the native content of a tooltip is rebuilt (ClearLines fires
+-- OnTooltipCleared; the rows we added are gone with it), and drop a SetPetAction
+-- duplicate mark the same way the hookTooltips handler below would.
+local function forgetRowsOnClear(tooltip)
+  if tooltipClearedHooked[tooltip] or type(tooltip.HookScript) ~= "function" then return end
+  tooltipClearedHooked[tooltip] = true
+  pcall(tooltip.HookScript, tooltip, "OnTooltipCleared", function(t)
+    tooltipLines[t] = nil
+    petLinesDone[t] = nil
+  end)
+end
+
+-- The rows a tooltip holds right now, when the client numbers them.
+local function rowsBefore(tooltip)
+  if type(tooltip.NumLines) ~= "function" then return nil end
+  local ok, n = pcall(tooltip.NumLines, tooltip)
+  if not ok or type(n) ~= "number" then return nil end
+  return n
+end
+
+-- Rewrite the rows we added before (their indices are prev.rows[i]) with the new set;
+-- returns false when an owned row could not be addressed (a rebuild without our knowledge,
+-- or no GetLeftLine). Rows with no matching new line are blanked, never deleted.
+local function rewriteOwnedRows(tooltip, prev, lines, pet)
+  if type(tooltip.GetLeftLine) ~= "function" then return false end
+  local addressable = true
+  for i, index in ipairs(prev.rows) do
+    local ok, row = pcall(tooltip.GetLeftLine, tooltip, index)
+    if not ok or type(row) ~= "table" or type(row.SetText) ~= "function" then
+      addressable = false
+    elseif i <= #lines then
+      local text = pet and (lines[i][1] .. " (" .. L.PET .. ")") or lines[i][1]
+      pcall(row.SetText, row, text)
+      if type(row.SetTextColor) == "function" then
+        pcall(row.SetTextColor, row, lines[i][2], lines[i][3], lines[i][4])
+      end
+    else
+      pcall(row.SetText, row, "")
+    end
+  end
+  return addressable
+end
+
+-- Add lines whose indices we record as they land at the end of the tooltip.
+local function appendOwnedRows(tooltip, prev, rows, lines, pet)
+  local base = rowsBefore(tooltip) or 0
+  for i = 1, #lines do
+    local text = pet and (lines[i][1] .. " (" .. L.PET .. ")") or lines[i][1]
+    local ok = pcall(tooltip.AddLine, tooltip, text, lines[i][2], lines[i][3], lines[i][4])
+    if ok then rows[#rows + 1] = base + i end
+  end
+  prev.count = #rows
+  return #rows > 0
+end
+
 -- Adds our lines; returns how many. A pet's spell says so at the end of each line.
 local function addTooltipLines(tooltip, spellID, pet)
   if not db.tooltip or isSecret(spellID) or type(spellID) ~= "number" then return 0 end
@@ -1095,10 +1291,32 @@ local function addTooltipLines(tooltip, spellID, pet)
       lines[#lines + 1] = Format.ReductionLine(reduction, L, ns.ReductionPerHit(reduction), ns.TargetSpeed())
     end
   end
-  for _, line in ipairs(lines) do
-    local text = pet and (line[1] .. " (" .. L.PET .. ")") or line[1]
-    tooltip:AddLine(text, line[2], line[3], line[4])
+  forgetRowsOnClear(tooltip)
+  local prev = tooltipLines[tooltip]
+  if prev and prev.spellID == spellID then
+    -- the same spell on the same tooltip again: a refresh (a combo change while the tooltip
+    -- is open). Rows the tooltip still shows are rewritten in place and the set grows or
+    -- shrinks at the end; a tooltip that was rebuilt natively since falls through to a plain
+    -- add at the end.
+    if rewriteOwnedRows(tooltip, prev, lines, pet) then
+      -- a smaller set leaves its surplus rows blanked but tracked, so a later larger set
+      -- rewrites them instead of appending duplicates
+      if #lines > #prev.rows then
+        appendOwnedRows(tooltip, prev, prev.rows, { select(#prev.rows + 1, unpack(lines)) }, pet)
+      end
+      return #lines
+    end
+  elseif prev then
+    -- a different spell on a tooltip that kept its rows: blank the previous spell's rows (a
+    -- native rebuild drops them anyway) so no stale number stays readable, then add the new
+    -- set at the end
+    rewriteOwnedRows(tooltip, prev, {}, pet)
+    tooltipLines[tooltip] = nil
+    prev = nil
   end
+  local added = { spellID = spellID, rows = {} }
+  appendOwnedRows(tooltip, added, added.rows, lines, pet)
+  if added.count > 0 then tooltipLines[tooltip] = added end
   return #lines
 end
 ns.AddTooltipLines = addTooltipLines
@@ -1134,10 +1352,37 @@ local function ownerIsPetSpellBook(tooltip)
   return false
 end
 
+-- A combo change while a finisher's tooltip is open: re-render its lines on the same tooltip,
+-- so the number under the cursor follows the selected target's combo. addTooltipLines takes the
+-- previous lines for the same spell off first, so this never appends a second set.
+local function refreshOpenFinisherTooltip()
+  if not db.tooltip then return end
+  if type(GameTooltip) ~= "table" or type(GameTooltip.IsShown) ~= "function" then return end
+  local ok, shown = pcall(GameTooltip.IsShown, GameTooltip)
+  if not ok or not shown then return end
+  if type(GameTooltip.GetSpell) ~= "function" then return end
+  local ok2, _, spellID = pcall(GameTooltip.GetSpell, GameTooltip)
+  -- Forever's native getter returns name, id (pinned TooltipUtil.GetDisplayedSpell), so pcall
+  -- yields ok, name, id -- the id is the THIRD value, exactly as the OnTooltipSetSpell hook
+  -- below reads it. A fourth slot would always be nil and the open tooltip would never refresh.
+  if not ok2 or isSecret(spellID) or type(spellID) ~= "number" then return end
+  local entry = getEntry(spellID)
+  if not (entry and entry.show == "finisher") then return end
+  addTooltipLines(GameTooltip, spellID, ownerIsPetSpellBook(GameTooltip))
+end
+
+-- A combo-related change: the finisher numbers on the buttons, and the open tooltip when it
+-- shows a finisher.
+local function refreshFinishers()
+  requestUpdate()
+  refreshOpenFinisherTooltip()
+end
+
 -- A pet action tooltip can reach us twice: through a tooltip data post-call (on clients that
 -- build tooltips from data, and again when the tooltip refreshes) and through the SetPetAction
 -- hook right after it. The post-call marks the tooltip so the hook does not add the lines again.
-local petLinesDone = {} -- [tooltip] = true
+-- (The table itself is declared with the tooltip helpers above; the SetPetAction hook and the
+-- OnTooltipCleared handler below both use the same local.)
 
 local function addPetLines(tooltip, slot)
   return addTooltipLines(tooltip, petSpellOnSlot(slot), true)
@@ -1384,7 +1629,7 @@ frame:RegisterEvent("PLAYER_LOGIN")
 local isReset = {}
 for _, e in ipairs(RESET_EVENTS) do isReset[e] = true end
 
-frame:SetScript("OnEvent", function(_, event, arg1, _, arg3)
+frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
   if event == "ADDON_LOADED" then
     if arg1 == ADDON then
       -- switched off in BattleInfoTool: silent
@@ -1403,7 +1648,8 @@ frame:SetScript("OnEvent", function(_, event, arg1, _, arg3)
     -- The weapon's numbers change with gear, forms and buffs; these say so for the player.
     -- A seal cast says which seal Judgement unleashes where the buffs cannot be read.
     for _, e in ipairs({ "UNIT_AURA", "UNIT_PET", "UNIT_ATTACK_POWER", "UNIT_RANGED_ATTACK_POWER", "UNIT_DAMAGE",
-      "UNIT_ATTACK_SPEED", "UNIT_RANGEDDAMAGE", "UNIT_MAXHEALTH", "UNIT_SPELLCAST_SUCCEEDED" }) do
+      "UNIT_ATTACK_SPEED", "UNIT_RANGEDDAMAGE", "UNIT_MAXHEALTH", "UNIT_SPELLCAST_SUCCEEDED",
+      "UNIT_POWER_UPDATE", "UNIT_POWER_FREQUENT" }) do
       if type(frame.RegisterUnitEvent) == "function" then
         -- the target's attack speed too, for a reduction of its attack power per hit
         pcall(frame.RegisterUnitEvent, frame, e, "player", e == "UNIT_ATTACK_SPEED" and "target" or nil)
@@ -1417,13 +1663,26 @@ frame:SetScript("OnEvent", function(_, event, arg1, _, arg3)
       end
     end
     register("PLAYER_TARGET_CHANGED")
+    -- the selected target's combo points: the events that say they changed. On clients that
+    -- fire a unit variant of COMBO_POINTS / COMBO_TARGET_CHANGED, RegisterEvent still receives
+    -- the event name; the payload is guarded as secret before anything is read from it.
+    register("COMBO_POINTS")
+    register("COMBO_TARGET_CHANGED")
     readBonus()
     readWeapon()
     readTargetSpeed()
     requestUpdate()
   elseif event == "PLAYER_TARGET_CHANGED" then
     readTargetSpeed()
-    requestUpdate()
+    refreshFinishers()
+  elseif event == "COMBO_POINTS" or event == "COMBO_TARGET_CHANGED" then
+    if not isSecret(arg1) then refreshFinishers() end
+  elseif event == "UNIT_POWER_UPDATE" or event == "UNIT_POWER_FREQUENT" then
+    -- the payload's powerType is a cstring ("COMBO_POINTS"), never the numeric enum the
+    -- UnitPower API takes; unreadable arguments are rejected before any comparison
+    if not isSecret(arg1) and not isSecret(arg2) and arg1 == "player" and arg2 == COMBO_EVENT_TOKEN then
+      refreshFinishers()
+    end
   elseif event == "SPELL_TEXT_UPDATE" then
     if not isSecret(arg1) and type(arg1) == "number" then parsedCache[arg1] = nil end
     requestUpdate()
@@ -1454,6 +1713,7 @@ end)
 -- For the tests.
 ns._buttons, ns._labels, ns._sideLabels, ns._bonus = buttons, labels, sideLabels, bonus
 ns._petButtons, ns._petSlots = petButtons, petSlots
+ns._eventFrame = frame
 ns._settings = function() return db end
 ns._weaponStats, ns._readWeapon = weaponStats, readWeapon
 ns._noteMiss, ns._parsedCache = noteMiss, parsedCache

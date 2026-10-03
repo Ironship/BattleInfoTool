@@ -1043,6 +1043,43 @@ function ns.registerOptions()
 end
 
 -- Inside BattleInfoTool: the window's content in its tab, with the presets at the tab's top right.
+-- BIT Minimal OFF-scene sample: a static mock bar with a fixed tick label, never
+-- live ticks and never real nameplates. DoTInfo is port-frozen, so this seam is
+-- edited directly here (see tools/port.py).
+local function buildDoTPreview(parent)
+  local scene = CreateFrame("Frame", nil, parent)
+  scene:SetSize(560, 120)
+  scene.title = scene:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  scene.title:SetPoint("TOPLEFT", 12, -4)
+  scene.title:SetText("DoTInfo sample (not your bars)")
+  scene.bar = CreateFrame("Frame", nil, scene)
+  scene.bar:SetSize(180, 20)
+  scene.bar:SetPoint("TOPLEFT", 12, -30)
+  scene.label = scene:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  scene.label:SetPoint("TOPLEFT", 12, -56)
+  scene.label:SetText("450 over 3 ticks")
+  scene.label:SetHeight(14)
+  return scene
+end
+
+local function renderDoTPreview(scene, style)
+  BIT.Style.ApplyText(scene.title, style, "text")
+  BIT.Style.ApplyText(scene.label, style, "text")
+  -- Native-Y min/max reflow: bar height, label row and scene height derive
+  -- from the shared font size; widths stay fixed (no scale capability).
+  -- The window is never resized.
+  local fontSize = style.fontSize or 12
+  local barH = math.max(20, fontSize + 6)
+  local barDepth = 4 + fontSize + 8
+  local labDepth = barDepth + barH + 4
+  scene.bar:ClearAllPoints()
+  scene.bar:SetPoint("TOPLEFT", 12, -barDepth)
+  scene.bar:SetSize(180, barH)
+  scene.label:ClearAllPoints()
+  scene.label:SetPoint("TOPLEFT", 12, -labDepth)
+  scene:SetSize(560, labDepth + fontSize + 16)
+end
+
 if BIT.RegisterTab then
     BIT.RegisterTab("DoTInfo", {
         title = "DoTInfo",
@@ -1056,6 +1093,10 @@ if BIT.RegisterTab then
             anchor:SetPoint("TOPRIGHT", -10, -8)
             buildContent(40, anchor)
         end,
+        buildPreview = buildDoTPreview,
+        previewRender = renderDoTPreview,
+        capabilities = { roles = { "text" }, shapes = false,
+            geometry = false, border = false, font = true, scale = false, opacity = true },
     })
     BIT.tabWords.dot, BIT.tabWords.did = "DoTInfo", "DoTInfo"
 end
