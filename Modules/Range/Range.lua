@@ -290,8 +290,17 @@ local dimmed = {} -- the ones dimmed now
 local function dimIcon(button)
   local icon = button.icon
   if type(icon) ~= "table" or type(button.action) ~= "number" then return end
-  local ok, usable, noMana = pcall(C_ActionBar.IsUsableAction, button.action)
-  if not ok or isSecret(usable) or isSecret(noMana) then return end
+  -- Usability colors: C_ActionBar.IsUsableAction on newer clients, the classic
+  -- global IsUsableAction where it does not exist (Forever). Without either,
+  -- fall back to plain white: range dimming below still applies.
+  local usable, noMana
+  if C_ActionBar and type(C_ActionBar.IsUsableAction) == "function" then
+    local ok, u, m = pcall(C_ActionBar.IsUsableAction, button.action)
+    if ok and not isSecret(u) and not isSecret(m) then usable, noMana = u, m end
+  elseif type(IsUsableAction) == "function" then
+    local ok, u, m = pcall(IsUsableAction, button.action)
+    if ok and not isSecret(u) and not isSecret(m) then usable, noMana = u, m end
+  end
   local r, g, b = 1, 1, 1
   if not usable then
     if noMana then r, g, b = 0.5, 0.5, 1 else r, g, b = 0.4, 0.4, 0.4 end
@@ -310,7 +319,10 @@ local function dimIcon(button)
 end
 
 local function startDimming()
-  if type(ActionButton_UpdateRangeIndicator) ~= "function" or not (C_ActionBar and C_ActionBar.IsUsableAction) then
+  -- The range indicator hook needs Blizzard's per-button call; usability colors
+  -- resolve per API inside dimIcon (C_ActionBar where present, classic global
+  -- IsUsableAction otherwise), so a missing usability API never blocks dimming.
+  if type(ActionButton_UpdateRangeIndicator) ~= "function" then
     return
   end
   hooksecurefunc("ActionButton_UpdateRangeIndicator", function(button, checksRange, inRange)
