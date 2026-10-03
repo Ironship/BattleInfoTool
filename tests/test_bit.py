@@ -621,8 +621,8 @@ G.itemStats["club"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 20 }')
 G.itemStats["twig"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 10 }')
 G.itemLoc["club"], G.itemLoc["twig"] = "INVTYPE_2HWEAPON", "INVTYPE_2HWEAPON"
 r = {x.spec.name: [pt.percent for pt in x.parts.values()] for x in si.SpecRatings("club", rt.table_from(["twig"])).values()}
-check("in Cat and Bear Form the weapon's damage counts for nothing (the paw swings), for survival and threat, "
-      "nor for Balance", (r["Cat"], r["Bear"], r["Balance"]), ([0], [0, 0], [0]))
+check("in Cat and Bear Form the weapon's damage counts (game-measured: 1 DPS ~= 14 FAP), for damage/threat but not "
+      "survival, nor for Balance", (r["Cat"], r["Bear"], r["Balance"]), ([100], [0, 100], [0]))
 G.playerClass = "WARRIOR"
 G.itemStats["axe"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 10, ITEM_MOD_STRENGTH_SHORT = 5 }')
 G.itemStats["blade"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 8 }')

@@ -9,7 +9,8 @@
 -- item's hit and crit into both the melee and the spell pool, so those keys carry both weights.
 -- A weight smaller than its own 90% confidence interval is left out as the sim's noise.
 -- mainHand, offHand, ranged: the worth of a point of a weapon's damage per second in that place (0 where
--- the spec does not fight with it: a caster's weapon, Cat and Bear Form's paw, an Arms warrior's off hand).
+-- the spec does not fight with it: a caster's weapon, an Arms warrior's off hand). Cat and Bear Form
+-- fight with the weapon's DPS (FERAL_RUNS below): their mainHand is game-measured, not simulated.
 --
 -- Druid Restoration is rated by BattleInfoTool's own starter heuristic (an approximation, marked
 -- '(approx.)' in the tooltip; weighted score = 1 * +Healing + 1 * Spell Power + 0.5 * Intellect + 0.5 * Spirit + 2 * MP5), NOT a simulation: ForeverSim does not simulate
@@ -36,7 +37,7 @@ M.SPECS = {
         ITEM_MOD_STAMINA_SHORT = 2.4022,
         RESISTANCE0_NAME = 1,
       } },
-      threat = { reference = "Agility", mainHand = 0, offHand = 0, ranged = 0, weights = {
+      threat = { reference = "Agility", mainHand = 8.972, offHand = 0, ranged = 0, weights = {
         ITEM_MOD_AGILITY_SHORT = 1,
         ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT = 0.2153,
         ITEM_MOD_ATTACK_POWER_SHORT = 0.6409,
@@ -56,7 +57,7 @@ M.SPECS = {
     },
     -- druid/feralcat: Feral; talents -5521002023132213051-05503
     { name = "Cat", icon = "Interface\\Icons\\Ability_Druid_CatForm", role = "damage",
-      damage = { reference = "Agility", mainHand = 0, offHand = 0, ranged = 0, weights = {
+      damage = { reference = "Agility", mainHand = 6.033, offHand = 0, ranged = 0, weights = {
         ITEM_MOD_AGILITY_SHORT = 1,
         ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT = 0.1394,
         ITEM_MOD_ATTACK_POWER_SHORT = 0.4421,

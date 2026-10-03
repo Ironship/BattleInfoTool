@@ -78,6 +78,14 @@ METRICS = {"damage": "DPS", "threat": "TPS", "survival": "TMI"}
 # (its coefficients are DESIGN CHOICES, provenance and assumptions documented there), born the same way
 # into Weights.lua with approximate = true so the tooltip marks it "(approx.)". HEALER_RUNS keeps the two
 # sources apart: a spec named here is taken from the healer file, never from a sim run.
+# Feral forms fight with the weapon's DPS (the sim never measures it: its shapeshifted
+# runs carry no "Main Hand DPS" row). Game-measured on Forever: a 16.0 DPS weapon adds
+# ~15.6 melee DPS in Bear Form, i.e. 1 weapon DPS ~= 1 feral DPS ~= 14 Feral Attack Power
+# (the classic 14 AP = 1 DPS rule; the sim's own Feral Attack Power row confirms the rate).
+# So a feral damage/threat mainHand is 14 * the run's Feral Attack Power weight, in points
+# of the measure's reference stat. Survival keeps mainHand 0 (DPS does not mitigate).
+FERAL_RUNS = {"druid_bear", "druid_cat"}
+FERAL_AP_PER_DPS = 14
 HEALER_RUNS = {"druid_restoration"}
 HEALER_DATA = os.path.join(ROOT, "tools", "data", "healer_weights.json")
 
@@ -133,7 +141,7 @@ def significant(metric, stat, reference):
     return value if abs(value) >= ci else 0
 
 
-def measure(run, kind, reference):
+def measure(run, run_name, kind, reference):
     """One measure of a spec as Lua: its reference stat, the weights of a weapon's damage per second in
     each place, and the item weights, all in points of the reference stat."""
     metric = run["metrics"][METRICS[kind]]
@@ -152,6 +160,9 @@ def measure(run, kind, reference):
         else:
             for key in KEYS[stat]:
                 weights[key] = weights.get(key, 0) + value
+    if run_name in FERAL_RUNS and kind in ("damage", "threat"):
+        fap = significant(metric, "Feral Attack Power", reference) / ref
+        weapons["mainHand"] = round(FERAL_AP_PER_DPS * fap, 3)
     return measure_lua(reference, weights, weapons, False)
 
 
@@ -203,7 +214,8 @@ def main():
         "-- item's hit and crit into both the melee and the spell pool, so those keys carry both weights.",
         "-- A weight smaller than its own 90% confidence interval is left out as the sim's noise.",
         "-- mainHand, offHand, ranged: the worth of a point of a weapon's damage per second in that place (0 where",
-        "-- the spec does not fight with it: a caster's weapon, Cat and Bear Form's paw, an Arms warrior's off hand).",
+        "-- the spec does not fight with it: a caster's weapon, an Arms warrior's off hand). Cat and Bear Form",
+        "-- fight with the weapon's DPS (FERAL_RUNS below): their mainHand is game-measured, not simulated.",
         "--",
         "-- Druid Restoration is rated by BattleInfoTool's own starter heuristic (an approximation, marked",
         f"-- '(approx.)' in the tooltip; {healer['model']}), NOT a simulation: ForeverSim does not simulate",
@@ -231,7 +243,7 @@ def main():
                 run = runs[run_name]
                 used.add(run_name)
                 lines.append(f"    -- {build(run)}")
-                measure_texts = {kind: measure(run, kind, reference) for kind, reference in refs.items()}
+                measure_texts = {kind: measure(run, run_name, kind, reference) for kind, reference in refs.items()}
             lines.append(f"    {{ name = \"{name}\", icon = \"Interface\\\\Icons\\\\{icon}\", role = \"{role}\",")
             for kind, text in measure_texts.items():
                 lines.append(f"      {kind} = {text},")
