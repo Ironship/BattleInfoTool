@@ -11,7 +11,7 @@ A World of Warcraft addon for WoW: Forever that puts several combat helpers in o
 A part switched off does not run at all; the switch takes effect after a reload.
 
 - **ShieldsInfo**: remaining absorption over the player, target, party frames and accessible nameplates. An optional curved HUD shows the remaining shield and can be scaled, mirrored and dragged. `/bit shields`; the HUD is off by default.
-- **HunterRangeFinder**: seven range chevrons for hunters, with crossed swords in melee and a skull in the dead zone. Adapted/ported from `HunterRangeFinder` (its code version is 3.11.6) — no separate addon required, everything lives inside BattleInfoTool. `/bit hunter` opens the settings; `/bit hunterprobe` prints diagnostic range answers. Bands are approximate, not exact yard measurements. Other classes create no hunter HUD.
+- **HunterRangeFinder**: seven range chevrons for hunters, with crossed swords in melee and a skull in the dead zone. Fully inside BattleInfoTool — no separate addon required. `/bit hunter` opens the settings; `/bit hunterprobe` prints diagnostic range answers. Bands are approximate, not exact yard measurements. Other classes create no hunter HUD.
 
 **Install:** unzip `BattleInfoTool-<version>.zip` into `Interface\AddOns` of the `_classic_beta_` folder, then restart the game.
 

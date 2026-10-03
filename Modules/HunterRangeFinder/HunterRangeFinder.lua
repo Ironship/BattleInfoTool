@@ -1,11 +1,9 @@
 -- BattleInfoTool module HunterRangeFinder: the hunter's approximate range in native markers.
 -- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
 --
--- Adapted from HunterRangeFinder v1.03, version 3.11.6
--- (HunterRangeFinder.lua, README.txt, HunterRangeFinder.toc and its Textures). Two things changed
--- for living inside BattleInfoTool:
+-- The hunter's range ladder in seven stacked chevrons, fully inside BattleInfoTool:
 --   * the settings live in one BIT.Settings("HunterRangeFinder") store, built into the module's
---     tab (/bit hunter), instead of HunterRangeFinderDB and a window and slash commands of its own;
+--     tab (/bit hunter), instead of a standalone store with a window and slash commands of its own;
 --   * the module starts a HUD only for a Hunter with the module switched on; any other class (or
 --     a switched-off module) creates no frames, events or polling, and the tab explains that.
 -- /bit hunterprobe prints what the client answers, for diagnostics.
