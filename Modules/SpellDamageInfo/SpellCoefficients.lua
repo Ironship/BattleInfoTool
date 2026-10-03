@@ -1,4 +1,4 @@
--- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/SpellCoefficients.lua at 8269edd.
+-- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/SpellCoefficients.lua at 6cd7d5a.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: the share of spell power each spell gets, from the client's own spell tables
 -- (SpellEffect.EffectBonusCoefficient) of WoW: Forever 1.60.1.70009 and Classic Era 1.15.9.69722.
