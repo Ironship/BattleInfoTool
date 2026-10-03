@@ -1,6 +1,6 @@
 -- BattleInfoTool module Range: a red X over the target while it is out of range, a green
 -- checkmark while it is in range.
--- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+-- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- In range means: one of the spells the range is measured by reaches the target. By default
 -- those are the class's main attacks (below); the settings take a spell of the player's own

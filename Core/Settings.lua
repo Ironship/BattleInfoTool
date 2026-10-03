@@ -2,7 +2,7 @@
 -- files load. Each tab starts with the module's Enable switch; below it the module builds its own
 -- settings (BIT.RegisterTab), the first time the tab is shown, and only while the module runs:
 -- a module that is off never ran its code, so it has nothing to show settings for.
--- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+-- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- The window is made of plain frames (no secure templates, no protected calls), so it opens in
 -- combat too.

@@ -1,5 +1,5 @@
 -- BattleInfoTool module HunterRangeFinder: the hunter's approximate range in native markers.
--- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+-- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- The hunter's range ladder in seven stacked chevrons, fully inside BattleInfoTool:
 --   * the settings live in one BIT.Settings("HunterRangeFinder") store, built into the module's

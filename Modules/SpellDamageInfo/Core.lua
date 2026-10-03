@@ -1,7 +1,7 @@
 -- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Core.lua at 8269edd.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: action button numbers, tooltip lines, settings and /sdi.
--- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+-- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- Everything here stays out of Blizzard's way: the numbers are FontStrings of our own on the
 -- action buttons, tooltip lines are added through the tooltip post-call hook, and no Blizzard

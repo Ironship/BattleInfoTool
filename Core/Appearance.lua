@@ -21,7 +21,7 @@
 -- for that module in the same scope it clears. Resolve never writes to any saved variable and
 -- never touches gameplay data; its result is always a fresh table whose nested tables alias
 -- nothing.
--- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+-- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 
 local _, BIT = ...
 

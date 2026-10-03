@@ -1,5 +1,5 @@
 -- BattleInfoTool: one addon made of parts (modules), each of which can be switched off.
--- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+-- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- Every module keeps its own namespace, BIT.Module(name), so two modules can both have a "db"
 -- or an "L" without meeting. A module's code runs at load like any addon's; at ADDON_LOADED,

@@ -1,7 +1,7 @@
 -- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Parser.lua at 8269edd.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: reads a spell's damage and healing out of its description text.
--- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+-- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- Parse(text, lang) returns a table or nil:
 --   direct = { min = n, max = n }         instant damage

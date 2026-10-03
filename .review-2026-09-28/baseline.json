@@ -1,0 +1,18 @@
+{
+  "bit": "c6f6a11aad65ed2f9ab1e772e999c00471e99f3b",
+  "sdi": "56f3e4656ebcb5bf9ee4e805784035d68cbbc682",
+  "test_bit": "failed: 0 (28.09, python3.12+lupa)",
+  "test_modules": "ok (28.09)",
+  "model": "moa cheap-smart (Opus 5.5 niedostępny: 403 oauth_org_not_allowed w sesji Claude)",
+  "plan": "10 obszarów jak wgxw7q6zg + 2 sceptyków/znalezisko + krytyk + synteza, fale po 3",
+  "wave0": "25 pkt z szybkiego przebiegu (deleg_1d627723) - SUPERSEDED, zastapione falami 1-2",
+  "lua_correction": "lua.exe to 5.4.6, nie 5.1; wiarygodne tylko lupa.lua51 na python3.12; DOT-1..DOT-6 do re-weryfikacji pod lupa",
+  "refuted": [
+    "StatsInfo:98 guard OK (sygnatura przyjmuje link)",
+    "suppressIfMusic to forceNoDuplicates",
+    "Range:122 fallback martwy na Forever 1.60.1 (C_Spell tabelka)",
+    "UNIT_MAXPOWER full->0 nie wystepuje",
+    "showDiffs/spec-order/armor/.0 OK"
+  ],
+  "fala3_plan": "SDI z mirrorem + port drift + testy/mutacje + re-weryfikacja DOT major pod lupa"
+}

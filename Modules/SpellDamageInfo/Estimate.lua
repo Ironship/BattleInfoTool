@@ -2,7 +2,7 @@
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: the optional spell-power estimate (the client's own shares, Classic's rules
 -- where it has none) and the button value.
--- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+-- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 -- Pure Lua 5.1, no game API.
 
 local _, BIT = ...

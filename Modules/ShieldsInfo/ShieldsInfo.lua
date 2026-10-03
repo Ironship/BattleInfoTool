@@ -4,7 +4,7 @@
 -- There is no floating HUD: the shield dots beside the character are retired, and the
 -- legacy hud/numbers/scale/mirror/preview/locked/x/y keys in saved settings are ignored
 -- (never read, never cleaned).
--- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+-- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- The absorb value the client returns is a secret in combat: it must never be compared,
 -- added, formatted into a string of its own, stored in a table key or saved. Presence is

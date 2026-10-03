@@ -1,7 +1,7 @@
 -- BattleInfoTool module StatsInfo: over the game's own bag buttons, a small arrow that
 -- tells whether the item is an upgrade for some spec against what is worn in that slot,
 -- and, on an upgrade, one beneficiary-spec icon (Blizzard assets only).
--- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
+-- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- Loaded after StatsInfo.lua (see BattleInfoTool.toc). Everything here uses the module's
 -- own existing evaluator (M.Compare, M.SpecRatings and their generated Weights.lua) and the
