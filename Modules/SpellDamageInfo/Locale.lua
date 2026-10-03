@@ -1,7 +1,7 @@
--- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Locale.lua at 6cd7d5a.
+-- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Locale.lua at 8269edd.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: English and German strings, and number formatting.
--- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
+-- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
 
 local _, BIT = ...
 -- Inside BattleInfoTool its own namespace; loaded on its own, the addon's table as before.
@@ -80,7 +80,9 @@ Locales.en = {
   FIRST = " for the first %d enemies",
   HEAL_MAX = " (your maximum health)",
   PER_RAGE = "Plus %s for each extra point of rage",
-  FINISHER_NOTE = "At %d combo points, attack power not included; 1-%d: %s",
+  FINISHER_CURRENT_NOTE = "At the current %d combo points, attack power not included; the others: %s",
+  FINISHER_STATIC_NOTE = "Combo points not readable: static preview, attack power not included; %s",
+  FINISHER_NONE_NOTE = "No combo points on the selected target yet: preview, attack power not included; %s",
   FROM_SEAL = "From %s",
   JUDGEMENT_LINE = "Judgement: %s damage",
   NO_SEAL = "No seal active: Judgement's damage comes from the seal.",
@@ -200,7 +202,9 @@ Locales.de = {
   FIRST = " f\195\188r die ersten %d Gegner",
   HEAL_MAX = " (Eure maximale Gesundheit)",
   PER_RAGE = "Plus %s f\195\188r jeden zus\195\164tzlichen Wutpunkt",
-  FINISHER_NOTE = "Bei %d Combopunkten, ohne Angriffskraft; 1-%d: %s",
+  FINISHER_CURRENT_NOTE = "Bei den aktuellen %d Combopunkten, ohne Angriffskraft; die \195\188brigen: %s",
+  FINISHER_STATIC_NOTE = "Combopunkte nicht ablesbar: statische Vorschau, ohne Angriffskraft; %s",
+  FINISHER_NONE_NOTE = "Noch keine Combopunkte am Ziel: Vorschau, ohne Angriffskraft; %s",
   FROM_SEAL = "Aus %s",
   JUDGEMENT_LINE = "Richturteil: %s Schaden",
   NO_SEAL = "Kein Siegel aktiv: der Schaden des Richturteils kommt vom Siegel.",
@@ -508,13 +512,33 @@ function Format.TooltipLines(view, L)
   end
   local f = view.finisher
   if f then
-    local others = {}
-    for i = 1, f.top - 1 do
-      local p = f.points[i]
-      if p then others[#others + 1] = p.total and Format.Thousands(p.total, L) or rangeText(p, L) end
+    local at = view.finisherAt
+    if at and at.known and at.n and at.n >= 1 and at.n <= f.top then
+      -- the numbers above are for the count the selected target has right now; the note names
+      -- that count and lists the other rows, each with its own points
+      local others = {}
+      for i = 1, f.top do
+        local p = f.points[i]
+        if p and i ~= at.n then
+          others[#others + 1] = tostring(i) .. ": " .. (p.total and Format.Thousands(p.total, L) or rangeText(p, L))
+        end
+      end
+      lines[#lines + 1] = { string.format(L.FINISHER_CURRENT_NOTE, at.n, table.concat(others, " / ")),
+        NOTE_COLOR[1], NOTE_COLOR[2], NOTE_COLOR[3] }
+    else
+      -- zero combo points (or no selected target), or a count the client cannot say: the whole
+      -- parsed table as an explicit preview, never a precise amount pretending to be current
+      local others = {}
+      for i = 1, f.top do
+        local p = f.points[i]
+        if p then
+          others[#others + 1] = tostring(i) .. ": " .. (p.total and Format.Thousands(p.total, L) or rangeText(p, L))
+        end
+      end
+      local note = (at and at.known and at.n == 0) and L.FINISHER_NONE_NOTE or L.FINISHER_STATIC_NOTE
+      lines[#lines + 1] = { string.format(note, table.concat(others, " / ")),
+        NOTE_COLOR[1], NOTE_COLOR[2], NOTE_COLOR[3] }
     end
-    lines[#lines + 1] = { string.format(L.FINISHER_NOTE, f.top, f.top - 1, table.concat(others, " / ")),
-      NOTE_COLOR[1], NOTE_COLOR[2], NOTE_COLOR[3] }
   end
   if view.fromSeal then
     lines[#lines + 1] = { string.format(L.FROM_SEAL, view.fromSeal), NOTE_COLOR[1], NOTE_COLOR[2], NOTE_COLOR[3] }

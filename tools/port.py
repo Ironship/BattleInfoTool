@@ -324,6 +324,11 @@ MODULES["SpellDamageInfo"] = {
 def port(name):
     if name == "DoTInfo":
         sys.exit("DoTInfo frozen in BIT per user decision: the standalone addon is read-only; edit Modules/DoTInfo/* directly")
+    if name == "SpellDamageInfo":
+        sys.exit("SpellDamageInfo port BLOCKED (2026-10-03): the BIT fork is ahead of upstream "
+                 "(ComputeItem/itemOnSlot, ParseItemHeal, combo/finisher views, tooltip row bookkeeping) "
+                 "and the recipe cannot reproduce it -- a port would silently regress 400+ lines. "
+                 "Upstream the fork first, then remove this guard.")
     spec = MODULES[name]
     repo = spec["repo"]
     out_dir = ROOT / "Modules" / name

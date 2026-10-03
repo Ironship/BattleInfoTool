@@ -1,8 +1,8 @@
--- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Estimate.lua at 6cd7d5a.
+-- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Estimate.lua at 8269edd.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: the optional spell-power estimate (the client's own shares, Classic's rules
 -- where it has none) and the button value.
--- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
+-- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
 -- Pure Lua 5.1, no game API.
 
 local _, BIT = ...
@@ -132,6 +132,14 @@ function Estimate.ButtonValue(view, mode)
     if view.heal then v = v + avg(view.heal) end
     if view.hot then v = v + view.hot.total end
     return v, "heal"
+  end
+  -- A mana consumable's stated amount (average over a range, like healing).
+  -- Damage and healing win over mana; a consumable view may still carry
+  -- both amounts at once, and a spell may pair a health cost with a mana
+  -- gain (Life Tap, read beside ButtonValue rather than through it).
+  if view.mana then
+    local m = view.mana
+    if m.min and m.max then return (m.min + m.max) / 2, "mana" end
   end
   return nil
 end

@@ -1,7 +1,7 @@
--- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Parser.lua at 6cd7d5a.
+-- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Parser.lua at 8269edd.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: reads a spell's damage and healing out of its description text.
--- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
+-- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
 --
 -- Parse(text, lang) returns a table or nil:
 --   direct = { min = n, max = n }         instant damage
@@ -52,7 +52,7 @@ local NUM = "[0-9]+%.?[0-9]*"
 
 local function detectLanguage(t)
   if find(t, "sek%.") or find(t, "schaden") or find(t, "punkt%(e%)") or find(t, "heilt ")
-    or find(t, " und ") or find(t, "gesundheit") then
+    or find(t, " und ") or find(t, "gesundheit") or find(t, "stellt ") or find(t, "wieder her") then
     return "de"
   end
   return "en"
@@ -499,6 +499,102 @@ function Parser.Parse(text, lang)
   return result
 end
 
+-- A consumable's healing or mana out of its use text ("Use: Restores 70 to 90
+-- health." / "Benutzen: Stellt 70 bis 90 Gesundheit wieder her."):
+-- { heal = { min, max } } for an instant amount ("Restores"/"Stellt" health as
+-- well as "Heals"/"Heilt" health or damage outside over time),
+-- { hot = { total, duration } } for a bandage ("Heals 66 damage over 6 sec." /
+-- "Heilt 66 Schaden über 6 Sek."): the stated total, averaged over a range
+-- exactly like a potion's (70-90 -> 80),
+-- { mana = { min, max } } for an instant mana amount ("Restores 140 to 175
+-- mana." / "Stellt 140 bis 175 Mana wieder her."),
+-- or nil (plus a short reason). Only stated amounts; "Restores"/"Stellt" over
+-- time may tick, so it stays unread ("over-time") and is never guessed.
+-- Damage wordings are never read here: Parse above keeps reading those
+-- exactly as before.
+function Parser.ParseItemHeal(text, lang)
+  if type(text) ~= "string" or text == "" then return nil, "empty" end
+  local t
+  t, lang = prepare(text, lang)
+  local lo, hi, healsVerb
+  local mlo, mhi
+  local dur, minutes
+  if lang == "de" then
+    mlo, mhi = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") mana wieder her")
+    if not mlo then mlo = match(t, "stellt (" .. NUM .. ") mana wieder her") end
+    if not mlo then mlo, mhi = match(t, "stellt sofort (" .. NUM .. ") bis (" .. NUM .. ") mana wieder her") end
+    if not mlo then mlo = match(t, "stellt sofort (" .. NUM .. ") mana wieder her") end
+    lo, hi = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") gesundheit wieder her")
+    if not lo then lo = match(t, "stellt (" .. NUM .. ") gesundheit wieder her") end
+    if not lo then lo, hi = match(t, "stellt sofort (" .. NUM .. ") bis (" .. NUM .. ") gesundheit wieder her") end
+    if not lo then lo = match(t, "stellt sofort (" .. NUM .. ") gesundheit wieder her") end
+    if not lo then lo, hi = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") leben wieder her") end
+    if not lo then lo = match(t, "stellt (" .. NUM .. ") leben wieder her") end
+    if not lo then lo, hi = match(t, "stellt sofort (" .. NUM .. ") bis (" .. NUM .. ") leben wieder her") end
+    if not lo then lo = match(t, "stellt sofort (" .. NUM .. ") leben wieder her") end
+    if not lo then
+      lo, hi = match(t, "heilt (" .. NUM .. ") bis (" .. NUM .. ") schaden")
+      if not lo then lo, hi = match(t, "heilt (" .. NUM .. ") bis (" .. NUM .. ") gesundheit") end
+      if not lo then lo = match(t, "heilt (" .. NUM .. ") schaden") end
+      if not lo then lo = match(t, "heilt (" .. NUM .. ") gesundheit") end
+      if lo then healsVerb = true end
+    end
+    -- "über 6 Sek." (minutes count as 60 seconds, as in Parse above)
+    dur = match(t, "\195\188ber (" .. NUM .. ") sek")
+    minutes = false
+    if not dur then dur = match(t, "\195\188ber (" .. NUM .. ") min"); minutes = dur ~= nil end
+  else
+    mlo, mhi = match(t, "restores (" .. NUM .. ") to (" .. NUM .. ") mana")
+    if not mlo then mlo = match(t, "restores (" .. NUM .. ") mana") end
+    lo, hi = match(t, "restores (" .. NUM .. ") to (" .. NUM .. ") health")
+    if not lo then lo = match(t, "restores (" .. NUM .. ") health") end
+    if not lo then lo, hi = match(t, "restores (" .. NUM .. ") to (" .. NUM .. ") life") end
+    if not lo then lo = match(t, "restores (" .. NUM .. ") life") end
+    if not lo then
+      lo, hi = match(t, "heals (" .. NUM .. ") to (" .. NUM .. ") damage")
+      if not lo then lo, hi = match(t, "heals (" .. NUM .. ") to (" .. NUM .. ") health") end
+      if not lo then lo = match(t, "heals (" .. NUM .. ") damage") end
+      if not lo then lo = match(t, "heals (" .. NUM .. ") health") end
+      if lo then healsVerb = true end
+    end
+    dur = match(t, "over (" .. NUM .. ") sec")
+    minutes = false
+    if not dur then dur = match(t, "over (" .. NUM .. ") min"); minutes = dur ~= nil end
+  end
+  dur = tonumber(dur)
+  if dur and minutes then dur = dur * 60 end
+  if dur then
+    -- Over time: only a Heals/Heilt wording states a bandage total; a
+    -- Restores/Stellt wording over time may tick, so it stays unread.
+    if lo and healsVerb then
+      lo, hi = tonumber(lo), tonumber(hi or lo)
+      if lo and hi then return { hot = { total = (lo + hi) / 2, duration = dur } } end
+    end
+    return nil, "over-time"
+  end
+  -- An instant amount with a stray duration marker but no stated duration
+  -- ("every 2 sec") may tick, so it stays unread too.
+  if lo or mlo then
+    if find(t, "over ") or find(t, "\195\188ber ") then return nil, "over-time" end
+    if find(t, " sec") or find(t, " sek") or find(t, " min") then return nil, "over-time" end
+  end
+  local result
+  if lo then
+    lo, hi = tonumber(lo), tonumber(hi or lo)
+    if not lo or not hi then return nil, "no-amount" end
+    result = { heal = { min = lo, max = hi } }
+  end
+  if mlo then
+    mlo, mhi = tonumber(mlo), tonumber(mhi or mlo)
+    if mlo and mhi then
+      result = result or {}
+      result.mana = { min = mlo, max = mhi }
+    end
+  end
+  if not result then return nil, "no-amount" end
+  return result
+end
+
 ---------------------------------------------------------------------------------------------
 -- Debuffs that lower the enemy's damage or attack power
 ---------------------------------------------------------------------------------------------
@@ -936,16 +1032,6 @@ local function specialEN(t)
   if n then return { hot = { total = num(n) * floor(num(dur) / num(every) + 0.5), duration = num(dur) } } end
   n, dur = match(t, "restore (" .. NUM .. ") health over (" .. NUM .. ") sec")
   if n then return { hot = { total = num(n), duration = num(dur) } } end
-  -- Instant restores on use-items: healthstones ("restores 120 life"), potions
-  -- ("restores 1050 to 1751 health/mana"). A plain instant heal, no duration.
-  -- (Lua patterns have no alternation: one match per noun.)
-  lo, hi = match(t, "restores (" .. NUM .. ") to (" .. NUM .. ") health")
-  if not lo then lo, hi = match(t, "restores (" .. NUM .. ") to (" .. NUM .. ") mana") end
-  if not lo then lo, hi = match(t, "restores (" .. NUM .. ") to (" .. NUM .. ") life") end
-  if not lo then lo = match(t, "restores (" .. NUM .. ") health") end
-  if not lo then lo = match(t, "restores (" .. NUM .. ") mana") end
-  if not lo then lo = match(t, "restores (" .. NUM .. ") life") end
-  if lo then return { heal = D(lo, hi) } end
   local per
   n, per = match(t, "causing (" .. NUM .. ") damage and converting each extra point of rage into (" .. NUM .. ") additional damage")
   if n then return { direct = D(n), school = "physical", perRage = num(per) } end
@@ -1003,15 +1089,6 @@ local function specialDE(t)
   if n0 then return { hot = { total = num(n0) * floor(num(dur0) / num(every0) + 0.5), duration = num(dur0) } } end
   local n, dur = match(t, "um im verlauf von (" .. NUM .. ") sek%.? (" .. NUM .. ") gesundheit wiederherzustellen")
   if n then return { hot = { total = num(dur), duration = num(n) } } end
-  -- Healthstones/Potions: "Stellt sofort 120 Leben wieder her."
-  -- (Lua patterns have no alternation: one match per noun.)
-  lo, hi = match(t, "stellt sofort (" .. NUM .. ") bis (" .. NUM .. ") leben wieder her")
-  if not lo then lo, hi = match(t, "stellt sofort (" .. NUM .. ") bis (" .. NUM .. ") gesundheit wieder her") end
-  if not lo then lo, hi = match(t, "stellt sofort (" .. NUM .. ") bis (" .. NUM .. ") mana wieder her") end
-  if not lo then lo = match(t, "stellt sofort (" .. NUM .. ") leben wieder her") end
-  if not lo then lo = match(t, "stellt sofort (" .. NUM .. ") gesundheit wieder her") end
-  if not lo then lo = match(t, "stellt sofort (" .. NUM .. ") mana wieder her") end
-  if lo then return { heal = D(lo, hi) } end
   local per
   n, per = match(t, "verursacht (" .. NUM .. ") punkt%(e%) schaden und jeder zus" .. AE .. "tzliche wutpunkt wird in (" .. NUM .. ")")
   if n then return { direct = D(n), school = "physical", perRage = num(per) } end
