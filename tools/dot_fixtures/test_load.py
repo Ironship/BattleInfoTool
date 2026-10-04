@@ -55,6 +55,9 @@ function methods.IsShown(self) return self.shown end
 function methods.IsVisible(self) return self.shown end
 function methods.SetText(self, t) self.text = t end
 function methods.GetText(self) return self.text end
+function methods.SetTexture(self, t) self.texture = t end
+function methods.SetVertexColor(self, ...) self.vertex = { ... } end
+function methods.SetColorTexture(self, ...) self.color = { ... } end
 function methods.SetSize(self, w, h) self.width, self.height = w, h end
 function methods.SetWidth(self, w) self.width = w end
 function methods.SetHeight(self, h) self.height = h end
@@ -267,7 +270,13 @@ check("  plate fill color copied from the marker", G.BattleInfoTool_DoTInfoDB.pl
 for preset in ("Minimal", "Classic", "Debug", "Juicy"):
     step(f"apply preset {preset}", lambda p=preset: H.clickText(p))
     step(f"  display loop after {preset}", lambda: H.update(0.2))
+    settings = G.BattleInfoTool_DoTInfoDB
+    check(f"  {preset} styles both bars",
+          (settings.plateFillTexture, settings.plateDotColors, settings.plateFillOpacity),
+          (settings.fillTexture, settings.dotColors, settings.fillOpacity))
 check("Juicy preset set the fill", G.BattleInfoTool_DoTInfoDB.fillTexture, "stripes")
+check("Juicy nameplates use a different color per DoT", G.BattleInfoTool_DoTInfoDB.plateDotColors, "each")
+check("presets keep the smaller nameplate icon size", G.BattleInfoTool_DoTInfoDB.nameplateIconSize, 18)
 
 
 def toggle_glow():
@@ -395,8 +404,32 @@ def fire_and_update(event, *args):
 
 step("start casting Immolate (cast time) on it", fire_and_update("UNIT_SPELLCAST_START", "cast-2", 348))
 check("  nameplate marker counts it while casting: 40 + 20", markers[0].value if markers else None, 60)
+
+
+def colored_segments(marker=None):
+    return [c for c in (marker or markers[0]).children.values()
+            if c.kind == "texture" and c.shown and c.vertex
+            and c.texture == ns.textureDir + "Stripes"]
+
+
+def shown_dividers(marker=None):
+    return [c for c in (marker or markers[0]).children.values()
+            if c.kind == "texture" and c.shown and c.color and c.width == 1]
+
+
+fills = colored_segments()
+check("  Juicy draws two striped nameplate segments", len(fills), 2)
+check("  the DoTs have different colors", tuple(fills[0].vertex.values()) != tuple(fills[1].vertex.values()), True)
+check("  the first DoT matches the target's color", tuple(fills[0].vertex.values())[:3],
+      tuple(ns.dotColor(lua.eval('{ name = "Corruption", school = 32 }'), "each").values()))
+check("  one divider separates the two DoTs", len(shown_dividers()), 1)
+G.BattleInfoTool_DoTInfoDB.segmentDividers = False
+H.update(0.2)
+check("  shared divider option also applies to nameplates", len(shown_dividers()), 0)
+G.BattleInfoTool_DoTInfoDB.segmentDividers = True
 step("the cast is interrupted", fire_and_update("UNIT_SPELLCAST_INTERRUPTED", "cast-2", 348))
 check("  back to Corruption alone", markers[0].value if markers else None, 40)
+check("  a single DoT has no internal divider", len(shown_dividers()), 0)
 
 
 def set_estimate(on):
@@ -420,6 +453,20 @@ step("  it lands (SUCCEEDED, then STOP)", lambda: (H.fire("UNIT_SPELLCAST_SUCCEE
                                                    H.fire("UNIT_SPELLCAST_STOP", "player", "cast-4", 348),
                                                    H.update(1.0)))
 check("  counted once: 40 + 20", markers[0].value if markers else None, 60)
+
+sample = lua.eval('''(function()
+    local state = { health = 100, dots = {} }
+    for i = 1, 8 do state.dots[i] = { name = "Sample DoT " .. i, school = 32, damage = 5 } end
+    return state
+end)()''')
+lua.execute('CapacityPlate = FakeMock("Frame"); CapacityBar = FakeMock("StatusBar")')
+ns.setPlatePreview(lua.eval('{ plate = CapacityPlate, healthBar = CapacityBar }'), sample)
+H.update(0.2)
+capacity_marker = next(c for c in G.CapacityPlate.children.values() if c.kind == "StatusBar")
+check("nameplates keep eight separate DoTs like the target marker", len(colored_segments(capacity_marker)), 8)
+check("  eight DoTs have seven dividers", len(shown_dividers(capacity_marker)), 7)
+ns.setPlatePreview(None, None)
+H.update(0.2)
 
 
 def plates_off():

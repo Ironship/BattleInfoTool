@@ -196,6 +196,18 @@ end
 local function unitKey(unit)
     local ok, guid = pcall(UnitGUID, unit)
     if ok and not isSecret(guid) then return guid end
+    -- A secret action-target GUID can still identify the same mob as a readable nameplate.
+    -- Only trust the game's plain identity answer, then keep that plate's real GUID across switches.
+    if unit == "softenemy" and ok and isSecret(guid) and type(UnitIsUnit) == "function" then
+        for i = 1, 40 do
+            local plateUnit = "nameplate" .. i
+            local sameOK, same = pcall(UnitIsUnit, plateUnit, unit)
+            if sameOK and not isSecret(same) and same == true then
+                local guidOK, plateGUID = pcall(UnitGUID, plateUnit)
+                if guidOK and not isSecret(plateGUID) and plateGUID then return plateGUID end
+            end
+        end
+    end
     if unit ~= "target" then return nil end
     if not warnedSecretGuid then
         warnedSecretGuid = true
@@ -335,9 +347,9 @@ local OUTCOME_LOOKBACK = 0.25
 local AVOIDED_ACTIONS = {
     MISS = true, DODGE = true, PARRY = true, EVADE = true, IMMUNE = true, DEFLECT = true, RESIST = true, REFLECT = true,
 }
-local lastBuilder    -- { points, at }: builder whose outcome isn't known yet
+local lastBuilder    -- { key, points, at }: builder whose outcome isn't known yet
 local lastDotCast    -- { key, name, dot, previous, at }: DoT cast whose outcome isn't known yet
-local lastOutcome    -- { avoided, action, at }: most recent outcome on the target
+local lastOutcome    -- { key, avoided, action, at }: most recent outcome on a tracked unit
 
 local function describeReading(ok, value)
     if not ok then return "error" end
@@ -403,7 +415,9 @@ local function onCastSent(spellID)
     -- DOT-1: remember who the cast is aimed at while the target is still it.
     -- SUCCEEDED only names the spell, so onPlayerCast uses this instead of
     -- the (maybe tabbed-away) current target. Never cleared by target change.
-    pendingCastTargetKey = unitKey("target")
+    -- Action targeting can have only softenemy. Hard targets keep precedence; unitKey only uses
+    -- a soft target whose own GUID or matching nameplate's GUID can be read safely.
+    pendingCastTargetKey = unitKey("target") or unitKey("softenemy")
     local ok, _, desc = pcall(spellNameAndDescription, spellID)
     if not ok or not isFinisherDescription(desc) then return end
     local points, readings = readComboPoints()
@@ -412,21 +426,22 @@ local function onCastSent(spellID)
 end
 
 -- An avoid that arrived just before the cast event (see OUTCOME_LOOKBACK), or nil.
-local function avoidJustBefore()
-    if lastOutcome and lastOutcome.avoided and GetTime() - lastOutcome.at <= OUTCOME_LOOKBACK then
+local function avoidJustBefore(key)
+    if lastOutcome and lastOutcome.key == key and lastOutcome.avoided
+        and GetTime() - lastOutcome.at <= OUTCOME_LOOKBACK then
         return lastOutcome.action
     end
 end
 
 -- A builder was cast: count its points unless it was already avoided, else wait for its outcome.
-local function onBuilderCast(points)
-    local avoided = avoidJustBefore()
+local function onBuilderCast(points, key)
+    local avoided = avoidJustBefore(key)
     if avoided then
         trace("COMBO builder " .. avoided .. " (before cast event), counted=" .. countedPoints)
         return
     end
     countedPoints = math.min(COMBO_CAP, countedPoints + points)
-    lastBuilder = { points = points, at = GetTime() }
+    lastBuilder = { key = key, points = points, at = GetTime() }
 end
 
 -- A DoT cast whose result was avoided isn't on the target: drop it. (Waiting for a first tick to prove it
@@ -444,23 +459,31 @@ local function removeAvoidedDot(cast, action)
     end
 end
 
-local function onTargetAvoided(action)
+local function onTargetAvoided(action, key)
     local now = GetTime()
-    lastOutcome = { avoided = true, action = action, at = now }
-    if lastBuilder and now - lastBuilder.at <= OUTCOME_WINDOW then
-        countedPoints = math.max(0, countedPoints - lastBuilder.points)
-        trace("COMBO builder " .. action .. ", counted=" .. countedPoints)
+    if key == (pendingCastTargetKey or unitKey("target") or unitKey("softenemy")) then
+        lastOutcome = { key = key, avoided = true, action = action, at = now }
     end
-    if lastDotCast and now - lastDotCast.at <= OUTCOME_WINDOW then
-        removeAvoidedDot(lastDotCast, action)
+    if lastBuilder and lastBuilder.key == key then
+        if now - lastBuilder.at <= OUTCOME_WINDOW then
+            countedPoints = math.max(0, countedPoints - lastBuilder.points)
+            trace("COMBO builder " .. action .. ", counted=" .. countedPoints)
+        end
+        lastBuilder = nil
     end
-    lastBuilder, lastDotCast = nil, nil
+    if lastDotCast and lastDotCast.key == key then
+        if now - lastDotCast.at <= OUTCOME_WINDOW then removeAvoidedDot(lastDotCast, action) end
+        lastDotCast = nil
+    end
 end
 
--- A hit on the target: the pending casts landed (a later avoid belongs to something else).
-local function onTargetHit()
-    lastOutcome = { avoided = false, at = GetTime() }
-    lastBuilder, lastDotCast = nil, nil
+-- A hit on the cast's recipient proves it landed; a hit on another mob proves nothing about it.
+local function onTargetHit(key)
+    if key == (pendingCastTargetKey or unitKey("target") or unitKey("softenemy")) then
+        lastOutcome = { key = key, avoided = false, at = GetTime() }
+    end
+    if lastBuilder and lastBuilder.key == key then lastBuilder = nil end
+    if lastDotCast and lastDotCast.key == key then lastDotCast = nil end
 end
 
 local function resetComboCount()
@@ -515,11 +538,12 @@ end
 
 -- Returns the target key the DoT was applied to, or nil if the cast wasn't a tracked DoT.
 local function onPlayerCast(spellID)
+    local key = pendingCastTargetKey or unitKey("target") or unitKey("softenemy")
     local ok, name, desc = pcall(spellNameAndDescription, spellID)
     if not ok or not name or isSecret(name) then return end
     if type(desc) == "string" and not isSecret(desc) then
         local awarded = tonumber(desc:match("Awards (%d+) combo point")) or ns.locale.comboPointsAwarded(desc)
-        if awarded then onBuilderCast(awarded) end
+        if awarded then onBuilderCast(awarded, key) end
     end
     if IGNORED_SPELLS[name] then return end
     local isFinisher = isFinisherDescription(desc)
@@ -541,7 +565,6 @@ local function onPlayerCast(spellID)
     -- remembered at SENT time, not to whatever is targeted now (a tab
     -- mid-cast must not move the DoT). Fall back to the current target when
     -- no SENT was seen (or its target was unreadable).
-    local key = pendingCastTargetKey or unitKey("target")
     pendingCastTargetKey = nil
     if not key then
         -- DOT-5b: SUCCEEDED with no readable target silently vanished (0 log
@@ -564,7 +587,7 @@ local function onPlayerCast(spellID)
         isFinisher and string.format(" %s combo points (%s)", comboPoints or "?", comboSource) or "",
         total, duration, dot.school, dot.interval, learned and ("learned " .. learned) or "from description",
         isWaiting(dot) and ", waiting for first tick" or ""))
-    local avoided = avoidJustBefore()
+    local avoided = avoidJustBefore(key)
     if avoided then
         removeAvoidedDot(lastDotCast, avoided)
         lastDotCast = nil
@@ -603,7 +626,7 @@ local function onCastStart(castGUID, spellID)
     if not ok or not name or isSecret(name) or IGNORED_SPELLS[name] or isFinisherDescription(desc) then return end
     local total, school, duration, statedInterval = parseDot(desc, 1)
     if not total then return end
-    local key = unitKey("target")
+    local key = pendingCastTargetKey or unitKey("target") or unitKey("softenemy")
     if not key then return end
     local now = GetTime()
     local dot = newDot(spellID, spellID, name, total, school, duration, statedInterval, now)
@@ -780,19 +803,17 @@ local lastCombatUnit
 local lastCombatFed
 local function onUnitCombat(unit, action, flag, amount, school)
     if isSecret(action) then return end
+    local key = unitKey(unit)
+    if not key then return end
     -- DOT-6: an absorbed tick still landed on the mob (the shield ate it),
     -- so it proves the DoT is alive and keeps its rhythm. Treat ABSORB like
     -- WOUND for matching, but never let a 0 feed tickSum/learned sizes.
     local absorbed = action == "ABSORB"
-    if unit == "target" then
-        if AVOIDED_ACTIONS[action] then return onTargetAvoided(action) end
-        if action == "WOUND" or absorbed then onTargetHit() end
-    end
+    if AVOIDED_ACTIONS[action] then return onTargetAvoided(action, key) end
+    if action == "WOUND" or absorbed then onTargetHit(key) end
     if action ~= "WOUND" and not absorbed then return end
     if isSecret(amount) or isSecret(school) or type(amount) ~= "number" then return end
     local isCrit = not isSecret(flag) and flag == "CRITICAL"
-    local key = unitKey(unit)
-    if not key then return end
     local dots = dotsByTarget[key]
     if not dots then return end
 

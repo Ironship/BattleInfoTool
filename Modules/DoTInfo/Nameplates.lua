@@ -6,7 +6,7 @@
 --
 -- Widgets are created per Blizzard nameplate frame (which WoW recycles between mobs) and parented to it, so
 -- they move, scale and hide with the plate. They're lighter than the target marker: fill, per-DoT segments and a
--- thin outline in the Marker tab's style; no glow, shine, spark or animation.
+-- thin outline in the Marker tab's style; presets match their fill and DoT colors to the target marker.
 --
 -- Also the probe (/dotinfo plates): what the addon can reach on nameplates, logged, with a test bar on each.
 
@@ -22,7 +22,7 @@ local MAX_PLATES = 40
 -- UnitExists per beat -- 400/s at 10 Hz -- to 200/s. (0.25 broke the standalone
 -- test_load rhythm, which draws within a single 0.2 s frame after SUCCEEDED.)
 local UPDATE_INTERVAL = 0.2
-local MAX_SEGMENTS = 4
+local MAX_SEGMENTS = 8 -- same per-DoT capacity as the target marker
 local OUTLINE_THICKNESS = 1
 local ICON_BAR_LENGTH = 10000 -- see the kill icon notes in Core.lua
 local FALLBACK_LEVEL = 200    -- frame level when the plate's own level can't be read
@@ -114,7 +114,13 @@ local function createWidgets(plate, healthBar)
             texture:SetPoint("TOPLEFT", w.segments[i - 1].fillEnd, "TOPRIGHT")
         end
         texture:SetPoint("BOTTOMRIGHT", fillEnd, "BOTTOMRIGHT")
-        w.segments[i] = { bar = bar, fillEnd = fillEnd, texture = texture }
+        local divider = w.marker:CreateTexture(nil, "OVERLAY", nil, 1)
+        divider:SetColorTexture(0, 0, 0, 0.85)
+        divider:SetWidth(1)
+        divider:SetPoint("TOP", fillEnd, "TOPRIGHT")
+        divider:SetPoint("BOTTOM", fillEnd, "BOTTOMRIGHT")
+        divider:Hide()
+        w.segments[i] = { bar = bar, fillEnd = fillEnd, texture = texture, divider = divider }
     end
 
     w.edges = {}
@@ -259,6 +265,7 @@ local function drawPlate(w, entries, total, maxHealth, health, db)
             segment.bar:SetMinMaxValues(0, maxHealth)
             segment.bar:SetValue(i <= count and running or total)
             segment.texture:SetShown(i <= count)
+            segment.divider:SetShown(db.segmentDividers and i < count or false)
         end
         w.iconBar:SetMinMaxValues(0, health)
         w.iconBar:SetValue(total)

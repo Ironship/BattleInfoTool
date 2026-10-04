@@ -6,6 +6,8 @@
 
 **DoTInfo**: marks on the target's health bar the damage of DoTs still have to deal, with a kill icon when target should die with current dots - great for mana management and visible indicator that dots are still on target.
 
+DoTInfo presets style both the target frame and nameplates. **Juicy** uses matching striped segments, a different color per DoT, and dividers on both bars. Nameplate colors and fill can still be adjusted separately in `/bit` > DoTInfo > Nameplates.
+
 ![damage](https://i.imgur.com/QfaSkDy.png)
 
 \[Based on DoesITDie addon \[MIT\] but with many my own changes, bug fixes and ideas [https://www.curseforge.com/wow/addons/does-it-die](https://www.curseforge.com/wow/addons/does-it-die)\]

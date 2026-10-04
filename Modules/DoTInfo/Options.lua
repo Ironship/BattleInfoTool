@@ -23,7 +23,7 @@ local PREVIEW_LAYOUT = { label = 92, control = 140 }
 local DISABLED_ALPHA = 0.35
 local SIMULATION_STEP = 0.5 -- seconds
 
--- Presets only set appearance; accuracy and troubleshooting settings are left alone.
+-- Presets style both the target marker and nameplates; accuracy settings are left alone.
 local PRESETS = {
     { id = "minimal", label = "Minimal", values = {
         showSkull = true, skullIcon = "cross", skullSize = 40, skullPulse = false,
@@ -513,10 +513,21 @@ local function resetTab(tab)
     changed()
 end
 
+local function copyMarkerStyleToPlates()
+    local settings = db()
+    settings.plateFillTexture, settings.plateFillColor, settings.plateFillOpacity =
+        settings.fillTexture, settings.fillColor, settings.fillOpacity
+    settings.plateDotColors, settings.plateIcon = settings.dotColors, settings.skullIcon
+    settings.plateOutlineStyle, settings.plateDashLength = settings.outlineStyle, settings.dashLength
+    settings.plateOutlineThickness = math.min(settings.outlineThickness, 3)
+    settings.plateOutlineColor, settings.plateOutlineOpacity = settings.outlineColor, settings.outlineOpacity
+end
+
 local function applyPreset(preset)
     for key, value in pairs(preset.values) do db()[key] = value end
+    copyMarkerStyleToPlates()
     changed()
-    ns.print(preset.label .. " preset applied.")
+    ns.print(preset.label .. " preset applied to the target frame and nameplates.")
 end
 
 ---------------------------------------------------------------------------
@@ -583,7 +594,7 @@ local function buildTabs()
     text:slider("labelSize", "Size", 8, 20, 1, { enabledIf = showsLabel })
     text:choice("labelColor", "Color", lists.colors, { enabledIf = showsLabel })
 
-    -- Nameplates have their own look: enemy plates are red, so the target marker's colors may not show on them.
+    -- Presets match both bars; these controls allow a separate nameplate look afterwards.
     local platesOn = function(s) return s.nameplateMode ~= "off" end
     local plateIcon = function(s) return s.nameplateMode == "markerIcon" end
     local plateSingle = function(s) return platesOn(s) and s.plateDotColors == "single" end
@@ -611,12 +622,7 @@ local function buildTabs()
     plates:choice("plateOutlineColor", "Outline color", lists.colors, { enabledIf = plateOutline })
     plates:slider("plateOutlineOpacity", "Outline opacity", 10, 100, 5, { suffix = "%", enabledIf = plateOutline })
     plates.footer = pushButton(window.settingsArea, "Copy from Marker tab", 160, function()
-        local db = ns.db
-        db.plateFillTexture, db.plateFillColor, db.plateFillOpacity = db.fillTexture, db.fillColor, db.fillOpacity
-        db.plateDotColors, db.plateIcon = db.dotColors, db.skullIcon
-        db.plateOutlineStyle, db.plateDashLength = db.outlineStyle, db.dashLength
-        db.plateOutlineThickness = math.min(db.outlineThickness, 3)
-        db.plateOutlineColor, db.plateOutlineOpacity = db.outlineColor, db.outlineOpacity
+        copyMarkerStyleToPlates()
         changed()
     end)
     plates.footer:SetPoint("BOTTOMLEFT", 10, 10)
@@ -941,7 +947,7 @@ local function buildContent(top, anchor)
         previous = button
     end
     presetLabel:SetPoint("RIGHT", previous, "LEFT", -8, 0)
-    presetLabel:SetText("Presets")
+    presetLabel:SetText("Both bars")
 
     local pane = CreateFrame("Frame", nil, window, "BackdropTemplate")
     pane:SetPoint("TOPLEFT", 10, -top)
