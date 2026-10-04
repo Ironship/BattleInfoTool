@@ -493,6 +493,27 @@ tooltipEnchant = function(link)
   return out
 end
 
+-- Strength gives block value (0.05 per point, RatingBuster Classic / StatLogic VanillaLogic
+-- ADD_BLOCK_VALUE_MOD_STR value 0.05) but only with a shield: warriors, paladins and shamans.
+-- The class comes the same guarded way SpecRatings asks it (ask + pcall); a secret class
+-- (in combat) fails silent: no line.
+local function usesShield()
+  local _, class = ask(UnitClass, "player")
+  if not class or isSecret(class) then return false end
+  return class == "WARRIOR" or class == "PALADIN" or class == "SHAMAN"
+end
+
+-- Feral Attack Power is attack power 1:1 (RatingBuster Classic / StatLogic VanillaLogic
+-- ADD_AP_MOD_FERAL_ATTACK_POWER value 1 for Cat/Bear/Dire Bear) but only in form: outside
+-- Cat/Bear it would lie, so nothing is shown. The form is asked the guarded way Range asks
+-- it (GetShapeshiftFormID: Cat 1, Bear 5, Dire Bear 8, see Range.lua DRUID_FORM_SPELLS and
+-- SpellDamageInfo CAT_FORM); a secret or unknown form fails silent: no line.
+local function inFeralForm()
+  local form = ask(GetShapeshiftFormID)
+  if form == nil or isSecret(form) then return false end
+  return form == 1 or form == 5 or form == 8
+end
+
 -- What n points of the stat under key give this character: { { kind, value } }, in the order shown.
 function M.WorthParts(key, n)
   local parts = {}
@@ -500,6 +521,7 @@ function M.WorthParts(key, n)
   if key == "ITEM_MOD_STRENGTH_SHORT" then
     local ap = attackPower(1, n)
     if ap then add("ap", ap) end
+    if usesShield() then add("blockvalue", n * 0.05) end
   elseif key == "ITEM_MOD_AGILITY_SHORT" then
     add("armor", constant("ARMOR_PER_AGILITY", 2) * n)
     local ap = attackPower(2, n)
@@ -531,6 +553,15 @@ function M.WorthParts(key, n)
     add("healing", n)
   elseif key == "ITEM_MOD_SPELL_POWER_SHORT" or key == "ITEM_MOD_SPELL_DAMAGE_DONE_SHORT" then
     add("spellpower", n)
+  elseif key == "ITEM_MOD_DEFENSE_SKILL_SHORT" then
+    -- Flat +Defense skill: no such key in the client's GlobalStrings (only
+    -- ITEM_MOD_DEFENSE_SKILL_RATING_SHORT exists) and none seen in GetItemStats data;
+    -- kept defensively. Honest raw skill ("+X defense", kind "defense" with its existing
+    -- word and ShieldWall icon), not the 0.04% avoidance RatingBuster converts it to.
+    add("defense", n)
+  elseif key == "ITEM_MOD_FERAL_ATTACK_POWER_SHORT" then
+    -- 1:1 attack power, but only in Cat/Bear form (see inFeralForm above).
+    if inFeralForm() then add("ap", n) end
   elseif RATINGS[key] then
     -- the game's own conversion at this level, as its character sheet does it
     local kind, name, number = RATINGS[key][1], RATINGS[key][2], RATINGS[key][3]
@@ -544,8 +575,8 @@ end
 local WORTH_WORDS = {
   armor = "armor", ap = "attack power", crit = "crit", dodge = "dodge", health = "health", mana = "mana",
   spellcrit = "spell crit", regen = "mana per 5 sec. when not casting", hit = "hit", haste = "haste",
-  expertise = "expertise", parry = "parry", block = "block", defense = "defense", healing = "healing",
-  spellpower = "spell power",
+  expertise = "expertise", parry = "parry", block = "block", blockvalue = "block value", defense = "defense",
+  healing = "healing", spellpower = "spell power",
 }
 local PERCENT_KINDS = { crit = true, dodge = true, spellcrit = true, hit = true, haste = true, expertise = true,
   parry = true, block = true }
@@ -553,7 +584,8 @@ local PERCENT_KINDS = { crit = true, dodge = true, spellcrit = true, hit = true,
 local WORTH_SHORT = {
   armor = "armor", ap = "AP", crit = "crit", dodge = "dodge", health = "health", mana = "mana",
   spellcrit = "spell crit", regen = "mana/5s", hit = "hit", haste = "haste", expertise = "expertise",
-  parry = "parry", block = "block", defense = "defense", healing = "healing", spellpower = "spell power",
+  parry = "parry", block = "block", blockvalue = "block value", defense = "defense", healing = "healing",
+  spellpower = "spell power",
 }
 local function worthValue(kind, value) return PERCENT_KINDS[kind] and percent(value) or signed(value) end
 
@@ -691,7 +723,8 @@ local ICONS = {
   spellcrit = "Interface\\Icons\\Spell_Fire_FlameBolt", regen = "Interface\\Icons\\INV_Drink_07",
   hit = "Interface\\Icons\\Ability_Hunter_SniperShot", haste = "Interface\\Icons\\Spell_Nature_Bloodlust",
   expertise = "Interface\\Icons\\Ability_Warrior_Revenge", parry = "Interface\\Icons\\Ability_Parry",
-  block = "Interface\\Icons\\Ability_Defend", defense = "Interface\\Icons\\Ability_Warrior_ShieldWall",
+  block = "Interface\\Icons\\Ability_Defend", blockvalue = "Interface\\Icons\\INV_Shield_05",
+  defense = "Interface\\Icons\\Ability_Warrior_ShieldWall",
   healing = "Interface\\Icons\\Spell_Holy_Heal", spellpower = "Interface\\Icons\\Spell_Nature_Lightning",
 }
 M.ICONS = ICONS
@@ -765,6 +798,117 @@ local function itemName(link)
   return (type(link) == "string" and link:match("%[(.-)%]")) or "?"
 end
 
+---------------------------------------------------------------------------------------------
+-- Tank caps (independent of WorthParts): whether the character is uncrittable (440 defense
+-- skill vs a boss +3) and how far its avoidance is from 102.4% (miss+dodge+parry+block).
+-- Shown when it matters: the player has a tank spec in M.SPECS, or the item itself carries
+-- defensive stats. Every number comes from the client's live APIs behind ask/pcall with an
+-- isSecret guard; when no API answers, the line is left out entirely (fail silent, nothing
+-- guessed). English throughout, colours as the rest (UP green when capped, DOWN red below).
+---------------------------------------------------------------------------------------------
+
+local UNCRITTABLE_DEFENSE = 440
+local AVOIDANCE_CAP = 102.4
+
+-- Item keys that make the item itself tank-relevant (defense/dodge/parry/block families,
+-- including flat defense skill and block value as block family).
+local TANK_STATS = {
+  ITEM_MOD_DEFENSE_SKILL_RATING_SHORT = true,
+  ITEM_MOD_DEFENSE_SKILL_SHORT = true,
+  ITEM_MOD_DODGE_RATING_SHORT = true,
+  ITEM_MOD_PARRY_RATING_SHORT = true,
+  ITEM_MOD_BLOCK_RATING_SHORT = true,
+  ITEM_MOD_BLOCK_VALUE_SHORT = true,
+}
+
+-- Whether the player's class has a tank spec in M.SPECS (Druid Bear, Paladin Protection,
+-- Warrior Protection). Guarded like SpecRatings (ask + pcall); a secret class fails silent.
+local function hasTankSpec()
+  local _, class = ask(UnitClass, "player")
+  if type(class) ~= "string" or isSecret(class) then return false end
+  local specs = M.SPECS and M.SPECS[class]
+  if type(specs) ~= "table" then return false end
+  for _, s in ipairs(specs) do
+    if type(s) == "table" and s.role == "tank" then return true end
+  end
+  return false
+end
+
+local function itemHasTankStats(link)
+  local stats = itemStats(link)
+  if type(stats) ~= "table" then return false end
+  for k, v in pairs(stats) do
+    if TANK_STATS[k] and type(v) == "number" and not isSecret(v) and v ~= 0 then return true end
+  end
+  return false
+end
+
+-- The character's current defense skill, or nil when no API answers (fail silent).
+-- Tried in order, each behind ask/pcall with an isSecret guard: UnitDefense("player")
+-- (base + modifier, the probe's own function) first, then GetDefense() with no args.
+-- No C_... module is invented here.
+local function tankDefenseSkill()
+  local a, b = ask(UnitDefense, "player")
+  if isSecret(a) or isSecret(b) then return nil end
+  if type(a) == "number" and type(b) == "number" then return a + b end
+  if type(a) == "number" then return a end
+  local g = ask(GetDefense)
+  if isSecret(g) then return nil end
+  if type(g) == "number" then return g end
+  return nil
+end
+
+-- Miss chance vs a boss +3 from defense skill and level: 5% base plus 0.04% per point of
+-- (defense - boss weapon skill), boss skill = (level+3)*5. Needs both defense and a sane
+-- UnitLevel("player"); otherwise nil (the caller then shows dodge+parry+block only).
+local function tankMissChance(defense)
+  if type(defense) ~= "number" or defense ~= defense then return nil end
+  local lvl = num(ask(UnitLevel, "player"))
+  if not lvl or lvl <= 0 then return nil end
+  local miss = 5 + (defense - (lvl + 3) * 5) * 0.04
+  if miss ~= miss or miss == math.huge or miss == -math.huge then return nil end
+  if miss < 0 then miss = 0 end
+  return miss
+end
+
+local function wholeText(v)
+  if v == math.floor(v) then return string.format("%d", v) end
+  return string.format("%.1f", v)
+end
+
+-- The tank lines for link: {} when nothing can be said honestly. Gate: a tank-spec player
+-- sees them on any item; anyone else only on a defensive item. Each line needs its own API:
+-- Uncrittable needs defense skill; Avoidance needs dodge+parry+block (all three, live
+-- GetDodgeChance/GetParryChance/GetBlockChance) plus optionally miss (defense+level).
+local function tankExtraLines(link)
+  if type(link) ~= "string" or isSecret(link) then return {} end
+  if not hasTankSpec() and not itemHasTankStats(link) then return {} end
+  local out = {}
+  local def = tankDefenseSkill()
+  if type(def) == "number" and def == def and def ~= math.huge and def ~= -math.huge then
+    local need = UNCRITTABLE_DEFENSE - def
+    if need < 0 then need = 0 end
+    local text = "Uncrittable: " .. wholeText(def) .. "/440 (need " .. wholeText(need) .. ")"
+    out[#out + 1] = { ((def >= UNCRITTABLE_DEFENSE) and UP or DOWN) .. text .. "|r", 1, 1, 1 }
+  end
+  local dodge = num(ask(GetDodgeChance))
+  local parry = num(ask(GetParryChance))
+  local block = num(ask(GetBlockChance))
+  if dodge and parry and block then
+    local miss = (def ~= nil) and tankMissChance(def) or nil
+    local total, text
+    if miss then
+      total = miss + dodge + parry + block
+      text = string.format("Avoidance: %.2f%% / 102.4%% (miss+dodge+parry+block)", total)
+    else
+      total = dodge + parry + block
+      text = string.format("Avoidance: %.2f%% / 102.4%% (dodge+parry+block, no miss)", total)
+    end
+    out[#out + 1] = { ((total + 1e-9 >= AVOIDANCE_CAP) and UP or DOWN) .. text .. "|r", 1, 1, 1 }
+  end
+  return out
+end
+
 -- The tooltip lines for link: { text, r, g, b }. gameCompares: the game shows its own comparison beside
 -- this tooltip ("If you replace this item, the following stat changes will occur"), so the differences
 -- are not repeated.
@@ -832,6 +976,16 @@ function M.TooltipLines(link, gameCompares)
     end
     local ratings = settings.specs and M.SpecRatings(link, c.against, c.slots, c.offHand)
     if ratings then specLines(lines, ratings) end
+  end
+  -- Tank caps: one independent section after the comparisons (once per tooltip, not per
+  -- worn slot), only when the gate holds and an API answers. A pcall keeps a throwing
+  -- client from costing the tooltip; on error nothing is added.
+  do
+    local ok, extra = pcall(tankExtraLines, link)
+    if ok and type(extra) == "table" and #extra > 0 then
+      if #lines > 0 then lines[#lines + 1] = { DIVIDER, 1, 1, 1 } end
+      for _, l in ipairs(extra) do lines[#lines + 1] = l end
+    end
   end
   return lines
 end
