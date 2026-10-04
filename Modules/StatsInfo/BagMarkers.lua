@@ -242,6 +242,29 @@ local function specVerdict(parts)
   return "none", approx
 end
 
+-- Stat keys the model prices for this class (any spec, any measure, nonzero):
+-- only their losses can veto an arrow. An unmodelled loss (3 armor the class
+-- never converts) still prints its line, but never blocks an upgrade alone.
+local function modelledKeys()
+  local _, class = ask(UnitClass, "player")
+  local specs = type(class) == "string" and M.SPECS and M.SPECS[class]
+  local set = {}
+  if specs then for _, spec in ipairs(specs) do
+    for _, mname in ipairs({ "damage", "survival", "threat", "healing" }) do
+      local m = spec[mname]
+      if type(m) == "table" then
+        if type(m.weights) == "table" then
+          for k, v in pairs(m.weights) do if v ~= 0 then set[k] = true end end
+        end
+        if (m.mainHand or 0) ~= 0 or (m.offHand or 0) ~= 0 or (m.ranged or 0) ~= 0 then
+          set["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"] = true
+        end
+      end
+    end
+  end end
+  return set
+end
+
 -- One replacement path's verdict; nil when the ratings cannot be computed (the class is
 -- not known, or it has no SPECS entry): that path is unknown and no arrow may use it.
 local function comparisonVerdict(link, c)
@@ -272,14 +295,21 @@ local function comparisonVerdict(link, c)
   if sawDown or sawSignificant then return { verdict = "none" } end
   -- Every rated part is neutral: the changed stats are not modelled for these specs
   -- (armor-only cloth on a damage class). The conservative raw-diff dominance
-  -- fallback, per path: up if some diff is positive and none negative, down if some
-  -- negative and none positive.
-  local pos, neg = false, false
+  -- fallback, per path: up if some diff is positive and no MODELLED diff is negative
+  -- (an unmodelled loss never vetoes alone: 3 armor a rogue never converts cannot block
+  -- +2 stamina, though its line still prints), down if some diff is negative and none
+  -- positive. Off-armor with stats therefore gets arrows too.
+  local modelled = modelledKeys()
+  local pos, negAny, negModelled = false, false, false
   for _, d in ipairs(c.diffs) do
-    if d.diff > 0 then pos = true elseif d.diff < 0 then neg = true end
+    if d.diff > 0 then pos = true
+    elseif d.diff < 0 then
+      negAny = true
+      if modelled[d.key] then negModelled = true end
+    end
   end
-  if pos and not neg then return { verdict = "up", fallback = true } end
-  if neg and not pos then return { verdict = "down", fallback = true } end
+  if pos and not negModelled then return { verdict = "up", fallback = true } end
+  if negAny and not pos then return { verdict = "down", fallback = true } end
   return { verdict = "none", fallback = true }
 end
 
