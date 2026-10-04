@@ -71,8 +71,9 @@ function UI.Check(parent, labelText, get, set, tooltip)
   return box
 end
 
--- A slider with its label above and its value to the right.
-function UI.Slider(parent, labelText, min, max, step, get, set, format)
+-- A slider with its label above and its value to the right. The optional tooltip (the same
+-- extra argument UI.Check takes) explains the setting while the label or the slider is hovered.
+function UI.Slider(parent, labelText, min, max, step, get, set, format, tooltip)
   local holder = CreateFrame("Frame", nil, parent)
   holder:SetSize(260, 40)
   holder.label = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -123,6 +124,21 @@ function UI.Slider(parent, labelText, min, max, step, get, set, format)
     self.refreshing = false
   end
   holder.bar = bar
+  -- Hovering the label or the slider shows the tooltip, so neither spot is dead.
+  if tooltip then
+    local function enter(self)
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      GameTooltip:SetText(labelText, 1, 1, 1)
+      GameTooltip:AddLine(tooltip, nil, nil, nil, true)
+      GameTooltip:Show()
+    end
+    local function leave() GameTooltip:Hide() end
+    holder:EnableMouse(true)
+    holder:SetScript("OnEnter", enter)
+    holder:SetScript("OnLeave", leave)
+    bar:SetScript("OnEnter", enter)
+    bar:SetScript("OnLeave", leave)
+  end
   holder:Refresh()
   return holder
 end

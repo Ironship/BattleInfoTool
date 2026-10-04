@@ -12,8 +12,10 @@
 -- flows raw into the native display calls only: StatusBar:SetMinMaxValues and
 -- StatusBar:SetValue. Health and absorbs are never saved anywhere.
 --
--- The overlay fill is the native Blizzard WHITE8X8 in the shared absorb colour
--- (BIT.Style role "absorb"); no custom art is painted on unit frames.
+-- The overlay fill is the shared absorb colour (BIT.Style role "absorb") over a fill
+-- texture the settings choose: the native Blizzard WHITE8X8 ("flat") or one of the
+-- module's own textures. The settings sample paints the very same look from its own
+-- fixed numbers; no game reading ever reaches it.
 
 local _, BIT = ...
 local M = BIT.Module("ShieldsInfo")
@@ -21,6 +23,11 @@ local M = BIT.Module("ShieldsInfo")
 local WHITE = "Interface\\Buttons\\WHITE8X8" -- the native Blizzard fill (the shared style paints it)
 local UPDATE_INTERVAL = 0.2
 local PARTY_UNITS = { "party1", "party2", "party3", "party4" }
+-- The units whose bars the module draws: player, target and the party slots. The unit
+-- events are registered unfiltered (see start(): RegisterUnitEvent takes at most two unit
+-- tokens and this set is six), so onEvent checks every event's unit against this set.
+local WATCHED_UNITS = { player = true, target = true }
+for _, unit in ipairs(PARTY_UNITS) do WATCHED_UNITS[unit] = true end
 
 local DEFAULTS = {
   player = true,      -- the player frame
@@ -28,15 +35,51 @@ local DEFAULTS = {
   party = true,       -- classic party frames and compact party/raid frames
   nameplates = true,  -- every accessible nameplate
   overlayAlpha = 1.0, -- the absorb fill translucency (the slider clamps it to 0.2..1.0)
+  fillTexture = "flat", -- the fill art the overlay wears (FILL_TEXTURES below)
 }
 -- Retired keys (hud, numbers, scale, mirror, preview, locked, x, y) are not
 -- defaults anymore: BIT.Settings leaves saved values untouched, and this
 -- module never reads them, so an old profile loads without a crash or a wipe.
 
+-- The fill art the overlay may wear, in the order the settings offer it. "flat" is the
+-- native Blizzard fill the shared style paints; the rest are plain textures (the stripes
+-- tile, REPEAT, so their pattern keeps its size on a bar of any width). A saved id that
+-- is not on this list reads as "flat": nothing here ever rejects a write with an error.
+local TEXTURE_DIR = "Interface\\AddOns\\BattleInfoTool\\Modules\\ShieldsInfo\\Textures\\"
+local FILL_TEXTURES = {
+  { id = "flat", label = "Flat", hint = "The native Blizzard fill: just the shared absorb colour.",
+    path = WHITE },
+  { id = "smooth", label = "Health bar", hint = "The game's own health bar texture.",
+    path = "Interface\\TargetingFrame\\UI-StatusBar" },
+  { id = "raid", label = "Raid bar", hint = "The raid frames' health bar texture.",
+    path = "Interface\\RaidFrame\\Raid-Bar-Hp-Fill" },
+  { id = "stripes", label = "Stripes", hint = "Diagonal stripes that keep their size on any bar.",
+    path = TEXTURE_DIR .. "Stripes.tga", tiled = true },
+  { id = "shield_aura", label = "Shield aura", hint = "The module's own shield aura art.",
+    path = TEXTURE_DIR .. "shield_aura.tga" },
+  { id = "shield_aura_mirrored", label = "Shield aura (mirrored)",
+    hint = "The shield aura art, mirrored.",
+    path = TEXTURE_DIR .. "shield_aura_mirrored.tga" },
+}
+
+-- The style presets under the settings: they write only the fill art and its translucency
+-- (plain style numbers), never the frame switches, so a preset cannot turn a frame off.
+local PRESETS = {
+  { label = "Minimal", values = { fillTexture = "flat", overlayAlpha = 0.35 } },
+  { label = "Classic", values = { fillTexture = "smooth", overlayAlpha = 0.6 } },
+  { label = "Juicy", values = { fillTexture = "shield_aura", overlayAlpha = 1.0 } },
+}
+
 local settings
 
+-- A secret value is one the client marks with issecretvalue: every comparison or table
+-- index on it raises. Asked inside a pcall (as in ResourceDing/Core.lua:179-184), so a
+-- client whose own check raises reads as "not secret" here, never as an error out of a
+-- handler.
 local function isSecret(v)
-  return type(issecretvalue) == "function" and issecretvalue(v) or false
+  if type(issecretvalue) ~= "function" then return false end
+  local ok, r = pcall(issecretvalue, v)
+  return ok and r or false
 end
 
 -- The client's answer, or nil when the API is missing, errors, or has nothing to say.
@@ -64,8 +107,11 @@ end
 -- healthBar -> { bar = StatusBar, unit = unit, plate = bool, party = bool, current = bool }
 local overlays = setmetatable({}, { __mode = "k" })
 
+-- Hide runs from the event handlers too, where the client refuses work on a protected
+-- frame in combat: wrapped, so a refusal never takes a handler down (the tick hides the
+-- overlay at the next pass anyway).
 local function hideOverlay(overlay)
-  if overlay then overlay.bar:Hide() end
+  if overlay then pcall(function() overlay.bar:Hide() end) end
 end
 
 -- The unit's health bar the module may draw on, or nil.
@@ -79,7 +125,7 @@ local function usableBar(frame)
 end
 
 ---------------------------------------------------------------------------------------------
--- The shared absorb look: the native Blizzard fill in the shared absorb
+-- The shared absorb look: the chosen fill texture in the shared absorb
 -- colour/opacity. Styling only: the bars' raw values and every saved setting
 -- stay untouched, so a style write (even while the settings are closed) never
 -- disturbs gameplay data. Secret-safe by construction: Resolve/Apply never
@@ -98,8 +144,74 @@ local function clampAlpha(v)
   return v
 end
 
+-- The settings the look and the sample read: the live table while the module runs, the
+-- saved one otherwise, so the OFF-page sample shows the player's own choices. Reading
+-- only: a missing table falls back to the defaults above, nothing is ever written here.
+local function currentSettings()
+  if settings then return settings end
+  if type(BIT.Settings) == "function" then
+    local ok, s = pcall(BIT.Settings, "ShieldsInfo", DEFAULTS)
+    if ok and type(s) == "table" then return s end
+  end
+  return DEFAULTS
+end
+
 local function overlayAlpha()
-  return clampAlpha(settings ~= nil and settings.overlayAlpha or 1.0)
+  return clampAlpha(currentSettings().overlayAlpha)
+end
+
+-- The chosen fill art (FILL_TEXTURES), or "flat" for anything unknown. A saved id the
+-- client would refuse to compare (a secret can never be written there, but a comparison
+-- that raises must still not escape a paint) reads as "flat" too.
+local function chosenFill()
+  local id = currentSettings().fillTexture
+  if type(id) == "string" then
+    local ok, entry = pcall(function()
+      for i = 1, #FILL_TEXTURES do
+        if FILL_TEXTURES[i].id == id then return FILL_TEXTURES[i] end
+      end
+    end)
+    if ok and type(entry) == "table" then return entry end
+  end
+  return FILL_TEXTURES[1]
+end
+
+-- Paints one overlay bar in the shared absorb look. The shield translucency
+-- multiplies on top of the shared style: only the absorb fill turns more
+-- transparent, never the underlying unit bar and never any text. Styling only:
+-- every value here is a style number, never the absorb. The live overlays and
+-- the settings sample run this same painter, so the sample can only look like
+-- the real thing.
+local function paintShield(bar, style)
+  local entry = chosenFill()
+  pcall(function()
+    bar:SetStatusBarTexture(entry.path)
+    -- The tiling is the texture's own: a status bar's fill is one texture region,
+    -- configured here so "stripes" repeats instead of stretching (REPEAT, as in
+    -- DoTInfo/Core.lua:1342-1344).
+    local tex = ask(bar.GetStatusBarTexture, bar)
+    if tex ~= nil and (type(tex) == "table" or type(tex) == "userdata") then
+      pcall(function()
+        if entry.tiled then
+          tex:SetTexture(entry.path, "REPEAT", "REPEAT")
+          tex:SetHorizTile(true)
+          tex:SetVertTile(true)
+        else
+          tex:SetHorizTile(false)
+          tex:SetVertTile(false)
+        end
+      end)
+    end
+  end)
+  pcall(function()
+    local colors = style.colors
+    local c = type(colors) == "table" and (colors.absorb or colors.text) or nil
+    if type(c) == "table" then
+      local base = type(c[4]) == "number" and c[4] or 1
+      local op = type(style.opacity) == "number" and style.opacity or 1
+      bar:SetStatusBarColor(c[1], c[2], c[3], base * op * overlayAlpha())
+    end
+  end)
 end
 
 local function styleOverlay(bar)
@@ -107,20 +219,12 @@ local function styleOverlay(bar)
     local ok, style = pcall(BIT.Style.Resolve, "ShieldsInfo")
     if ok and type(style) == "table" then
       pcall(BIT.Style.ApplyBar, bar, style, "absorb")
-      pcall(function()
-        local colors = style.colors
-        local c = type(colors) == "table" and (colors.absorb or colors.text) or nil
-        if type(c) == "table" then
-          local base = type(c[4]) == "number" and c[4] or 1
-          local op = type(style.opacity) == "number" and style.opacity or 1
-          bar:SetStatusBarColor(c[1], c[2], c[3], base * op * overlayAlpha())
-        end
-      end)
+      paintShield(bar, style)
       return
     end
   end
-  -- Degraded but visible: the native fill, never an error.
-  pcall(function() bar:SetStatusBarTexture(WHITE) end)
+  -- Degraded but visible: the chosen fill, never an error.
+  pcall(function() bar:SetStatusBarTexture(chosenFill().path) end)
 end
 
 -- Style writes restyle the live overlays even while the settings are closed. Fully
@@ -137,20 +241,26 @@ local function onStyleChanged()
 end
 
 -- The overlay StatusBar on a health bar, created once and reused; nil when the bar is
--- protected or the client would not accept a child.
+-- protected or the client would not accept a child. Creation runs from the event handlers
+-- as well, where the client may refuse a child of a protected bar in combat: the whole
+-- build is wrapped, and a failure caches nothing (the next tick retries after the fight).
 local function overlayFor(healthBar)
   if type(healthBar) ~= "table" then return nil end
   if not usableBar(healthBar) then return nil end
   local o = overlays[healthBar]
   if o then return o end
-  local bar = CreateFrame("StatusBar", nil, healthBar)
-  bar:SetAllPoints(healthBar)
-  local orientation = ask(healthBar.GetOrientation, healthBar) or "HORIZONTAL"
-  bar:SetOrientation(orientation)
-  bar:SetReverseFill(orientation == "VERTICAL")
-  bar:SetFrameLevel((healthBar:GetFrameLevel() or 0) + 1)
-  styleOverlay(bar)
-  bar:Hide()
+  local ok, bar = pcall(function()
+    local b = CreateFrame("StatusBar", nil, healthBar)
+    b:SetAllPoints(healthBar)
+    local orientation = ask(healthBar.GetOrientation, healthBar) or "HORIZONTAL"
+    b:SetOrientation(orientation)
+    b:SetReverseFill(orientation == "VERTICAL")
+    b:SetFrameLevel((healthBar:GetFrameLevel() or 0) + 1)
+    styleOverlay(b)
+    b:Hide()
+    return b
+  end)
+  if not ok or type(bar) ~= "table" then return nil end
   o = { bar = bar, unit = nil, plate = false, party = false, current = false }
   overlays[healthBar] = o
   return o
@@ -448,6 +558,15 @@ end
 
 local driver
 
+-- The unit a unit event is about, safe to look up and drawn on by this module. A secret
+-- unit token is neither a key nor a comparison (it would raise), so it is never watched.
+local function isUnitWatched(unit)
+  if type(unit) ~= "string" or isSecret(unit) then return false end
+  return WATCHED_UNITS[unit] == true
+end
+
+local UNIT_EVENTS = { UNIT_ABSORB_AMOUNT_CHANGED = true, UNIT_HEALTH = true, UNIT_MAXHEALTH = true }
+
 local function onEvent(_, event, arg1)
   if event == "PLAYER_LOGIN" then
     attachCompactHooks()
@@ -467,6 +586,10 @@ local function onEvent(_, event, arg1)
       end
     end
     if cleared then return end
+  elseif UNIT_EVENTS[event] and not isUnitWatched(arg1) then
+    -- the unit events arrive unfiltered (see start()): one about a unit nobody draws on
+    -- never wakes a refresh (arg1 is the event's own unit)
+    return
   end
   updateAll()
 end
@@ -484,9 +607,12 @@ local function start()
   driver:RegisterEvent("GROUP_ROSTER_UPDATE")
   driver:RegisterEvent("NAME_PLATE_UNIT_ADDED")
   driver:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
-  driver:RegisterUnitEvent("UNIT_ABSORB_AMOUNT_CHANGED", "player", "target", unpack(PARTY_UNITS))
-  driver:RegisterUnitEvent("UNIT_HEALTH", "player", "target", unpack(PARTY_UNITS))
-  driver:RegisterUnitEvent("UNIT_MAXHEALTH", "player", "target", unpack(PARTY_UNITS))
+  -- The unit events unfiltered: Frame:RegisterUnitEvent takes at most two unit tokens and
+  -- the watched set is six (player, target, the four party slots). onEvent does the
+  -- filtering by each event's own unit (arg1).
+  driver:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
+  driver:RegisterEvent("UNIT_HEALTH")
+  driver:RegisterEvent("UNIT_MAXHEALTH")
   driver:SetScript("OnEvent", onEvent)
   local since = 0
   driver:SetScript("OnUpdate", function(_, elapsed)
@@ -510,62 +636,84 @@ loader:SetScript("OnEvent", function(self, _, name)
   start()
 end)
 
--- BIT-only settings sample: a mock bar with a native shield fill and a fixed
--- absorb number, independent of live bars.
+-- BIT-only settings sample: a mock health bar with the shield overlay over it, fed the
+-- module's own fixed numbers (SAMPLE_MAX/SAMPLE_ABSORB), independent of live bars. The
+-- numbers are plain sample data and flow only into the native SetMinMaxValues/SetValue,
+-- exactly like a live reading; no game API is read here and nothing is formatted into text.
+local SAMPLE_MAX, SAMPLE_ABSORB = 10000, 6200
+
 local function buildShieldsPreview(parent)
   local scene = CreateFrame("Frame", nil, parent)
   scene:SetSize(560, 120)
   scene.title = scene:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   scene.title:SetPoint("TOPLEFT", 12, -4)
-  scene.title:SetText("Shields sample (not your bars)")
-  scene.bar = CreateFrame("Frame", nil, scene)
+  scene.title:SetText("Shields sample (fixed data)")
+  -- The mock health bar: a plain full bar the overlay lies on, like the live frames.
+  scene.bar = CreateFrame("StatusBar", nil, scene)
   scene.bar:SetSize(180, 20)
   scene.bar:SetPoint("TOPLEFT", 12, -30)
-  scene.fill = CreateFrame("Frame", nil, scene.bar)
-  scene.fill:SetSize(120, 20)
-  scene.fill:SetPoint("LEFT", scene.bar, "LEFT", 0, 0)
-  scene.number = scene:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  scene.number:SetPoint("TOPLEFT", 12, -56)
-  scene.number:SetText("12400")
-  scene.number:SetHeight(14)
+  scene.bar:SetMinMaxValues(0, SAMPLE_MAX)
+  scene.bar:SetValue(SAMPLE_MAX)
+  -- The overlay, exactly as overlayFor builds it on a live bar: its own StatusBar
+  -- covering the health bar, carrying the sample reading.
+  scene.overlay = CreateFrame("StatusBar", nil, scene.bar)
+  scene.overlay:SetAllPoints(scene.bar)
+  scene.overlay:SetMinMaxValues(0, SAMPLE_MAX)
+  scene.overlay:SetValue(SAMPLE_ABSORB)
   return scene
 end
 
 local function renderShieldsPreview(scene, style)
+  if type(scene) ~= "table" then return end
   BIT.Style.ApplyText(scene.title, style, "text")
-  BIT.Style.ApplyText(scene.number, style, "text")
-  -- Native-Y min/max reflow: title depth, bar height, number row and scene
-  -- height all derive from the shared font size; widths stay fixed because
-  -- this sample has no scale capability. The window is never resized.
+  BIT.Style.ApplyBar(scene.bar, style, "muted")
+  paintShield(scene.overlay, style)
+  -- Native-Y min/max reflow: title depth, bar height and scene height all
+  -- derive from the shared font size; widths stay fixed because this sample
+  -- has no scale capability. The window is never resized.
   local fontSize = style.fontSize or 12
   local barH = math.max(20, fontSize + 6)
   local barDepth = 4 + fontSize + 8
-  local numDepth = barDepth + barH + 4
   scene.bar:ClearAllPoints()
   scene.bar:SetPoint("TOPLEFT", 12, -barDepth)
   scene.bar:SetSize(180, barH)
-  scene.fill:SetSize(120, barH)
-  scene.number:ClearAllPoints()
-  scene.number:SetPoint("TOPLEFT", 12, -numDepth)
-  scene:SetSize(560, numDepth + fontSize + 16)
+  scene:SetSize(560, barDepth + barH + 12)
 end
+
+-- The palette roles the editor shows: "absorb" paints the overlay, "muted" the mock
+-- health bar under it and "text" the sample title -- every role the module's look uses
+-- (the Range.lua:451 contract).
+local CAPABILITIES = { roles = { "absorb", "muted", "text" }, shapes = false,
+  geometry = false, border = false, font = true, scale = false, opacity = true }
 
 BIT.RegisterTab("ShieldsInfo", {
   buildPreview = buildShieldsPreview,
   previewRender = renderShieldsPreview,
-  capabilities = { roles = { "text" }, shapes = false,
-    geometry = false, border = false, font = true, scale = false, opacity = true },
+  capabilities = CAPABILITIES,
   title = "Shields",
   summary = "The remaining absorb of a shield on your frames and nameplates.",
-  width = 640, height = 400,
+  width = 640, height = 900,
   build = function(parent)
     local UI = BIT.UI
     local checks = {}
     M._checks = checks
     local rows = {}
+    local scene, editor
+    -- The sample repaints from the same settings and resolved style the live overlays use.
+    local function refreshPreview()
+      if type(scene) == "table" then
+        pcall(renderShieldsPreview, scene, BIT.Style.Resolve("ShieldsInfo"))
+      end
+    end
     local function changed()
       for _, r in ipairs(rows) do if r.Refresh then r:Refresh() end end
       updateAll()
+      refreshPreview()
+    end
+    -- A look change: the live overlays and the sample both repaint at once.
+    local function styleChanged()
+      restyleOverlays()
+      changed()
     end
     local function set(key) return function(v) settings[key] = v; changed() end end
     local function get(key) return function() return settings[key] end end
@@ -575,25 +723,101 @@ BIT.RegisterTab("ShieldsInfo", {
       rows[#rows + 1] = row
       y = y - (height or 30)
     end
-    local function toggle(name, label)
-      local box = UI.Check(parent, label, get(name), set(name))
+    local function toggle(name, label, tooltip)
+      local box = UI.Check(parent, label, get(name), set(name), tooltip)
       checks[name] = box
       add(box)
     end
-    toggle("player", "On your player frame")
-    toggle("target", "On your target frame")
-    toggle("party", "On party frames (classic and compact party/raid)")
-    toggle("nameplates", "On nameplates")
+    toggle("player", "On your player frame",
+      "The shield over your own health bar.")
+    toggle("target", "On your target frame",
+      "The shield over your target's health bar.")
+    toggle("party", "On party frames (classic and compact party/raid)",
+      "The shields over the classic party frames and the compact party/raid frames.")
+    toggle("nameplates", "On nameplates",
+      "The shields over every accessible nameplate.")
     local function getAlpha() return clampAlpha(settings.overlayAlpha) end
     local function setAlpha(v)
       settings.overlayAlpha = clampAlpha(v)
-      restyleOverlays()
-      changed()
+      styleChanged()
     end
-    local alpha = UI.Slider(parent, "Shield bar opacity", ALPHA_MIN, ALPHA_MAX, 0.05,
-      getAlpha, setAlpha, "%%")
+    local alpha = UI.Slider(parent, "Fill opacity", ALPHA_MIN, ALPHA_MAX, 0.05,
+      getAlpha, setAlpha, "%%",
+      "How solid the shield fill is. 100% is solid; lower lets the health bar under it show through.")
     M._alpha = alpha
     add(alpha, 46)
+
+    -- The fill art: one button per texture with a swatch of it, the current one lit.
+    local fillBox = CreateFrame("Frame", nil, parent)
+    fillBox:SetSize(560, 72)
+    fillBox.label = fillBox:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    fillBox.label:SetPoint("TOPLEFT", 0, 0)
+    fillBox.label:SetText("Fill style")
+    local fillButtons = {}
+    for i, entry in ipairs(FILL_TEXTURES) do
+      local b = UI.Button(fillBox, entry.label, 178, function()
+        settings.fillTexture = entry.id
+        styleChanged()
+      end)
+      b:SetPoint("TOPLEFT", ((i - 1) % 3) * 184, -18 - math.floor((i - 1) / 3) * 26)
+      local sw = b:CreateTexture(nil, "ARTWORK")
+      sw:SetSize(12, 12)
+      sw:SetPoint("LEFT", 6, 0)
+      pcall(function()
+        sw:SetTexture(entry.path, entry.tiled and "REPEAT" or nil, entry.tiled and "REPEAT" or nil)
+        if entry.tiled then sw:SetHorizTile(true) sw:SetVertTile(true) end
+      end)
+      b:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(entry.label, 1, 1, 1)
+        GameTooltip:AddLine(entry.hint, nil, nil, nil, true)
+        GameTooltip:Show()
+      end)
+      b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+      fillButtons[entry.id] = b
+    end
+    function fillBox:Refresh()
+      local id = settings.fillTexture
+      if type(id) ~= "string" then id = "flat" end
+      for key, b in pairs(fillButtons) do
+        b:SetAlpha(key == id and 1 or 0.55)
+      end
+    end
+    add(fillBox, 78)
+
+    -- The presets: one click for a known look. Only the fill art and its translucency
+    -- are written; the frame switches above stay exactly as the player left them.
+    local presetBox = CreateFrame("Frame", nil, parent)
+    presetBox:SetSize(560, 46)
+    presetBox.label = presetBox:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    presetBox.label:SetPoint("TOPLEFT", 0, 0)
+    presetBox.label:SetText("Presets")
+    for i, preset in ipairs(PRESETS) do
+      local b = UI.Button(presetBox, preset.label, 150, function()
+        for k, v in pairs(preset.values) do settings[k] = v end
+        styleChanged()
+      end)
+      b:SetPoint("TOPLEFT", (i - 1) * 156, -18)
+      b:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(preset.label, 1, 1, 1)
+        GameTooltip:AddLine("Only the fill style and its opacity change; your frame switches stay.",
+          nil, nil, nil, true)
+        GameTooltip:Show()
+      end)
+      b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end
+    add(presetBox, 52)
+
+    -- The shared editor, and the module's own sample under it: the same pair the OFF-page
+    -- builds as buildPreview/previewRender (the HunterRangeFinder pattern). The editor's
+    -- refresh callback repaints that same scene with the freshly resolved module style.
+    editor = UI.Appearance(parent, "ShieldsInfo", CAPABILITIES, refreshPreview)
+    editor:SetPoint("TOPLEFT", 12, y)
+    rows[#rows + 1] = editor
+    y = y - editor:GetHeight() - 12
+    scene = buildShieldsPreview(parent)
+    scene:SetPoint("TOPLEFT", editor, "BOTTOMLEFT", 0, -12)
     changed()
   end,
 })

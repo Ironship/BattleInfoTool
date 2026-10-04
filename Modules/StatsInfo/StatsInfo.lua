@@ -124,7 +124,11 @@ end
 
 local function equipped(slot)
   local link = ask(GetInventoryItemLink, "player", slot)
-  return type(link) == "string" and link or nil
+  -- A secret link is not a link: it reads as a string (type() cannot tell), but Compare
+  -- equates it with the new link below and that comparison raises on a combat-secret value
+  -- (the bag handlers went down to it). Wearing "unknown" is wearing nothing comparable.
+  if type(link) ~= "string" or isSecret(link) then return nil end
+  return link
 end
 
 -- Whether the client's answers for link can be trusted yet. The new link has this guard in

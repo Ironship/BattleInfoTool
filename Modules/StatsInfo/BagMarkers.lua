@@ -53,7 +53,14 @@ local M = BIT.Module("StatsInfo")
 
 local THRESHOLD = 0.05 -- the tooltip's display threshold (changesNothing in StatsInfo.lua)
 
-local function isSecret(v) return type(issecretvalue) == "function" and issecretvalue(v) or false end
+-- A secret value is never touched: issecretvalue is asked inside a pcall (as in
+-- ResourceDing/Core.lua:179-184), so a client whose own check raises still reads as
+-- "not secret" here, never as an error out of a bag handler.
+local function isSecret(v)
+  if type(issecretvalue) ~= "function" then return false end
+  local ok, r = pcall(issecretvalue, v)
+  return ok and r or false
+end
 
 local function ask(fn, ...)
   if type(fn) ~= "function" then return nil end
@@ -176,6 +183,10 @@ local function requestState(link)
   if not active then return "dead" end
   local id = itemIDOf(link)
   if not id then return "dead" end
+  -- A secret id must never key the plain request tables (arrived/waits/outstanding/wanted):
+  -- the client raises "cannot be indexed with secret keys" on any touch, and type() reads a
+  -- secret number as a number. Asked once here, before any of them is indexed at all.
+  if isSecret(id) then return "dead" end
   if arrived[id] then return "dead" end
   if waits[id] and waits[id] >= MAX_WAIT_STATE then return "dead" end
   if outstanding[id] or wanted[id] then return "wait" end
@@ -216,7 +227,10 @@ end
 -- The arrival events (ITEM_DATA_LOAD_RESULT / GET_ITEM_INFO_RECEIVED): forget the pending
 -- request, mark the id as arrived-once, and wake both renderers.
 local function onItemDataArrived(id)
-  if type(id) ~= "number" then return end
+  -- Same secret-id rule as requestState: type() reads a secret number as a number, and a
+  -- secret id must never key outstanding/wanted/arrived below ("cannot be indexed with
+  -- secret keys"), so it is asked once here, before any of them is touched.
+  if type(id) ~= "number" or isSecret(id) then return end
   if outstanding[id] or wanted[id] then
     outstanding[id] = nil
     wanted[id] = nil
@@ -297,19 +311,19 @@ local function comparisonVerdict(link, c)
   -- (armor-only cloth on a damage class). The conservative raw-diff dominance
   -- fallback, per path: up if some diff is positive and no MODELLED diff is negative
   -- (an unmodelled loss never vetoes alone: 3 armor a rogue never converts cannot block
-  -- +2 stamina, though its line still prints), down if some diff is negative and none
-  -- positive. Off-armor with stats therefore gets arrows too.
+  -- +2 stamina, though its line still prints). Off-armor with stats therefore gets arrows
+  -- too -- an up arrow only.
   local modelled = modelledKeys()
-  local pos, negAny, negModelled = false, false, false
+  local pos, negModelled = false, false
   for _, d in ipairs(c.diffs) do
     if d.diff > 0 then pos = true
-    elseif d.diff < 0 then
-      negAny = true
-      if modelled[d.key] then negModelled = true end
-    end
+    elseif d.diff < 0 and modelled[d.key] then negModelled = true end
   end
   if pos and not negModelled then return { verdict = "up", fallback = true } end
-  if negAny and not pos then return { verdict = "down", fallback = true } end
+  -- No arrow when every modelled opinion is neutral (never invent a down for zero-opinion
+  -- items): the legend's red down is "every replacement path is strictly worse for every
+  -- spec" (StatsInfo.lua:1262), and raw diffs with no opinion behind them cannot prove
+  -- that. Zero gains (not pos) is that case: no plus, no arrow.
   return { verdict = "none", fallback = true }
 end
 
@@ -609,6 +623,9 @@ local function liveOwned(details)
   local guid = details.guid
   if guid == nil or isSecret(guid) then return false end
   local live = ask(C_Item.GetItemGUID, loc)
+  -- Only a proven-plain string may be compared with the recorded guid: a secret one
+  -- raises on the comparison itself (and on every table touch it would flow into).
+  if type(live) ~= "string" or isSecret(live) then return false end
   if live ~= guid then return false end
   return true
 end
@@ -647,8 +664,9 @@ local function baganatorOnUpdate(widget, details)
   if state == "wait" then
     -- the client retries while the data loads; we already issued the coalesced request.
     -- Bound the waits so a never-loading item ends as false, not as an endless nil loop.
+    -- A secret id never keys waits either (type() reads it as a number; indexing raises).
     local id = details.itemID
-    if type(id) == "number" then waits[id] = (waits[id] or 0) + 1 end
+    if type(id) == "number" and not isSecret(id) then waits[id] = (waits[id] or 0) + 1 end
     return nil
   end
   if state ~= "ok" then return false end
@@ -697,8 +715,16 @@ local function eachVisibleButton(cb)
       if not (type(frame.IsShown) == "function" and not frame:IsShown()) then
         if type(frame.EnumerateValidItems) == "function" then
           for _, button in frame:EnumerateValidItems() do
-            local slot, bag = button:GetSlotAndBagID() -- SLOT FIRST, BAG SECOND (native)
-            cb(button, bag, slot)
+            -- SLOT FIRST, BAG SECOND (native). A button without the native accessor takes
+            -- the legacy GetBagID/GetID pair (as the paths below); one whose bag neither
+            -- names is skipped, never guessed.
+            if type(button.GetSlotAndBagID) ~= "function" then
+              local bag = type(button.GetBagID) == "function" and button:GetBagID() or nil
+              if bag ~= nil then cb(button, bag, button:GetID()) end
+            else
+              local slot, bag = button:GetSlotAndBagID()
+              cb(button, bag, slot)
+            end
           end
         end
       end
@@ -739,7 +765,9 @@ local function evaluate(button, bag, slot)
   if type(info) == "table" then
     if type(info.hyperlink) == "string" and not isSecret(info.hyperlink) then link = info.hyperlink end
   else
-    local l = ask(GetContainerItemInfo, bag, slot) -- link first on the classic global
+    -- the classic global answers (texture, itemCount, locked, quality, readable, lootable,
+    -- itemLink, ...): the link is the 7th return, never the first (that one is the texture)
+    local _, _, _, _, _, _, l = ask(GetContainerItemInfo, bag, slot)
     if type(l) == "string" and not isSecret(l) then link = l end
   end
   if not link then
