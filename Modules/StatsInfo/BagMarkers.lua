@@ -401,7 +401,7 @@ function M.BagProbe(link)
   say("paths=" .. tostring(#comparisons))
   for i, c in ipairs(comparisons) do
     local v = comparisonVerdict(link, c)
-    say("path" .. tostring(i) .. "=" .. (v and v.verdict or "dead (class has no spec weights)"))
+    say("path" .. tostring(i) .. "=" .. (v and (v.verdict .. (v.fallback and " (raw fallback)" or "")) or "dead (class has no spec weights)"))
   end
   local state, verdict = M.BagVerdictState(link)
   if state == "ok" and verdict and verdict.verdict == "up" and verdict.beneficiaries then

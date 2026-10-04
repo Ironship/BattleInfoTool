@@ -494,13 +494,16 @@ tooltipEnchant = function(link)
 end
 
 -- Strength gives block value (0.05 per point, RatingBuster Classic / StatLogic VanillaLogic
--- ADD_BLOCK_VALUE_MOD_STR value 0.05) but only with a shield: warriors, paladins and shamans.
--- The class comes the same guarded way SpecRatings asks it (ask + pcall); a secret class
--- (in combat) fails silent: no line.
+-- ADD_BLOCK_VALUE_MOD_STR value 0.05) but only while actually blocking: a shield-capable
+-- class (warrior, paladin, shaman) with nonzero block chance. A 2H or empty off-hand
+-- blocks nothing, so the line stays out. Class and chance both guarded (ask + pcall);
+-- a secret class (in combat) fails silent: no line.
 local function usesShield()
   local _, class = ask(UnitClass, "player")
   if not class or isSecret(class) then return false end
-  return class == "WARRIOR" or class == "PALADIN" or class == "SHAMAN"
+  if class ~= "WARRIOR" and class ~= "PALADIN" and class ~= "SHAMAN" then return false end
+  local bv = num(ask(GetBlockChance))
+  return (bv or 0) > 0
 end
 
 -- Feral Attack Power is attack power 1:1 (RatingBuster Classic / StatLogic VanillaLogic
@@ -760,7 +763,7 @@ local function specLines(lines, ratings)
   ratings = worthSaying(ratings)
   if #ratings == 0 then return end
   lines[#lines + 1] = { DIVIDER, 1, 1, 1 } -- the specs' ratings apart from the stats
-  if settings.icons then
+  if settings and settings.icons then
     local parts = {}
     for _, r in ipairs(ratings) do
       -- one icon per spec (two icons side by side were drawn over each other in game)
@@ -844,17 +847,15 @@ local function itemHasTankStats(link)
 end
 
 -- The character's current defense skill, or nil when no API answers (fail silent).
--- Tried in order, each behind ask/pcall with an isSecret guard: UnitDefense("player")
--- (base + modifier, the probe's own function) first, then GetDefense() with no args.
--- No C_... module is invented here.
+-- Forever exposes it as UnitDefenseSkill, Classic Era as UnitDefense (base +
+-- modifier); each tried behind ask/pcall with an isSecret guard. GetDefense()
+-- does not exist as a callable API and is never invented here.
+local UnitDefenseFn = UnitDefenseSkill or UnitDefense
 local function tankDefenseSkill()
-  local a, b = ask(UnitDefense, "player")
+  local a, b = ask(UnitDefenseFn, "player")
   if isSecret(a) or isSecret(b) then return nil end
   if type(a) == "number" and type(b) == "number" then return a + b end
   if type(a) == "number" then return a end
-  local g = ask(GetDefense)
-  if isSecret(g) then return nil end
-  if type(g) == "number" then return g end
   return nil
 end
 
@@ -886,10 +887,14 @@ local function tankExtraLines(link)
   local out = {}
   local def = tankDefenseSkill()
   if type(def) == "number" and def == def and def ~= math.huge and def ~= -math.huge then
-    local need = UNCRITTABLE_DEFENSE - def
+    -- Uncrittable target scales with level (boss +3: level*5 + 140, i.e. 440 at 60);
+    -- without a sane level the fixed 440 stands in as the level-60 reference.
+    local lvl = num(ask(UnitLevel, "player"))
+    local target = (lvl and lvl > 0) and (lvl * 5 + 140) or UNCRITTABLE_DEFENSE
+    local need = target - def
     if need < 0 then need = 0 end
-    local text = "Uncrittable: " .. wholeText(def) .. "/440 (need " .. wholeText(need) .. ")"
-    out[#out + 1] = { ((def >= UNCRITTABLE_DEFENSE) and UP or DOWN) .. text .. "|r", 1, 1, 1 }
+    local text = "Uncrittable: " .. wholeText(def) .. "/" .. wholeText(target) .. " (need " .. wholeText(need) .. ")"
+    out[#out + 1] = { ((def >= target) and UP or DOWN) .. text .. "|r", 1, 1, 1 }
   end
   local dodge = num(ask(GetDodgeChance))
   local parry = num(ask(GetParryChance))
@@ -983,7 +988,8 @@ function M.TooltipLines(link, gameCompares)
   do
     local ok, extra = pcall(tankExtraLines, link)
     if ok and type(extra) == "table" and #extra > 0 then
-      if #lines > 0 then lines[#lines + 1] = { DIVIDER, 1, 1, 1 } end
+      -- No stacked dividers: specLines may have closed with its own.
+      if #lines > 0 and lines[#lines][1] ~= DIVIDER then lines[#lines + 1] = { DIVIDER, 1, 1, 1 } end
       for _, l in ipairs(extra) do lines[#lines + 1] = l end
     end
   end
@@ -997,7 +1003,10 @@ local function hookTooltips()
     if type(link) ~= "string" then return end
     -- the game compares by itself when the setting says so, or while Shift is held
     local gameCompares = TooltipUtil and ask(TooltipUtil.ShouldDoItemComparison, tooltip) == true
-    for _, line in ipairs(M.TooltipLines(link, gameCompares)) do tooltip:AddLine(line[1], line[2], line[3], line[4]) end
+    -- A throwing client anywhere in the comparison must not cost the tooltip.
+    local ok, out = pcall(M.TooltipLines, link, gameCompares)
+    if not ok or type(out) ~= "table" then return end
+    for _, line in ipairs(out) do tooltip:AddLine(line[1], line[2], line[3], line[4]) end
   end
   if type(TooltipDataProcessor) == "table" and type(TooltipDataProcessor.AddTooltipPostCall) == "function"
     and Enum and Enum.TooltipDataType then
@@ -1017,8 +1026,9 @@ local PROBED_FUNCTIONS = {
   "GetBlockChance", "GetShieldBlock", "GetHitModifier", "GetSpellHitModifier", "GetCritChanceFromAgility",
   "GetSpellCritChanceFromIntellect", "GetAttackPowerForStat", "GetUnitHealthModifier",
   "GetUnitMaxHealthModifier", "GetManaRegen", "GetPowerRegen", "GetCombatRating", "GetCombatRatingBonus",
-  "GetSpellBonusDamage", "GetSpellBonusHealing", "UnitStat", "UnitArmor", "UnitAttackPower",
-  "UnitRangedAttackPower", "UnitDefense", "UnitResistance", "GetItemStats", "GetInventoryItemLink",
+  "GetCombatRatingBonusForCombatRatingValue", "GetSpellBonusDamage", "GetSpellBonusHealing", "UnitStat", "UnitArmor", "UnitAttackPower",
+  "UnitRangedAttackPower", "UnitDefense", "UnitDefenseSkill", "UnitResistance", "UnitClass", "UnitLevel", "GetShapeshiftFormID",
+  "GetItemStats", "GetInventoryItemLink",
   "GetCritChanceFromStat", "GetSpellCritChanceFromStat", "GetDodgeChanceFromAttribute", "UnitHPPerStamina",
   "GetManaRegenFromSpirit", "GetRangedAttackPowerForStat",
 }
@@ -1234,8 +1244,8 @@ BIT.RegisterTab("StatsInfo", {
     legend:SetPoint("RIGHT", -14, 0)
     legend:SetJustifyH("LEFT")
     local words = {}
-    for _, kind in ipairs({ "armor", "ap", "crit", "hit", "haste", "expertise", "dodge", "parry", "block", "defense",
-      "health", "mana", "spellcrit", "regen", "healing" }) do
+    for _, kind in ipairs({ "armor", "ap", "crit", "hit", "haste", "expertise", "dodge", "parry", "block", "blockvalue", "defense",
+      "health", "mana", "spellcrit", "regen", "healing", "spellpower" }) do
       words[#words + 1] = icon(ICONS[kind], 12) .. " " .. WORTH_WORDS[kind]
     end
     legend:SetText(table.concat(words, "    ") .. "\n\nSpec ratings: how much better or worse the item is for "
