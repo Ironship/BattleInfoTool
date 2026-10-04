@@ -1786,11 +1786,9 @@ GRD10.Fire("UNIT_POWER_UPDATE", "player")
 check("the real climb still dings once", dingCount(), 1)
 
 # ---------------------------------------------------------------------------------------------
-print("-- RD-5: the dot sliders must move the shard diamonds too")
-# Shards.lua sizes the diamonds and anchors the row from db.dotSize / db.dotOffset, and the
-# settings sliders' setters only refresh the combo dots -- so on a warlock with shard
-# diamonds up, dragging either slider leaves them at the old look until a bag or target
-# event happens to redraw them (the diamonds lag behind the dots).
+print("-- RD-5: dots and shard diamonds move independently")
+# Shards.lua sizes the diamonds from db.dotSize but anchors them from db.shardOffset;
+# the dot offset slider moves only the combo dots, the shard slider only the diamonds.
 rtRD5, GRD5, BITRD5, _ = load(saved="""
 C_Item.GetItemCount = function() return 2 end  -- two soul shards in the bags
 """)
@@ -1803,13 +1801,17 @@ GRD5.plate = rtRD5.eval("NewPlate()")
 rd5.RefreshShards()
 check("  a warlock's shard diamonds draw at the default size", rd5._diamonds[1].width, 14)
 panel5 = rd5.CreateSettingsPanel(rtRD5.eval("FakeMock('settings')"))
-# dragging Dot size to 20: the combo dots move, and so must the diamonds
+# dragging Dot size to 20: the combo dots move, and so must the diamonds (shared size)
 panel5.dotSize.scripts.OnValueChanged(panel5.dotSize, 20)
 check("  Dot size 20 resizes the shard diamonds at once", rd5._diamonds[1].width, 20)
-# dragging the offset moves the row's anchor under the health bar the same way
+# dragging the dot offset moves the combo dots but leaves the diamonds at dotOffset 2
 panel5.dotOffset.scripts.OnValueChanged(panel5.dotOffset, 11)
 rowPts5 = [rd5._shardRow().points[i] for i in range(1, len(rd5._shardRow().points) + 1)]
-check("  the offset slider moves the diamonds right away", rowPts5[-1][5], -11)
+check("  the dot offset slider leaves the diamonds alone", rowPts5[-1][5], -2)
+# the shard offset slider moves the diamonds right away (-30 puts them above the bar)
+panel5.shardOffset.scripts.OnValueChanged(panel5.shardOffset, -30)
+rowPts5b = [rd5._shardRow().points[i] for i in range(1, len(rd5._shardRow().points) + 1)]
+check("  the shard offset slider moves the diamonds right away", rowPts5b[-1][5], 30)
 
 # ---------------------------------------------------------------------------------------------
 print("-- RD-6: every sound the panel offers must exist on the client's SoundKitConstants")

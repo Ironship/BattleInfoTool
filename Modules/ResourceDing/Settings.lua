@@ -186,7 +186,7 @@ function Addon.CreateSettingsPanel(parent)
       if Addon.RefreshDots then Addon.RefreshDots() end
       if Addon.RefreshShards then Addon.RefreshShards() end -- the diamonds size from dotSize too
     end)
-  panel.dotOffset = slider(panel, "Offset from the health bar (- = above)", -370, -80, 30,
+  panel.dotOffset = slider(panel, "Dot offset from the health bar (- = above)", -370, -80, 30,
     function() return Addon.db.dotOffset end,
     function(value)
       value = tonumber(value) or 2
@@ -194,7 +194,15 @@ function Addon.CreateSettingsPanel(parent)
       if value < -80 then value = -80 elseif value > 30 then value = 30 end
       Addon.db.dotOffset = value
       if Addon.RefreshDots then Addon.RefreshDots() end
-      if Addon.RefreshShards then Addon.RefreshShards() end -- and anchor from dotOffset
+    end)
+  panel.shardOffset = slider(panel, "Shard offset from the health bar (- = above)", -414, -80, 30,
+    function() return Addon.db.shardOffset end,
+    function(value)
+      value = tonumber(value) or 2
+      if value ~= value then value = 2 end
+      if value < -80 then value = -80 elseif value > 30 then value = 30 end
+      Addon.db.shardOffset = value
+      if Addon.RefreshShards then Addon.RefreshShards() end
     end)
 
   -- Right-hand column: a warlock's Soul Shards (Shards.lua) and the mana level (Mana.lua).
@@ -243,6 +251,7 @@ function Addon.CreateSettingsPanel(parent)
     panel.dots:SetChecked(Addon.db.dots)
     panel.dotSize.Refresh()
     panel.dotOffset.Refresh()
+    panel.shardOffset.Refresh()
     panel.shards:SetChecked(Addon.db.shards)
     panel.shardDiamonds:SetChecked(Addon.db.shardDiamonds)
     panel.mana:SetChecked(Addon.db.mana)
@@ -394,7 +403,7 @@ BIT.RegisterTab("ResourceDing", {
   title = "ResourceDing",
   summary = "A sound when your combo points are full, and the points as dots under the target; for "
     .. "casters a sound when mana climbs to a level, and for warlocks one on each Soul Shard.",
-  width = 640, height = 410,
+  width = 640, height = 460,
   build = function(parent) Addon.CreateSettingsPanel(parent) end,
 })
 BIT.tabWords.ding = "ResourceDing"
