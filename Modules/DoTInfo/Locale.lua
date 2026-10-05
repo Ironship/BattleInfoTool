@@ -65,6 +65,16 @@ L.GERMAN_NAMES = {
     ["Holy Fire"] = { "Heiliges Feuer" },
     ["Rip"] = { "Zerfetzen" },
     ["Rupture"] = { "Blutung" },
+    -- The rogue/druid bleed and poison family: tracked like any other DoT (Garrote, Rupture, Rake, Rip, Rend,
+    -- Lacerate). Poison tooltips read as DoTs where they name one (Deadly Poison's proc); the weapon-enchant
+    -- cast itself is not a cast on a target (see parseDot), and Wound/Instant Poison have no periodic damage.
+    ["Garrote"] = { "Erdrosseln" },
+    ["Rake"] = { "Krallenhieb" },
+    ["Rend"] = { "Verwunden" },
+    ["Lacerate"] = { "Aufschlitzen" },
+    ["Deadly Poison"] = { "Tödliches Gift" },
+    ["Instant Poison"] = { "Sofort wirkendes Gift" },
+    ["Wound Poison"] = { "Wundgift" },
     ["Siphon Life"] = { "Lebensentzug" },
     ["Rain of Fire"] = { "Feuerregen" },
     ["Hellfire"] = { "Höllenfeuer" },
@@ -90,6 +100,11 @@ L.GERMAN_NAMES = {
 L.SPELL_IDS = {
     ["Insect Swarm"] = 5570, ["Curse of Agony"] = 980, ["Fireball"] = 133, ["Holy Fire"] = 14914,
     ["Rip"] = 1079, ["Rupture"] = 1943, ["Siphon Life"] = 18265,
+    -- The rogue/druid bleed and poison family (Classic Era rank 1; Lacerate is Forever's own, ids 24118-24120):
+    -- without these the name-keyed tables in Core.lua never learn what this client calls Garrote and friends,
+    -- which is what tick intervals/shapes/schools (and any ignore check) are looked up by.
+    ["Garrote"] = 703, ["Rake"] = 1822, ["Rend"] = 772, ["Lacerate"] = 24118,
+    ["Deadly Poison"] = 2823, ["Instant Poison"] = 8679, ["Wound Poison"] = 13218,
     ["Rain of Fire"] = 5740, ["Hellfire"] = 1949, ["Blizzard"] = 10, ["Flamestrike"] = 2120,
     ["Consecration"] = 26573, ["Hurricane"] = 16914, ["Volley"] = 1510,
     ["Drain Life"] = 689, ["Drain Soul"] = 1120, ["Drain Mana"] = 5138, ["Health Funnel"] = 755,

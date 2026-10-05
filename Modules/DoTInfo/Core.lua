@@ -339,13 +339,23 @@ local pendingCastTargetKey = nil
 
 -- Cast outcomes. UNIT_COMBAT reports a dodge/parry/miss/resist/immune on the target, but not which attack it
 -- belongs to. A cast's own result arrives almost at once (same frame in the logs), so the first outcome on the
--- target right after a cast decides: a hit means it landed, an avoid means it didn't. A melee auto-attack
--- avoided in that instant is rare; it makes the addon drop a DoT that landed, which errs low (never a false
--- kill). Results can also arrive just before the cast event, hence the short look-back.
-local OUTCOME_WINDOW = 0.4
-local OUTCOME_LOOKBACK = 0.25
+-- target right after a cast decides: a hit means it landed, an avoid means it didn't. A recast replaced a DoT that
+-- is still ticking, so that one is put back instead. Results can also arrive just before the cast event, hence
+-- the short look-back.
+--
+-- Only MISS/DODGE/PARRY/EVADE are shared with auto-attacks: a dual-wielder swings about every 0.7s and misses a
+-- quarter of them, so one of those outcomes lands right after most melee casts. Bleeds with no initial damage
+-- (Garrote, Rupture, Rip, Lacerate) never get a hit of their own to prove the cast landed (the shield Rake has
+-- in "Rake hit, then an auto-attack dodged"), so the wide window dropped a large share of them the moment they
+-- landed. Resists and immunities can only belong to the cast (a white swing is never resisted), so those keep
+-- the wide window; the auto-attack class only decides close to the cast, where the code's own notes place the
+-- cast's own result ("same frame in the logs"). It can't be narrower: test_bit's F5 locks that a MISS right
+-- after a cast still drops the DoT (safe direction: never a false kill), which keeps the rare dropped bleed
+-- instead of a phantom one.
+-- Each entry is { window after the cast, look-back before it }.
 local AVOIDED_ACTIONS = {
-    MISS = true, DODGE = true, PARRY = true, EVADE = true, IMMUNE = true, DEFLECT = true, RESIST = true, REFLECT = true,
+    MISS = { 0.15, 0.15 }, DODGE = { 0.15, 0.15 }, PARRY = { 0.15, 0.15 }, EVADE = { 0.15, 0.15 },
+    IMMUNE = { 0.4, 0.25 }, DEFLECT = { 0.4, 0.25 }, RESIST = { 0.4, 0.25 }, REFLECT = { 0.4, 0.25 },
 }
 local lastBuilder    -- { key, points, at }: builder whose outcome isn't known yet
 local lastDotCast    -- { key, name, dot, previous, at }: DoT cast whose outcome isn't known yet
@@ -425,11 +435,11 @@ local function onCastSent(spellID)
     trace("COMBO at send: " .. readings .. ", counted=" .. countedPoints)
 end
 
--- An avoid that arrived just before the cast event (see OUTCOME_LOOKBACK), or nil.
+-- An avoid that arrived just before the cast event (see AVOIDED_ACTIONS' look-back), or nil.
 local function avoidJustBefore(key)
-    if lastOutcome and lastOutcome.key == key and lastOutcome.avoided
-        and GetTime() - lastOutcome.at <= OUTCOME_LOOKBACK then
-        return lastOutcome.action
+    if lastOutcome and lastOutcome.key == key and lastOutcome.avoided then
+        local windows = AVOIDED_ACTIONS[lastOutcome.action]
+        if windows and GetTime() - lastOutcome.at <= windows[2] then return lastOutcome.action end
     end
 end
 
@@ -461,18 +471,19 @@ end
 
 local function onTargetAvoided(action, key)
     local now = GetTime()
+    local window = (AVOIDED_ACTIONS[action] or AVOIDED_ACTIONS.RESIST)[1]
     if key == (pendingCastTargetKey or unitKey("target") or unitKey("softenemy")) then
         lastOutcome = { key = key, avoided = true, action = action, at = now }
     end
     if lastBuilder and lastBuilder.key == key then
-        if now - lastBuilder.at <= OUTCOME_WINDOW then
+        if now - lastBuilder.at <= window then
             countedPoints = math.max(0, countedPoints - lastBuilder.points)
             trace("COMBO builder " .. action .. ", counted=" .. countedPoints)
         end
         lastBuilder = nil
     end
     if lastDotCast and lastDotCast.key == key then
-        if now - lastDotCast.at <= OUTCOME_WINDOW then removeAvoidedDot(lastDotCast, action) end
+        if now - lastDotCast.at <= window then removeAvoidedDot(lastDotCast, action) end
         lastDotCast = nil
     end
 end
@@ -520,6 +531,9 @@ local function newDot(spellID, tickKey, name, total, school, duration, statedInt
     return {
         spellID = spellID,
         tickKey = tickKey,
+        -- The size learned on earlier casts, as it stood when this DoT was applied. Same-slot collisions are
+        -- judged against it (referenceTickSize): the store may have just been written by the disputed tick.
+        learnedAtApply = tickKey and db.ticks[tickKey] or nil,
         school = SCHOOL_BY_NAME[name] or school,
         total = total,
         duration = duration,
@@ -545,7 +559,13 @@ local function onPlayerCast(spellID)
         local awarded = tonumber(desc:match("Awards (%d+) combo point")) or ns.locale.comboPointsAwarded(desc)
         if awarded then onBuilderCast(awarded, key) end
     end
-    if IGNORED_SPELLS[name] then return end
+    if IGNORED_SPELLS[name] then
+        -- DOT-7: this drop used to be silent (no marker, no log line), which made an ignore or a name
+        -- collision look exactly like "the addon does not handle this spell". Record it like every other
+        -- decision, so a cast that shows nothing always has its reason in the log.
+        trace(string.format("IGNORED %s (id %d): on the ignore list", name, spellID))
+        return
+    end
     local isFinisher = isFinisherDescription(desc)
     local comboPoints, comboSource
     if isFinisher then comboPoints, comboSource = comboPointsForCast() end
@@ -692,14 +712,16 @@ local function plausibleTickAmount(dot, amount, isCrit, number)
 end
 
 -- Tick size to judge a same-slot collision by: the average of the DoT's earlier ticks, or with fewer than two
--- ticks the learned size, else the description's per-tick share. Learned first (F2): the description's
--- share is what a collision corrupts toward, so judging against it lets a white hit swap out a real tick.
+-- ticks the size learned on earlier casts (F2), else the description's per-tick share. Learned first (F2): the
+-- description's share is what a collision corrupts toward, so judging against it lets a white hit swap out a
+-- real tick. The learned size is the one from BEFORE this DoT (newDot's snapshot): saveLearnedTick runs the
+-- moment a hit is matched, so a fresh lookup would return the disputed tick's own size, block every swap, and
+-- keep a white hit that landed in the tick slot (test_tracking's Shadow Bolt + tick replay).
 local function referenceTickSize(dot)
     if dot.normalTicks > 1 then
         return (dot.tickSum - dot.lastTickAmount / dot.lastTickShape) / (dot.normalTicks - 1)
     end
-    if dot.tickKey and db.ticks[dot.tickKey] then return db.ticks[dot.tickKey] end
-    return dot.total / dot.totalTicks
+    return dot.learnedAtApply or (dot.total / dot.totalTicks)
 end
 
 local function saveLearnedTick(dot)
