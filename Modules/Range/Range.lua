@@ -505,9 +505,10 @@ local function updatePreview()
 end
 
 local function changed()
-  refreshControls()
+  if rows then for _, r in ipairs(rows) do if r.Refresh then r:Refresh() end end end
   updatePreview()
-  update()
+  -- Slider drags must not re-probe the spell list each step: the poll (0.1s)
+  -- re-runs update() and the dimming follows the next range indicator call.
   M.RefreshDimming()
   if window and window.spellsLine then
     local names = table.concat(M.Spells(), ", ")

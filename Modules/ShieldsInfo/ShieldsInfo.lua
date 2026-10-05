@@ -760,7 +760,9 @@ end
 
 local function changed()
   refreshControls()
-  updateAll()
+  -- Sliders and color drags must not re-enumerate every frame each step: the
+  -- overlays restyle in place and the 0.2s poll refreshes the numbers.
+  pcall(restyleOverlays)
   if refreshPreview then refreshPreview() end
 end
 

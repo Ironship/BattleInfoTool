@@ -1162,7 +1162,9 @@ local function checkbox(parent, key, labelText, opts)
         changed()
     end)
     function row:Refresh()
-        box:SetChecked(db()[key] and true or false)
+        local v = db()[key]
+        if key == "longRange" then v = v or detectedLongRange end
+        box:SetChecked(v and true or false)
         self:ApplyEnabled(box)
     end
     row.widget = box

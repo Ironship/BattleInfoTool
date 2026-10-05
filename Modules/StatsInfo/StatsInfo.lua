@@ -1322,7 +1322,7 @@ local function renderMockTooltip(scene, style)
   scene.caption:SetPoint("TOPLEFT", scene, "TOPLEFT", 12, -(bagY + bagSize + 4))
   scene.caption:SetFont(font, math.max(9, fs - 2), outline)
   scene.caption:SetTextColor(0.7, 0.7, 0.7, opacity)
-  scene:SetHeight(bagY + bagSize + 4 + math.max(9, fs - 2) + 8)
+  scene:SetHeight(math.min(280, bagY + bagSize + 4 + math.max(9, fs - 2) + 8))
 end
 
 local function buildStatsPreview(parent)
