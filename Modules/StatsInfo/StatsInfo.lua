@@ -19,6 +19,7 @@ local DEFAULTS = {
   specs = true,   -- how each spec of the class rates the item (Weights.lua)
   icons = true,   -- icons and one line each, instead of words
   bagMarkers = true,   -- the small green/red arrows over the game's own bag buttons
+  questMarkers = true, -- the one badge over a quest's reward buttons (an upgrade, or the coin)
   bagSpecIcons = true, -- on an up arrow, the beneficiary spec's icon (+N for the rest)
 }
 
@@ -1547,6 +1548,8 @@ BIT.RegisterTab("StatsInfo", {
       if key == "bagMarkers" then
         if v then M.EnableBagMarkers() else M.DisableBagMarkers() end
         if updateBagIconState then updateBagIconState() end
+      elseif key == "questMarkers" then
+        if v then M.EnableQuestMarkers() else M.DisableQuestMarkers() end
       elseif key == "bagSpecIcons" then
         M.RefreshBags(true)
       end
@@ -1574,16 +1577,20 @@ BIT.RegisterTab("StatsInfo", {
     local bagSpecIcons = box("bagSpecIcons", "The beneficiary spec icon on an up arrow",
       "+N for the rest of the specs it is an upgrade for, ~ for the approximate healer score. "
         .. "Needs the arrows on.")
+    box("questMarkers", "Quest reward arrows",
+      "One badge over a quest's rewards: a green up arrow on the first upgrade, or a coin on "
+        .. "the choice that sells for the most when nothing is an upgrade.")
     updateBagIconState = function()
       local on = (settings or DEFAULTS).bagMarkers
       bagSpecIcons:SetAlpha(on and 1 or 0.35)
       bagSpecIcons:EnableMouse(on)
     end
     display:body("Hover a box for what it does. The preview at the left follows these boxes at once.")
-    -- Reset: the six settings above, back to their defaults. The appearance is not touched.
+    -- Reset: the seven settings above, back to their defaults. The appearance is not touched.
     local reset = UI.Button(display.content, "Reset to defaults", 150, function()
       for k, v in pairs(DEFAULTS) do settings[k] = v end
       if settings.bagMarkers then M.EnableBagMarkers() else M.DisableBagMarkers() end
+      if settings.questMarkers then M.EnableQuestMarkers() else M.DisableQuestMarkers() end
       M.RefreshBags(true)
       for _, c in ipairs(checkRows) do c:Refresh() end
       updateBagIconState()

@@ -275,7 +275,7 @@ def chat(G):
 # ---------------------------------------------------------------------------------------------
 print("-- every module on")
 rt, G, BIT, files = load()
-check("the .toc lists the core and seven modules' files", len(files), 23)  # SpellCoefficients.lua since 0.8.0, StatsInfo's Weights.lua since 0.6.0
+check("the .toc lists the core and seven modules' files", len(files), 26)  # pre-existing bug in this assert: it read 23 while the .toc already listed 25; QuestMarkers.lua adds one (26)
 check("the tabs are in the order the files load", list(BIT.order.values()),
       ["SpellDamageInfo", "DoTInfo", "StatsInfo", "ResourceDing", "Range", "ShieldsInfo", "HunterRangeFinder"])
 G.Fire("ADDON_LOADED", "BattleInfoTool")

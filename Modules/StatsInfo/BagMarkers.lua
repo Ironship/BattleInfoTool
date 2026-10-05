@@ -327,6 +327,26 @@ local function comparisonVerdict(link, c)
   return { verdict = "none", fallback = true }
 end
 
+-- The level gate (the bag badges and the quest reward badges share it): an item whose
+-- required level is above the player's cannot be worn yet, so it never gets a badge -- it
+-- reads "dead", no verdict and no retry. A requirement the client hides is unknown and never
+-- coerced; a player level the client will not answer for is not a gate (nothing is proven
+-- against it), and an item with no requirement on record passes to the other gates.
+local function levelGate(link)
+  local _, _, _, _, minLevel = ask(C_Item and C_Item.GetItemInfo, link)
+  if isSecret(minLevel) then return "dead" end
+  if minLevel == nil then return "ok" end
+  if isSecret(minLevel) then return "dead" end
+  if type(minLevel) ~= "number" or minLevel ~= minLevel
+      or minLevel == math.huge or minLevel == -math.huge then
+    return "dead" -- a malformed requirement is unknown, never a number to compare with
+  end
+  local level = ask(UnitLevel, "player")
+  if type(level) ~= "number" or isSecret(level) or level ~= level then return "ok" end
+  if minLevel > level then return "dead" end
+  return "ok"
+end
+
 -- The badge verdict for a bag item. BagVerdictState answers the tri-state the Baganator
 -- corner contract needs:
 --   "dead"                 permanent unknown (secret/malformed/nonfinite/unresolved,
@@ -341,6 +361,7 @@ function M.BagVerdictState(link)
   if type(link) ~= "string" or isSecret(link) then return "dead" end
   local r = itemReadiness(link)
   if r ~= "ok" then return r end
+  if levelGate(link) ~= "ok" then return "dead" end -- above the player's level: never a badge
   -- Equippability AND current-player usability, from the pinned C_Item boundaries
   -- (forever-item-documentation.lua:1324/1627). false/error/secret/missing => no marker;
   -- a missing API is never permission to invent class restrictions.
@@ -408,6 +429,8 @@ function M.BagProbe(link)
       or "item data unusable: check the tooltip loads")
     return
   end
+  local gate = levelGate(link)
+  say("level gate=" .. tostring(gate) .. (gate == "dead" and " (above the player's level: never a badge)" or ""))
   say("equippable=" .. tostring(ask(C_Item and C_Item.IsEquippableItem, link))
     .. " usable=" .. tostring(ask(C_Item and C_Item.IsUsableItem, link)))
   local comparisons = M.Compare(link)
@@ -542,6 +565,7 @@ local function paintContents(container, verdict, nativeUp)
 end
 
 local function hideMarker(button)
+  if button then button.bitCheckedRefresh, button.bitCheckedLink = nil, nil end
   driveNativeUpgradeIcon(button, false)
   local marker = markers[button]
   if not marker then return end
@@ -677,6 +701,10 @@ local function baganatorOnUpdate(widget, details)
   local link
   local loc = details.itemLocation
   local info = ask(C_Container and C_Container.GetContainerItemInfo, loc.bagID, loc.slotIndex)
+  local stackCount
+  if type(info) == "table" then stackCount = info.stackCount end
+  if isSecret(stackCount) then stackCount = nil end
+  if stackCount == 0 then return false end -- a slot being emptied or moved: never a marker
   if type(info) == "table" and type(info.hyperlink) == "string" and not isSecret(info.hyperlink) then
     link = info.hyperlink
   elseif type(details.itemLink) == "string" and not isSecret(details.itemLink) then
@@ -779,36 +807,57 @@ local function eachVisibleButton(cb)
   end
 end
 
--- One slot's hyperlink: the one the native code itself reads at UpdateItems
+-- One slot's hyperlink and stack count: the one the native code itself reads at UpdateItems
 -- (C_Container.GetContainerItemInfo; the classic global GetContainerItemInfo as the
--- guarded fallback), else nil (an empty or unreadable slot).
+-- guarded fallback), else nil (an empty or unreadable slot). A stack count of 0 means the
+-- slot is being emptied or moved; a hidden count is unknown, never compared with.
 local function linkOf(bag, slot)
   local info = ask(C_Container and C_Container.GetContainerItemInfo, bag, slot)
   if type(info) == "table" then
-    if type(info.hyperlink) == "string" and not isSecret(info.hyperlink) then return info.hyperlink end
-    return nil
+    local count = info.stackCount
+    if isSecret(count) then count = nil end
+    if type(info.hyperlink) == "string" and not isSecret(info.hyperlink) then return info.hyperlink, count end
+    return nil, count
   end
   -- the classic global answers (texture, itemCount, locked, quality, readable, lootable,
-  -- itemLink, ...): the link is the 7th return, never the first (that one is the texture)
-  local _, _, _, _, _, _, l = ask(GetContainerItemInfo, bag, slot)
-  if type(l) == "string" and not isSecret(l) then return l end
-  return nil
+  -- itemLink, ...): the link is the 7th return and the count the 2nd, never the first (that
+  -- one is the texture)
+  local _, itemCount, _, _, _, _, l = ask(GetContainerItemInfo, bag, slot)
+  if isSecret(itemCount) then itemCount = nil end
+  if type(l) == "string" and not isSecret(l) then return l, itemCount end
+  return nil, itemCount
 end
 
--- One button: the hyperlink, then the verdict, then the marker.
+-- The per-slot memo (Pawn-style, clean-room: the pattern, not the code): a verdict is
+-- recomputed only when the slot's link changed, or when the revision counter grew -- a
+-- settings change, a gear swap or a level-up, i.e. anything that can give an UNCHANGED
+-- (slot, link) pair a NEW verdict. Only a computed "ok" verdict is remembered; a "wait" or
+-- "dead" answer is never pinned to a slot (data may still arrive, combat secrets clear) and
+-- is re-asked on the next pass, where it fails cheaply before the weights.
+local refreshCounter = 0
+local function bumpRevision() refreshCounter = refreshCounter + 1 end
+
+-- One button: the hyperlink and the stack count, then the verdict, then the marker.
 local function evaluate(button, bag, slot)
-  local link = linkOf(bag, slot)
-  if not link then
+  local link, stackCount = linkOf(bag, slot)
+  if not link or stackCount == 0 then
+    -- no item, or a slot being emptied or moved: never a marker
     applyMarker(button, nil)
+    button.bitCheckedRefresh, button.bitCheckedLink = nil, nil
     return
+  end
+  if button.bitCheckedRefresh == refreshCounter and button.bitCheckedLink == link then
+    return -- the same item in the same slot since the last revision: the verdict cannot have changed
   end
   local state, verdict = M.BagVerdictState(link)
   if state ~= "ok" then
     -- "wait"/"dead": clear now; the arrival events (ITEM_DATA_LOAD_RESULT / ...) re-run this
     applyMarker(button, nil)
+    button.bitCheckedRefresh, button.bitCheckedLink = nil, nil
     return
   end
   applyMarker(button, verdict)
+  button.bitCheckedRefresh, button.bitCheckedLink = refreshCounter, link
 end
 
 -- The live module switch (Core/Settings.lua writes BIT.SetSwitchedOn): the reload-scoped
@@ -825,7 +874,10 @@ local function refreshVisible()
 end
 
 -- A narrow refresh API for the settings boxes (and the tests): immediate, no events sway.
+-- It grows the memo's revision counter first: a settings change can give an unchanged
+-- (slot, link) pair a new verdict, so nothing may be skipped after it.
 function M.RefreshBags(force)
+  bumpRevision()
   refreshVisible()
 end
 
@@ -924,7 +976,7 @@ local REFRESH_EVENTS = {
   -- NOTE: there is no ITEM_DATA_LOADED on any client (Baganator only ever touches
   -- ITEM_DATA_LOAD_RESULT); registering it raises and kills the whole wiring.
   "BAG_UPDATE", "BAG_UPDATE_DELAYED", "GET_ITEM_INFO_RECEIVED",
-  "PLAYER_EQUIPMENT_CHANGED",
+  "PLAYER_EQUIPMENT_CHANGED", "PLAYER_LEVEL_UP",
 }
 
 local function ensureEvents()
@@ -1048,6 +1100,11 @@ loader:SetScript("OnEvent", function(self, event, arg1)
     end
     scheduleRefresh()
     return
+  end
+  if event == "PLAYER_EQUIPMENT_CHANGED" or event == "PLAYER_LEVEL_UP" then
+    -- the verdict is against what is worn (and gated by the player's level): an unchanged
+    -- (slot, link) pair can answer differently now, so the memo must not skip this pass
+    bumpRevision()
   end
   scheduleRefresh()
   requestBaganatorRefresh() -- the corner widgets follow the same events (never from onUpdate)
