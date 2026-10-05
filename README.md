@@ -14,21 +14,23 @@ DoTInfo presets style both the target frame and nameplates. **Juicy** uses match
 
 Current supported DoTs
 
-**Warlock**: Curse of Agony, Corruption, Immolate
+**Warlock**: Curse of Agony (Bane of Agony on Forever), Corruption, Immolate, Siphon Life
 
-**Priest**: Shadow Word: Pain, Devouring Plague
+**Priest**: Shadow Word: Pain, Devouring Plague, Holy Fire
 
-**Druid**: Moonfire, Rake, Rip, Insect Swarm
+**Druid**: Moonfire, Rake, Rip, Insect Swarm, Lacerate, Pounce, Entangling Roots
 
-**Mage**: Ignite (z critów), Pyroblast
+**Mage**: Pyroblast, Fireball, Frostfire Bolt
 
 **Shaman**: Flame Shock
 
-**Hunter**: Serpent Sting
+**Hunter**: Serpent Sting, Lacerate
 
-**Rogue**: Rupture, Garrote
+**Rogue**: Garrote, Rupture
 
-**Warrior**: Rend, Deep Wounds
+**Warrior**: Rend
+
+Rip and Rupture are finishers: the marker uses the combo points you have. DoTs from critical hits (Ignite, Deep Wounds) cannot be tracked - they are procs, not casts, and the addon only follows spells you cast.
 
 **StatsInfo**: in an item's tooltip, how it compares to what you wear — scored per spec (Arms/Fury, Fire/Frost/Arcane…) with ForeverSim weights (built on WoWSims); tanks get survival + threat. Resto druids get a marked `(approx.)` heuristic score; other healers aren't rated yet **\[Work in progress\]**.
 
@@ -46,7 +48,7 @@ Current supported DoTs
 
 ![shields info](https://i.imgur.com/iqUSKt4.png) ![shield in party](https://i.imgur.com/NkpFqdh_d.png?maxwidth=520&shape=thumb&fidelity=high)
 
-**HunterRange**: seven range chevrons for hunters, with crossed swords in melee and a skull in the dead zone. Bands are approximate, not exact yard measurements. Works only for hunter.
+**HunterRangeFinder**: a range rail that rides above the target's nameplate (or floats at a saved screen spot): six dots, a seventh past 35 yd with Hawk Eye (auto-detected), crossed swords in melee and a skull in the dead zone. Bands are approximate, not exact yard measurements. Works only for hunter. Every module now has a live preview on the left and settings tabs on the right in `/bit`, with presets and per-tab reset.
 
 ![range indicator](https://i.imgur.com/L7bopvP.png) ![dead zone](https://i.imgur.com/Ur0rxKh.png) ![meelee range](https://i.imgur.com/4CfMLky.png)
 

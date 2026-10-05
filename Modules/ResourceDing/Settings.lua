@@ -3,50 +3,34 @@
 local _, BIT = ...
 local Addon = BIT.Module("ResourceDing")
 
-local function checkbox(parent, name, label, y, getter, setter, x)
-  local control = CreateFrame("CheckButton", name, parent, "UICheckButtonTemplate")
-  control:SetPoint("TOPLEFT", x or 16, y)
-  local text = control.Text or control.text or _G[name .. "Text"]
-  if text then text:SetText(label) end
-  control:SetChecked(getter())
-  control:SetScript("OnClick", function(self) setter(self:GetChecked()) end)
-  return control
+local WHITE = "Interface\\Buttons\\WHITE8X8"
+local PANE_WIDTH = 290
+local ROW_HEIGHT = 26
+local SETTINGS_LAYOUT = { label = 170, control = 200 }
+local PREVIEW_LAYOUT = { label = 96, control = 140 }
+local DISABLED_ALPHA = 0.35
+local DIAMOND = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_3"
+local MAX_POINTS = 5
+
+local controls = {}
+local tabs, activeTab = {}, nil
+local settingsArea
+local previewState = { points = 5 }
+local previewScene
+local applySetting, updateLivePreview, refreshControls
+
+local function clampNumber(value, low, high, fallback)
+  value = tonumber(value)
+  if value == nil or value ~= value then value = fallback end
+  if value < low then value = low elseif value > high then value = high end
+  return value
 end
 
--- A slider with its label above and its value to the right, built from a plain Slider so it does
--- not depend on a template every client has.
-local function slider(parent, label, y, min, max, getter, setter, x, step)
-  local text = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-  text:SetPoint("TOPLEFT", x or 16, y)
-  text:SetText(label)
-  local bar = CreateFrame("Slider", nil, parent)
-  bar:SetOrientation("HORIZONTAL")
-  bar:SetSize(200, 16)
-  bar:SetPoint("TOPLEFT", (x or 16) + 2, y - 20)
-  bar:SetMinMaxValues(min, max)
-  bar:SetValueStep(step or 1)
-  if bar.SetObeyStepOnDrag then bar:SetObeyStepOnDrag(true) end
-  bar:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
-  local track = bar:CreateTexture(nil, "BACKGROUND")
-  track:SetColorTexture(0.2, 0.2, 0.22, 1)
-  track:SetPoint("LEFT")
-  track:SetPoint("RIGHT")
-  track:SetHeight(6)
-  local value = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  value:SetPoint("LEFT", bar, "RIGHT", 10, 0)
-  bar:SetScript("OnValueChanged", function(_, v)
-    v = math.floor(v / (step or 1) + 0.5) * (step or 1)
-    value:SetText(tostring(v))
-    if bar.refreshing then return end
-    setter(v)
-  end)
-  bar.Refresh = function()
-    bar.refreshing = true
-    bar:SetValue(getter())
-    value:SetText(tostring(getter()))
-    bar.refreshing = false
-  end
-  return bar
+local function setBackdrop(frame, shade, alpha)
+  if type(frame.SetBackdrop) ~= "function" then return end
+  frame:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
+  frame:SetBackdropColor(shade, shade, shade, alpha or 1)
+  frame:SetBackdropBorderColor(0.28, 0.28, 0.3, 1)
 end
 
 local function soundEntries()
@@ -103,64 +87,509 @@ local function createDropdown(parent, name, setting)
   end
 end
 
--- Built into its tab of the BattleInfoTool window.
-function Addon.CreateSettingsPanel(parent)
-  if Addon.settingsPanel then return Addon.settingsPanel end
-  local panel = CreateFrame("Frame", nil, parent)
-  panel:SetAllPoints()
-  panel.name = "ResourceDing"
-  Addon.settingsPanel = panel
-  -- The right-hand column (Soul Shards, then mana) starts at this x, from y = -102 down. A line in
-  -- the left column below that must end before it, or the column's controls cover its words.
-  local RIGHT = 370
+local function makeRow(parent, labelText, opts)
+  opts = opts or {}
+  local layout = opts.layout or SETTINGS_LAYOUT
+  local row = CreateFrame("Frame", nil, parent)
+  row:SetSize(layout.label + layout.control + 50, ROW_HEIGHT)
+  row.layout = layout
+  row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  row.label:SetPoint("LEFT", 6, 0)
+  row.label:SetWidth(layout.label - 8)
+  row.label:SetJustifyH("LEFT")
+  row.label:SetText(labelText)
+  row.enabledIf = opts.enabledIf
+  if opts.tooltip then
+    row:EnableMouse(true)
+    row:SetScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      GameTooltip:SetText(labelText, 1, 1, 1)
+      GameTooltip:AddLine(opts.tooltip, nil, nil, nil, true)
+      GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  end
+  function row:ApplyEnabled(widget)
+    local enabled = not self.enabledIf or self.enabledIf(Addon.db)
+    self:SetAlpha(enabled and 1 or DISABLED_ALPHA)
+    widget:EnableMouse(enabled)
+    if widget.EnableMouseWheel then widget:EnableMouseWheel(enabled) end
+  end
+  table.insert(controls, row)
+  return row
+end
 
-  local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-  title:SetPoint("TOPLEFT", 16, -16)
-  title:SetText("ResourceDing")
+local function checkboxRow(parent, labelText, get, set, opts)
+  local row = makeRow(parent, labelText, opts)
+  local box = CreateFrame("CheckButton", nil, row)
+  box:SetSize(24, 24)
+  box:SetPoint("LEFT", row, "LEFT", row.layout.label, 0)
+  box:SetNormalTexture("Interface\\Buttons\\UI-CheckBox-Up")
+  box:SetPushedTexture("Interface\\Buttons\\UI-CheckBox-Down")
+  box:SetHighlightTexture("Interface\\Buttons\\UI-CheckBox-Highlight", "ADD")
+  box:SetCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check")
+  box:SetScript("OnClick", function(self)
+    set(self:GetChecked() and true or false)
+  end)
+  function row:Refresh()
+    box:SetChecked(get() and true or false)
+    self:ApplyEnabled(box)
+  end
+  row.widget = box
+  box.Refresh = function() row:Refresh() end
+  return row, box
+end
 
-  local subtitle = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-  subtitle:SetPoint("TOPLEFT", 16, -44)
-  subtitle:SetPoint("TOPRIGHT", -16, -44)
-  subtitle:SetJustifyH("LEFT")
-  subtitle:SetText("Hear a single cue when your class finisher resource reaches maximum.")
+local function sliderRow(parent, labelText, min, max, step, get, set, opts)
+  opts = opts or {}
+  local row = makeRow(parent, labelText, opts)
+  local slider = CreateFrame("Slider", nil, row)
+  slider:SetOrientation("HORIZONTAL")
+  slider:SetSize(row.layout.control - 44, 18)
+  slider:SetPoint("LEFT", row, "LEFT", row.layout.label + 2, 0)
+  slider:SetMinMaxValues(min, max)
+  slider:SetValueStep(step)
+  if slider.SetObeyStepOnDrag then slider:SetObeyStepOnDrag(true) end
+  local track = slider:CreateTexture(nil, "BACKGROUND")
+  track:SetColorTexture(0.3, 0.3, 0.32, 1)
+  track:SetHeight(4)
+  track:SetPoint("LEFT")
+  track:SetPoint("RIGHT")
+  slider:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+  local valueText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  valueText:SetPoint("LEFT", slider, "RIGHT", 8, 0)
+  local suffix = opts.suffix or ""
+  local updating = false
+  slider:SetScript("OnValueChanged", function(_, value)
+    if updating then return end
+    value = math.floor(value / step + 0.5) * step
+    valueText:SetText(value .. suffix)
+    set(value)
+  end)
+  slider:SetScript("OnMouseWheel", function(self, delta)
+    local current = self:GetValue()
+    if type(current) ~= "number" then current = get() end
+    self:SetValue(current + delta * step)
+  end)
+  function row:Refresh()
+    updating = true
+    local value = get()
+    slider:SetValue(value)
+    valueText:SetText(math.floor(value / step + 0.5) * step .. suffix)
+    updating = false
+    self:ApplyEnabled(slider)
+  end
+  row.widget = slider
+  slider.Refresh = function() row:Refresh() end
+  return row, slider
+end
 
-  local resourceText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  resourceText:SetPoint("TOPLEFT", 16, -72)
-  resourceText:SetTextColor(0.35, 0.68, 1)
-  panel.resourceText = resourceText
+local function checkbox(parent, key, labelText, opts)
+  return checkboxRow(parent, labelText,
+    function() return Addon.db[key] end,
+    function(value) applySetting(key, value) end, opts)
+end
 
-  panel.enabled = checkbox(panel, "BattleInfoTool_ResourceDingEnabledCheck", "Sounds, dots and diamonds", -102,
-    function() return Addon.db.enabled end,
-    function(value) Addon.db.enabled = value; Addon.ResetPowerState(); Addon.RefreshMarks() end)
+local function slider(parent, key, labelText, min, max, step, opts)
+  return sliderRow(parent, labelText, min, max, step,
+    function() return Addon.db[key] end,
+    function(value) applySetting(key, value) end, opts)
+end
 
-  panel.combatOnly = checkbox(panel, "BattleInfoTool_ResourceDingCombatCheck", "Only play while in combat", -134,
-    function() return Addon.db.combatOnly end,
-    function(value) Addon.db.combatOnly = value; Addon.ResetPowerState() end)
+local function pushButton(parent, text, width, onClick)
+  local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+  button:SetSize(width, 22)
+  button:SetText(text)
+  button:SetScript("OnClick", onClick)
+  return button
+end
 
-  local soundLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-  soundLabel:SetPoint("TOPLEFT", 16, -178)
-  soundLabel:SetText("Sound")
+local function actionRow(parent, labelText, buttonText, onClick, opts)
+  opts = opts or {}
+  local row = makeRow(parent, labelText, opts)
+  local button = pushButton(row, buttonText, 90, onClick)
+  button:SetPoint("LEFT", row, "LEFT", row.layout.label, 0)
+  function row:Refresh() self:ApplyEnabled(button) end
+  row.widget = button
+  return row, button
+end
 
-  local dropdown, updateSoundText = createDropdown(panel, "BattleInfoTool_ResourceDingSoundDropdown")
-  dropdown:SetPoint("TOPLEFT", 8, -196)
-  panel.dropdown = dropdown
-  updateSoundText()
+local function soundRow(parent, labelText, setting, frameName, opts)
+  local row = makeRow(parent, labelText, opts)
+  local dropdown, updateText = createDropdown(row, frameName, setting)
+  dropdown:SetPoint("LEFT", row, "LEFT", row.layout.label, 0)
+  function row:Refresh()
+    updateText()
+    self:ApplyEnabled(dropdown)
+  end
+  row.widget = dropdown
+  return row, dropdown
+end
 
-  local test = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-  test:SetSize(90, 26)
-  test:SetPoint("TOPLEFT", 254, -203)
-  test:SetText("Test sound")
-  test:SetScript("OnClick", Addon.PlaySelectedSound)
+local function noteRow(parent, text, height)
+  local row = CreateFrame("Frame", nil, parent)
+  row:SetSize(SETTINGS_LAYOUT.label + SETTINGS_LAYOUT.control + 50, height or 40)
+  row.text = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  row.text:SetPoint("TOPLEFT", 6, 0)
+  row.text:SetPoint("TOPRIGHT", -6, 0)
+  row.text:SetJustifyH("LEFT")
+  row.text:SetWordWrap(true)
+  row.text:SetText(text)
+  function row:Refresh() end
+  table.insert(controls, row)
+  return row
+end
 
-  local supported = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-  supported:SetPoint("TOPLEFT", 16, -252)
-  supported:SetPoint("TOPRIGHT", panel, "TOPLEFT", RIGHT - 16, -252) -- wraps short of the mana column
-  supported:SetJustifyH("LEFT")
-  supported:SetWordWrap(true)
-  -- Built from the table the addon actually uses, which Core prunes on Classic
-  -- to the two classes that game has. Spelling the full Retail list out here
-  -- defeated that pruning: Classic players were told about Chi, Holy Power,
-  -- Soul Shards, Arcane Charges and Essence, none of which exist for them.
+-- One change path for every control and for "Reset this tab": the same side effects the
+-- flat panel had (dots and diamonds follow at once), then the preview and the twin
+-- controls (a setting appears both in its tab and in the preview's TRY IT block).
+function applySetting(key, value, quiet)
+  local db = Addon.db
+  if not db then return end
+  if key == "enabled" then
+    db.enabled = value
+    Addon.ResetPowerState()
+    Addon.RefreshMarks()
+  elseif key == "combatOnly" then
+    db.combatOnly = value
+    Addon.ResetPowerState()
+  elseif key == "sound" or key == "manaSound" then
+    db[key] = value
+    if not quiet then Addon.PlaySoundKey(value) end
+  elseif key == "dots" then
+    db.dots = value
+    if Addon.RefreshDots then Addon.RefreshDots() end
+  elseif key == "shards" then
+    db.shards = value
+  elseif key == "shardDiamonds" then
+    db.shardDiamonds = value
+    if Addon.RefreshShards then Addon.RefreshShards() end
+  elseif key == "mana" then
+    db.mana = value
+    if Addon.ResetMana then Addon.ResetMana() end
+  elseif key == "dotSize" then
+    db.dotSize = clampNumber(value, 8, 24, 14)
+    if Addon.RefreshDots then Addon.RefreshDots() end
+    if Addon.RefreshShards then Addon.RefreshShards() end -- the diamonds size from dotSize too
+  elseif key == "dotOffset" then
+    db.dotOffset = clampNumber(value, -80, 30, 2)
+    if Addon.RefreshDots then Addon.RefreshDots() end
+  elseif key == "shardOffset" then
+    db.shardOffset = clampNumber(value, -80, 30, 2)
+    if Addon.RefreshShards then Addon.RefreshShards() end
+  elseif key == "manaPercent" then
+    db.manaPercent = value
+    db.manaLevels[Addon.manaClass] = value -- this class's level only
+    if Addon.ResetMana then Addon.ResetMana() end
+  end
+  if not quiet then
+    refreshControls()
+    updateLivePreview()
+  end
+end
+
+local function defaultFor(key)
+  if key == "manaPercent" then
+    return Addon.DefaultManaPercent and Addon.DefaultManaPercent() or 100
+  end
+  return Addon.defaults and Addon.defaults[key]
+end
+
+---------------------------------------------------------------------------
+-- Live preview: a mock enemy health bar with the dots and diamonds the live
+-- HUD draws (Dots.lua / Shards.lua layout, sizes and clamps), over fixed data.
+---------------------------------------------------------------------------
+
+function updateLivePreview()
+  local scene = previewScene
+  if not scene or not Addon.db then return end
+  scene.updates = (scene.updates or 0) + 1
+  local db = Addon.db
+  local size = clampNumber(db.dotSize, 8, 24, 14)
+  local dotOffset = clampNumber(db.dotOffset, -80, 30, 2)
+  local shardOffset = clampNumber(db.shardOffset, -80, 30, 2)
+  local points = math.floor(tonumber(previewState.points) or MAX_POINTS)
+  if points < 0 then points = 0 elseif points > MAX_POINTS then points = MAX_POINTS end
+
+  local style
+  if BIT.Style and type(BIT.Style.Resolve) == "function" then
+    local ok, resolved = pcall(BIT.Style.Resolve, "ResourceDing")
+    if ok and type(resolved) == "table" then style = resolved end
+  end
+
+  local showDots = db.enabled and db.dots
+  scene.dotsRow:SetShown(showDots)
+  scene.dotsRow:ClearAllPoints()
+  scene.dotsRow:SetPoint("TOP", scene.healthBar, "BOTTOM", 0, -dotOffset)
+  local gap = math.max(2, math.floor(size / 4))
+  scene.dotsRow:SetSize(MAX_POINTS * size + (MAX_POINTS - 1) * gap, size)
+  for i = 1, MAX_POINTS do
+    local dot = scene.dots[i]
+    if not dot then
+      dot = Addon.MakeCircleDot(scene.dotsRow, size)
+      scene.dots[i] = dot
+    end
+    dot:SetShown(showDots)
+    if dot.overlay then dot.overlay:SetShown(showDots) end
+    if showDots then
+      dot:SetSize(size, size)
+      dot:ClearAllPoints()
+      dot:SetPoint("LEFT", scene.dotsRow, "LEFT", (i - 1) * (size + gap), 0)
+      Addon.LayoutCircleChrome(dot)
+      dot:SetMinMaxValues(i - 1, i)
+      dot:SetValue(points)
+      if dot.overlay then
+        dot.overlay:SetMinMaxValues(MAX_POINTS - 1, MAX_POINTS)
+        dot.overlay:SetValue(points)
+      end
+      Addon.PaintCircleDot(dot, style, i, MAX_POINTS, points >= MAX_POINTS)
+    end
+  end
+
+  local showDiamonds = db.enabled and db.shardDiamonds and points > 0
+  scene.shardsRow:SetShown(showDiamonds)
+  scene.shardsRow:ClearAllPoints()
+  scene.shardsRow:SetPoint("TOP", scene.healthBar, "BOTTOM", 0, -shardOffset)
+  scene.shardsRow:SetSize(math.max(2, points * (size - 2) + 2), size)
+  for i = 1, MAX_POINTS do
+    local diamond = scene.diamonds[i]
+    if showDiamonds and i <= points then
+      if not diamond then
+        diamond = scene.shardsRow:CreateTexture(nil, "ARTWORK")
+        diamond:SetTexture(DIAMOND)
+        scene.diamonds[i] = diamond
+      end
+      diamond:SetSize(size, size)
+      diamond:ClearAllPoints()
+      diamond:SetPoint("LEFT", scene.shardsRow, "LEFT", (i - 1) * (size - 2), 0)
+      diamond:Show()
+    elseif diamond then
+      diamond:Hide()
+    end
+  end
+
+  local caption = points .. " of " .. MAX_POINTS .. " combo points"
+  if points >= MAX_POINTS then caption = caption .. " (full)" end
+  if db.enabled and db.shardDiamonds then caption = caption .. "  |  " .. points .. " soul shards" end
+  scene.caption:SetText(caption)
+end
+
+local function buildLivePreview(pane)
+  local title = pane:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  title:SetPoint("TOPLEFT", 12, -12)
+  title:SetText("Live preview")
+  local titleRule = pane:CreateTexture(nil, "ARTWORK")
+  titleRule:SetColorTexture(0.28, 0.28, 0.3, 1)
+  titleRule:SetHeight(1)
+  titleRule:SetPoint("TOPLEFT", 8, -34)
+  titleRule:SetPoint("TOPRIGHT", -8, -34)
+
+  local scene = CreateFrame("Frame", nil, pane, "BackdropTemplate")
+  scene:SetSize(PANE_WIDTH - 24, 180)
+  scene:SetPoint("TOP", pane, "TOP", 0, -44)
+  setBackdrop(scene, 0.02, 1)
+  local ground = scene:CreateTexture(nil, "BACKGROUND", nil, -8)
+  ground:SetPoint("TOPLEFT", 1, -1)
+  ground:SetPoint("BOTTOMRIGHT", -1, 1)
+  ground:SetTexture("Interface\\FrameGeneral\\UI-Background-Rock")
+  ground:SetTexCoord(0, 0.26, 0, 0.18)
+  ground:SetVertexColor(0.75, 0.8, 0.75)
+
+  local name = scene:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  name:SetPoint("TOP", scene, "TOP", 0, -8)
+  name:SetText("Murloc Raider")
+  name:SetTextColor(1, 0.2, 0.2)
+
+  local healthBar = CreateFrame("StatusBar", nil, scene)
+  healthBar:SetSize(200, 20)
+  healthBar:SetPoint("TOP", scene, "TOP", 0, -46)
+  healthBar:SetMinMaxValues(0, 100)
+  healthBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+  healthBar:SetStatusBarColor(0.1, 0.8, 0.1)
+  healthBar:SetValue(62)
+  local healthBack = healthBar:CreateTexture(nil, "BACKGROUND")
+  healthBack:SetAllPoints()
+  healthBack:SetColorTexture(0.25, 0.08, 0.08, 1)
+  local healthPercent = healthBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  healthPercent:SetPoint("LEFT", healthBar, "LEFT", 3, 0)
+  healthPercent:SetText("62%")
+  local healthValue = healthBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  healthValue:SetPoint("RIGHT", healthBar, "RIGHT", -3, 0)
+  healthValue:SetText("88")
+
+  scene.healthBar = healthBar
+  scene.dotsRow = CreateFrame("Frame", nil, scene)
+  scene.shardsRow = CreateFrame("Frame", nil, scene)
+  scene.dots, scene.diamonds = {}, {}
+  scene.caption = scene:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  scene.caption:SetPoint("BOTTOM", scene, "BOTTOM", 0, 6)
+  scene.caption:SetWidth(PANE_WIDTH - 40)
+  scene.caption:SetJustifyH("CENTER")
+  previewScene = scene
+
+  local tryIt = pane:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  tryIt:SetPoint("TOPLEFT", scene, "BOTTOMLEFT", 0, -14)
+  tryIt:SetText("TRY IT")
+  tryIt:SetTextColor(0.85, 0.7, 0.3)
+  local tryRule = pane:CreateTexture(nil, "ARTWORK")
+  tryRule:SetColorTexture(0.28, 0.28, 0.3, 1)
+  tryRule:SetHeight(1)
+  tryRule:SetPoint("LEFT", tryIt, "RIGHT", 8, 0)
+  tryRule:SetPoint("RIGHT", pane, "RIGHT", -12, 0)
+
+  local points = sliderRow(pane, "Combo points", 0, MAX_POINTS, 1,
+    function() return previewState.points end,
+    function(value) previewState.points = value; updateLivePreview() end,
+    { layout = PREVIEW_LAYOUT, tooltip = "How many of the mock target's five points are lit. "
+        .. "The Soul Shard diamonds show the same number." })
+  points:SetPoint("TOPLEFT", tryIt, "BOTTOMLEFT", -6, -6)
+  local size = sliderRow(pane, "Size", 8, 24, 1,
+    function() return Addon.db.dotSize end,
+    function(value) applySetting("dotSize", value) end,
+    { layout = PREVIEW_LAYOUT, tooltip = "Dot and diamond size, the same setting as the Dots tab." })
+  size:SetPoint("TOPLEFT", points, "BOTTOMLEFT", 0, 0)
+  local offset = sliderRow(pane, "Offset", -80, 30, 1,
+    function() return Addon.db.dotOffset end,
+    function(value) applySetting("dotOffset", value) end,
+    { layout = PREVIEW_LAYOUT, tooltip = "The dots' offset from the health bar, the same setting as the Dots tab." })
+  offset:SetPoint("TOPLEFT", size, "BOTTOMLEFT", 0, 0)
+  local diamonds = checkboxRow(pane, "Shard diamonds",
+    function() return Addon.db.shardDiamonds end,
+    function(value) applySetting("shardDiamonds", value) end,
+    { layout = PREVIEW_LAYOUT, tooltip = "Purple diamonds under the target, the same setting as the Shards tab." })
+  diamonds:SetPoint("TOPLEFT", offset, "BOTTOMLEFT", 0, 0)
+
+  local hint = pane:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  hint:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 12, 8)
+  hint:SetWidth(PANE_WIDTH - 24)
+  hint:SetJustifyH("LEFT")
+  hint:SetText("Hear a single cue when your class finisher resource reaches maximum. "
+    .. "The preview is a silent sample drawn with the live dots and diamonds, not your target.")
+  updateLivePreview()
+end
+
+---------------------------------------------------------------------------
+-- Tabs
+---------------------------------------------------------------------------
+
+local function selectTab(tab)
+  activeTab = tab
+  for _, other in ipairs(tabs) do
+    local selected = other == tab
+    other.content:SetShown(selected)
+    other.button.text:SetTextColor(selected and 1 or 0.6, selected and 0.82 or 0.6, selected and 0 or 0.6)
+    other.button.underline:SetShown(selected)
+  end
+end
+
+-- A tab whose methods add rows top to bottom and remember the setting keys, for "Reset this tab".
+local function addTab(name)
+  local tab = { keys = {}, widgets = {}, y = 0 }
+  tab.content = CreateFrame("Frame", nil, settingsArea)
+  tab.content:SetPoint("TOPLEFT", settingsArea, "TOPLEFT", 8, -40)
+  tab.content:SetPoint("BOTTOMRIGHT", settingsArea, "BOTTOMRIGHT", -8, 40)
+  tab.content:Hide()
+
+  local button = CreateFrame("Button", nil, settingsArea)
+  button.text = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  button.text:SetText(name)
+  button:SetSize(button.text:GetStringWidth() + 20, 26)
+  button.text:SetPoint("CENTER")
+  button.underline = button:CreateTexture(nil, "ARTWORK")
+  button.underline:SetColorTexture(1, 0.82, 0, 1)
+  button.underline:SetHeight(2)
+  button.underline:SetPoint("BOTTOMLEFT", 6, 0)
+  button.underline:SetPoint("BOTTOMRIGHT", -6, 0)
+  local previous = tabs[#tabs]
+  if previous then
+    button:SetPoint("LEFT", previous.button, "RIGHT", 2, 0)
+  else
+    button:SetPoint("TOPLEFT", settingsArea, "TOPLEFT", 8, -8)
+  end
+  button:SetScript("OnClick", function() selectTab(tab) end)
+  tab.button = button
+
+  local function place(row, key)
+    row:SetPoint("TOPLEFT", tab.content, "TOPLEFT", 0, -tab.y)
+    tab.y = tab.y + (type(row.GetHeight) == "function" and row:GetHeight() or ROW_HEIGHT)
+    if type(key) == "string" then
+      table.insert(tab.keys, key)
+      if row.widget then tab.widgets[key] = row.widget end
+    end
+    return row
+  end
+
+  function tab:checkbox(key, labelText, opts)
+    return place(checkbox(self.content, key, labelText, opts), key)
+  end
+  function tab:slider(key, labelText, min, max, step, opts)
+    return place(slider(self.content, key, labelText, min, max, step, opts), key)
+  end
+  function tab:sound(key, labelText, frameName, opts)
+    return place(soundRow(self.content, labelText, key, frameName, opts), key)
+  end
+  function tab:action(labelText, buttonText, onClick, opts)
+    return place((actionRow(self.content, labelText, buttonText, onClick, opts)))
+  end
+  function tab:note(text)
+    return place(noteRow(self.content, text))
+  end
+  function tab:gap() self.y = self.y + 8 end
+
+  table.insert(tabs, tab)
+  return tab
+end
+
+local function resetTab(tab)
+  if not tab then return end
+  for _, key in ipairs(tab.keys) do
+    applySetting(key, defaultFor(key), true)
+  end
+  refreshControls()
+  updateLivePreview()
+end
+
+---------------------------------------------------------------------------
+-- The tab's content
+---------------------------------------------------------------------------
+
+local function buildTabs()
+  local widgets = {}
+
+  local dots = addTab("Dots")
+  dots:checkbox("dots", "Show the points as dots under the target's nameplate",
+    { tooltip = "Combo points as circles below your target's health bar, on its nameplate." })
+  dots:slider("dotSize", "Dot / diamond size", 8, 24, 1,
+    { tooltip = "How big the circles and the shard diamonds are." })
+  dots:slider("dotOffset", "Dot offset (- = above)", -80, 30, 1,
+    { tooltip = "How far the dots sit from the health bar; negative puts them above it." })
+  dots:gap()
+
+  local shards = addTab("Shards")
+  shards:checkbox("shards", "Sound when a shard comes in",
+    { tooltip = "A Soul Shard arriving in your bags plays the sound (Classic warlocks)." })
+  shards:checkbox("shardDiamonds", "Purple diamonds under the target",
+    { tooltip = "Each Soul Shard as a purple diamond below the target's health bar." })
+  shards:slider("shardOffset", "Shard offset (- = above)", -80, 30, 1,
+    { tooltip = "How far the diamonds sit from the health bar; they move independently of the dots." })
+  shards:gap()
+
+  local mana = addTab("Mana")
+  mana:checkbox("mana", "Sound when mana reaches the level",
+    { tooltip = "One cue when your mana climbs back to the level." })
+  mana:slider("manaPercent", "Mana level, %", 50, 100, 5, { suffix = "%", enabledIf = function(db) return db.mana end })
+  mana:sound("manaSound", "Sound at the level", "BattleInfoTool_ResourceDingManaSoundDropdown",
+    { enabledIf = function(db) return db.mana end })
+  mana:gap()
+
+  local sound = addTab("Sound")
+  sound:checkbox("enabled", "Sounds, dots and diamonds",
+    { tooltip = "The whole module: the finisher sound and the marks under the target." })
+  sound:checkbox("combatOnly", "Only play while in combat",
+    { tooltip = "A full bar out of combat stays quiet; it dings the moment combat starts." })
+  sound:sound("sound", "Sound", "BattleInfoTool_ResourceDingSoundDropdown")
+  sound:action("Hear it", "Test sound", Addon.PlaySelectedSound)
+
   local names, seen = {}, {}
   for _, resource in pairs(Addon.RESOURCES) do
     if not seen[resource.name] then
@@ -169,69 +598,72 @@ function Addon.CreateSettingsPanel(parent)
     end
   end
   table.sort(names)
-  supported:SetText("Supported: " .. table.concat(names, ", ")
+  sound:note("Supported: " .. table.concat(names, ", ")
     .. ". Classes without one of these get no finisher sound.")
+  sound:gap()
 
-  -- The dots under the target's nameplate (Dots.lua).
-  panel.dots = checkbox(panel, "BattleInfoTool_ResourceDingDotsCheck", "Show the points as dots under the target's nameplate", -290,
-    function() return Addon.db.dots end,
-    function(value) Addon.db.dots = value; if Addon.RefreshDots then Addon.RefreshDots() end end)
-  panel.dotSize = slider(panel, "Dot / diamond size", -326, 8, 24,
-    function() return Addon.db.dotSize end,
-    function(value)
-      value = tonumber(value) or 14
-      if value ~= value then value = 14 end
-      if value < 8 then value = 8 elseif value > 24 then value = 24 end
-      Addon.db.dotSize = value
-      if Addon.RefreshDots then Addon.RefreshDots() end
-      if Addon.RefreshShards then Addon.RefreshShards() end -- the diamonds size from dotSize too
-    end)
-  panel.dotOffset = slider(panel, "Dot offset from the health bar (- = above)", -370, -80, 30,
-    function() return Addon.db.dotOffset end,
-    function(value)
-      value = tonumber(value) or 2
-      if value ~= value then value = 2 end
-      if value < -80 then value = -80 elseif value > 30 then value = 30 end
-      Addon.db.dotOffset = value
-      if Addon.RefreshDots then Addon.RefreshDots() end
-    end)
-  panel.shardOffset = slider(panel, "Shard offset from the health bar (- = above)", -414, -80, 30,
-    function() return Addon.db.shardOffset end,
-    function(value)
-      value = tonumber(value) or 2
-      if value ~= value then value = 2 end
-      if value < -80 then value = -80 elseif value > 30 then value = 30 end
-      Addon.db.shardOffset = value
-      if Addon.RefreshShards then Addon.RefreshShards() end
-    end)
+  for _, tab in ipairs(tabs) do
+    for key, widget in pairs(tab.widgets) do widgets[key] = widget end
+  end
+  return widgets
+end
 
-  -- Right-hand column: a warlock's Soul Shards (Shards.lua) and the mana level (Mana.lua).
-  local shardsHead = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-  shardsHead:SetPoint("TOPLEFT", RIGHT, -102)
-  shardsHead:SetText("Soul Shards (warlock)")
-  panel.shards = checkbox(panel, "BattleInfoTool_ResourceDingShardsCheck", "Sound when a shard comes in", -120,
-    function() return Addon.db.shards end,
-    function(value) Addon.db.shards = value end, RIGHT)
-  panel.shardDiamonds = checkbox(panel, "BattleInfoTool_ResourceDingShardDiamondsCheck", "Purple diamonds under the target", -148,
-    function() return Addon.db.shardDiamonds end,
-    function(value) Addon.db.shardDiamonds = value; if Addon.RefreshShards then Addon.RefreshShards() end end, RIGHT)
+function refreshControls()
+  for _, row in ipairs(controls) do row:Refresh() end
+end
 
-  local manaHead = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-  manaHead:SetPoint("TOPLEFT", RIGHT, -196)
-  manaHead:SetText("Mana")
-  panel.mana = checkbox(panel, "BattleInfoTool_ResourceDingManaCheck", "Sound when mana reaches the level", -214,
-    function() return Addon.db.mana end,
-    function(value) Addon.db.mana = value; if Addon.ResetMana then Addon.ResetMana() end end, RIGHT)
-  panel.manaPercent = slider(panel, "Mana level, %", -248, 50, 100,
-    function() return Addon.db.manaPercent end,
-    function(value)
-      Addon.db.manaPercent = value
-      Addon.db.manaLevels[Addon.manaClass] = value -- this class's level only
-      if Addon.ResetMana then Addon.ResetMana() end
-    end, RIGHT, 5)
-  local manaDropdown, updateManaSoundText = createDropdown(panel, "BattleInfoTool_ResourceDingManaSoundDropdown", "manaSound")
-  manaDropdown:SetPoint("TOPLEFT", RIGHT - 8, -300)
-  panel.manaDropdown = manaDropdown
+-- Built into its tab of the BattleInfoTool window: the live preview on the left,
+-- the settings as tabs on the right, each with "Reset this tab".
+function Addon.CreateSettingsPanel(parent)
+  if Addon.settingsPanel then return Addon.settingsPanel end
+  local panel = CreateFrame("Frame", nil, parent)
+  panel:SetAllPoints()
+  panel.name = "ResourceDing"
+  Addon.settingsPanel = panel
+
+  local resourceText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  resourceText:SetPoint("TOPLEFT", 16, -10)
+  resourceText:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -16, -10)
+  resourceText:SetJustifyH("LEFT")
+  panel.resourceText = resourceText
+
+  local pane = CreateFrame("Frame", nil, panel, "BackdropTemplate")
+  pane:SetPoint("TOPLEFT", 10, -36)
+  pane:SetPoint("BOTTOMLEFT", 10, 10)
+  pane:SetWidth(PANE_WIDTH)
+  setBackdrop(pane, 0.09)
+
+  local area = CreateFrame("Frame", nil, panel, "BackdropTemplate")
+  area:SetPoint("TOPLEFT", pane, "TOPRIGHT", 10, 0)
+  area:SetPoint("BOTTOMRIGHT", -10, 10)
+  setBackdrop(area, 0.09)
+  panel.settingsArea = area
+
+  local divider = area:CreateTexture(nil, "ARTWORK")
+  divider:SetColorTexture(0.28, 0.28, 0.3, 1)
+  divider:SetHeight(1)
+  divider:SetPoint("TOPLEFT", 8, -34)
+  divider:SetPoint("TOPRIGHT", -8, -34)
+
+  buildLivePreview(pane)
+  settingsArea = area
+  local widgets = buildTabs()
+  panel.enabled = widgets.enabled
+  panel.combatOnly = widgets.combatOnly
+  panel.dropdown = widgets.sound
+  panel.dots = widgets.dots
+  panel.dotSize = widgets.dotSize
+  panel.dotOffset = widgets.dotOffset
+  panel.shards = widgets.shards
+  panel.shardDiamonds = widgets.shardDiamonds
+  panel.shardOffset = widgets.shardOffset
+  panel.mana = widgets.mana
+  panel.manaPercent = widgets.manaPercent
+  panel.manaDropdown = widgets.manaSound
+  panel.tabs = tabs
+
+  panel.resetButton = pushButton(area, "Reset this tab", 120, function() resetTab(activeTab) end)
+  panel.resetButton:SetPoint("BOTTOMRIGHT", -10, 10)
 
   panel.refresh = function()
     if not Addon.db then return end
@@ -246,18 +678,8 @@ function Addon.CreateSettingsPanel(parent)
     else
       resourceText:SetText("No finisher resource for this class")
     end
-    panel.enabled:SetChecked(Addon.db.enabled)
-    panel.combatOnly:SetChecked(Addon.db.combatOnly)
-    panel.dots:SetChecked(Addon.db.dots)
-    panel.dotSize.Refresh()
-    panel.dotOffset.Refresh()
-    panel.shardOffset.Refresh()
-    panel.shards:SetChecked(Addon.db.shards)
-    panel.shardDiamonds:SetChecked(Addon.db.shardDiamonds)
-    panel.mana:SetChecked(Addon.db.mana)
-    panel.manaPercent.Refresh()
-    updateManaSoundText()
-    updateSoundText()
+    refreshControls()
+    updateLivePreview()
   end
 
   -- The settings framework drives a canvas panel through these; without OnRefresh
@@ -271,6 +693,7 @@ function Addon.CreateSettingsPanel(parent)
   end
   panel:SetScript("OnShow", panel.refresh)
 
+  selectTab(tabs[1])
   panel.refresh()
   return panel
 end
@@ -403,7 +826,7 @@ BIT.RegisterTab("ResourceDing", {
   title = "ResourceDing",
   summary = "A sound when your combo points are full, and the points as dots under the target; for "
     .. "casters a sound when mana climbs to a level, and for warlocks one on each Soul Shard.",
-  width = 640, height = 460,
+  width = 760, height = 470,
   build = function(parent) Addon.CreateSettingsPanel(parent) end,
 })
 BIT.tabWords.ding = "ResourceDing"

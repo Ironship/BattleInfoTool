@@ -676,6 +676,7 @@ local CAPABILITIES = {
     roles = { "distanceNear", "distanceMid", "distanceFar", "good", "bad", "unknown", "muted", "text" },
     shapes = { "segments", "bar", "dots" },
     font = true, geometry = true, border = true, scale = true, opacity = true,
+    width = 500, -- the editor lives in the settings tab's right column (see the tab below)
 }
 
 -- Old visual values that still mean something, mapped onto the shared style and
@@ -993,168 +994,598 @@ loader:SetScript("OnEvent", function(self, event, name)
 end)
 
 ----------------------------------------------------------------------------------------------
--- The settings tab
+-- The settings tab: a live preview on the left, tabbed settings on the right and the rail's
+-- style presets in the strip above both, laid out like Modules/DoTInfo/Options.lua. The
+-- preview draws the rail through the very same buildScene/renderScene as the live HUD, on a
+-- mock enemy nameplate with its health bar underneath, and the TRY IT switch walks the mock
+-- target through every band on demand. Retired chevron/animation keys stay in the store for
+-- data preservation; only the two native icon flags have controls of their own.
 ----------------------------------------------------------------------------------------------
 
+local WINDOW_WIDTH, WINDOW_HEIGHT = 840, 500
+local PREVIEW_WIDTH = 290
+local COL_HEIGHT = 440 -- both columns fit the window's viewport; only the Appearance tab scrolls
+local ROW_HEIGHT = 26
+local SETTINGS_LAYOUT = { label = 170, control = 200 }
+local PREVIEW_LAYOUT = { label = 86, control = 146 }
+local DISABLED_ALPHA = 0.35
+local WHITE = "Interface\\Buttons\\WHITE8X8"
+
+-- The TRY IT switch: every band the rail can show, nearest first (the order the dots light).
+local BAND_ORDER = { "Y10", "Y15", "Y20", "Y25", "Y30", "Y35", "MAX", "MELEE", "DEAD" }
+local BAND_SWITCH_TEXT = {
+    Y10 = "Y10  8-10 yd", Y15 = "Y15  10-15 yd", Y20 = "Y20  15-20 yd",
+    Y25 = "Y25  20-25 yd", Y30 = "Y30  25-30 yd", Y35 = "Y35  30-35 yd",
+    MAX = "MAX  35+ yd (seventh dot)", MELEE = "MELEE  Wing Clip's reach", DEAD = "DEAD  5-8 yd dead zone",
+}
+local previewBand = SAMPLE_BAND
+local previewBar -- the mock health bar the preview rail is seated on
+
+-- Rail style presets: shape, thickness, border, gap and length, written to this module's
+-- appearance through the shared style store, so the Appearance tab and the live HUD follow at
+-- once. Every gameplay setting is left alone.
+local PRESETS = {
+    { id = "minimal", label = "Minimal",
+        values = { shape = "dots", thickness = 10, border = 0, gap = 6, length = 10 } },
+    { id = "classic", label = "Classic",
+        values = { shape = "segments", thickness = 8, border = 1, gap = 3, length = 14 } },
+    { id = "juicy", label = "Juicy",
+        values = { shape = "dots", thickness = 18, border = 3, gap = 2, length = 12 } },
+}
+
+local area -- the right-hand settings area the tabs live in
+local sample -- the retained live-preview scene, built inside build()
+local rows = {}
+local tabs, activeTab = {}, nil
+
+local function db() return settings end
+
+local function refreshControls()
+    for _, r in ipairs(rows) do if r.Refresh then r:Refresh() end end
+end
+
+-- Seat the preview rail on the mock health bar with the saved plate offset: the same "-offset"
+-- sign the live anchor uses, so a negative value (above) lifts the rail off the bar.
+local function seatPreviewRail()
+    if not sample or not previewBar then return end
+    local offset = finiteNum(tonumber(settings and settings.plateOffset), DEFAULTS.plateOffset)
+    if offset < -80 then offset = -80 elseif offset > 30 then offset = 30 end
+    sample:ClearAllPoints()
+    sample:SetPoint("BOTTOM", previewBar, "TOP", 0, -offset)
+end
+
+-- The retained preview, re-rendered from the resolved style and the TRY IT band. Pure:
+-- fictitious data only, never a live probe.
+local function renderPreview()
+    if not sample then return end
+    seatPreviewRail()
+    renderScene(sample, BIT.Style.Resolve(M.moduleName, hunterLegacy), previewBand, false)
+end
+
+-- Style edits, preset clicks and settings changes all land here: the preview first, then the
+-- live HUD from its cached band, then every row's own refresh.
+local function refreshAll()
+    renderPreview()
+    if hud then
+        local style = BIT.Style.Resolve(M.moduleName, hunterLegacy)
+        local b = preview and "PREVIEW" or band
+        if b and b ~= "OOR" then
+            renderScene(hud, style, b, scatterRed)
+        end
+    end
+    refreshControls()
+end
+
+local function changed()
+    if hud then reanchorHunterHud() end
+    refreshAll()
+end
+
+local function bandIndex(name)
+    for i = 1, #BAND_ORDER do
+        if BAND_ORDER[i] == name then return i end
+    end
+end
+
+local function bandText(name) return BAND_SWITCH_TEXT[name] or name end
+
+local function setPreviewBand(name)
+    if not bandIndex(name) then return end
+    previewBand = name
+    renderPreview()
+    refreshControls()
+end
+
 ----------------------------------------------------------------------------------------------
--- The settings tab: the shared appearance editor plus a real static sample on ANY
--- class, even without a target. Native Dead Zone skull + melee sword toggles and
--- an exact position reset sit beside the lock control; retired chevron/animation
--- keys stay in the store for data preservation but no control writes them back
--- except the two icon flags, which genuinely show/hide the native icons.
+-- Widgets (Modules/DoTInfo/Options.lua): one labelled row per setting, with a tooltip and
+-- greyed-out dependents; every row refreshes itself after any change.
 ----------------------------------------------------------------------------------------------
+
+local function setBackdrop(frame, shade, alpha)
+    frame:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
+    frame:SetBackdropColor(shade, shade, shade, alpha or 1)
+    frame:SetBackdropBorderColor(0.28, 0.28, 0.3, 1)
+end
+
+local function pushButton(parent, text, width, onClick)
+    local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    button:SetSize(width, 22)
+    button:SetText(text)
+    button:SetScript("OnClick", onClick)
+    return button
+end
+
+local function makeRow(parent, labelText, opts)
+    opts = opts or {}
+    local layout = opts.layout or SETTINGS_LAYOUT
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetSize(layout.label + layout.control + 50, ROW_HEIGHT)
+    row.layout = layout
+    row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    row.label:SetPoint("LEFT", 6, 0)
+    row.label:SetWidth(layout.label - 8)
+    row.label:SetJustifyH("LEFT")
+    row.label:SetText(labelText)
+    row.enabledIf = opts.enabledIf
+    if opts.tooltip then
+        row:EnableMouse(true)
+        row:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(labelText, 1, 1, 1)
+            GameTooltip:AddLine(opts.tooltip, nil, nil, nil, true)
+            GameTooltip:Show()
+        end)
+        row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end
+    function row:ApplyEnabled(widget)
+        local enabled = not self.enabledIf or self.enabledIf(db())
+        self:SetAlpha(enabled and 1 or DISABLED_ALPHA)
+        widget:EnableMouse(enabled)
+        if widget.EnableMouseWheel then widget:EnableMouseWheel(enabled) end
+    end
+    rows[#rows + 1] = row
+    return row
+end
+
+local function checkbox(parent, key, labelText, opts)
+    opts = opts or {}
+    local row = makeRow(parent, labelText, opts)
+    local box = CreateFrame("CheckButton", nil, row)
+    box:SetSize(24, 24)
+    box:SetPoint("LEFT", row, "LEFT", row.layout.label, 0)
+    box:SetNormalTexture("Interface\\Buttons\\UI-CheckBox-Up")
+    box:SetPushedTexture("Interface\\Buttons\\UI-CheckBox-Down")
+    box:SetHighlightTexture("Interface\\Buttons\\UI-CheckBox-Highlight", "ADD")
+    box:SetCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    box:SetScript("OnClick", function(self)
+        db()[key] = self:GetChecked() and true or false
+        changed()
+    end)
+    function row:Refresh()
+        box:SetChecked(db()[key] and true or false)
+        self:ApplyEnabled(box)
+    end
+    row.widget = box
+    return row
+end
+
+-- get/set work on any value: a saved setting or the preview's own band index.
+local function sliderRow(parent, labelText, min, max, step, get, set, opts)
+    opts = opts or {}
+    local row = makeRow(parent, labelText, opts)
+    local slider = CreateFrame("Slider", nil, row)
+    slider:SetOrientation("HORIZONTAL")
+    slider:SetSize(row.layout.control - 44, 18)
+    slider:SetPoint("LEFT", row, "LEFT", row.layout.label + 2, 0)
+    slider:SetMinMaxValues(min, max)
+    slider:SetValueStep(step)
+    if slider.SetObeyStepOnDrag then slider:SetObeyStepOnDrag(true) end
+    local track = slider:CreateTexture(nil, "BACKGROUND")
+    track:SetColorTexture(0.3, 0.3, 0.32, 1)
+    track:SetHeight(4)
+    track:SetPoint("LEFT")
+    track:SetPoint("RIGHT")
+    slider:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+    slider:GetThumbTexture():SetSize(18, 24)
+    local valueText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    valueText:SetPoint("LEFT", slider, "RIGHT", 8, 0)
+    local suffix = opts.suffix or ""
+    local function label(v)
+        if opts.format then return opts.format(v) end
+        return tostring(v) .. suffix
+    end
+    local updating = false
+    slider:SetScript("OnValueChanged", function(_, value)
+        if updating then return end
+        value = math.floor(value / step + 0.5) * step
+        valueText:SetText(label(value))
+        set(value)
+    end)
+    slider:SetScript("OnMouseWheel", function(self, delta) self:SetValue(self:GetValue() + delta * step) end)
+    function row:Refresh()
+        updating = true
+        local value = get()
+        slider:SetValue(value)
+        valueText:SetText(label(math.floor(value / step + 0.5) * step))
+        updating = false
+        self:ApplyEnabled(slider)
+    end
+    row.slider = slider
+    return row
+end
+
+local function slider(parent, key, labelText, min, max, step, opts)
+    opts = opts or {}
+    return sliderRow(parent, labelText, min, max, step,
+        function() return db()[key] end,
+        function(value)
+            db()[key] = value
+            changed()
+        end, opts)
+end
+
+local function actionRow(parent, labelText, buttonText, onClick, opts)
+    opts = opts or {}
+    local row = makeRow(parent, labelText, opts)
+    local button = pushButton(row, type(buttonText) == "function" and buttonText() or buttonText, 110, onClick)
+    button:SetPoint("LEFT", row, "LEFT", row.layout.label, 0)
+    function row:Refresh()
+        if type(buttonText) == "function" then button:SetText(buttonText()) end
+        self:ApplyEnabled(button)
+    end
+    row.widget = button
+    return row
+end
+
+-- A read-only row whose value text refreshes with the rest (what the client answered).
+local function infoRow(parent, labelText, getValue, opts)
+    opts = opts or {}
+    local row = makeRow(parent, labelText, opts)
+    local text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    text:SetPoint("LEFT", row, "LEFT", row.layout.label, 0)
+    text:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+    text:SetJustifyH("LEFT")
+    function row:Refresh()
+        text:SetText(getValue())
+        self:ApplyEnabled(self)
+    end
+    return row
+end
+
+----------------------------------------------------------------------------------------------
+-- Tabs (Modules/DoTInfo/Options.lua): one content area per tab, each remembering its setting
+-- keys so "Reset this tab" can put them back. Every tab scrolls: the shared appearance editor
+-- is taller than the area, and a scroll each keeps the left preview still.
+----------------------------------------------------------------------------------------------
+
+local function selectTab(tab)
+    activeTab = tab
+    for _, other in ipairs(tabs) do
+        local selected = other == tab
+        other.content:SetShown(selected)
+        other.button.text:SetTextColor(selected and 1 or 0.6, selected and 0.82 or 0.6, selected and 0 or 0.6)
+        other.button.underline:SetShown(selected)
+    end
+end
+
+local function addTab(name)
+    local tab = { name = name, keys = {}, y = 0 }
+    local content = CreateFrame("ScrollFrame", nil, area)
+    content:SetPoint("TOPLEFT", area, "TOPLEFT", 8, -40)
+    content:SetPoint("BOTTOMRIGHT", area, "BOTTOMRIGHT", -8, 40)
+    content:EnableMouseWheel(true)
+    local inner = CreateFrame("Frame", nil, content)
+    inner:SetWidth((area:GetWidth() or 500) - 16)
+    content:SetScrollChild(inner)
+    content:SetScript("OnMouseWheel", function(_, delta)
+        local maxScroll = math.max(0, (inner:GetHeight() or 0) - (content:GetHeight() or 0))
+        local at = (content:GetVerticalScroll() or 0) - delta * 24
+        content:SetVerticalScroll(math.min(math.max(at, 0), maxScroll))
+    end)
+    tab.content, tab.inner = content, inner
+    content:Hide()
+
+    local button = CreateFrame("Button", nil, area)
+    button.text = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    button.text:SetText(name)
+    button:SetSize(button.text:GetStringWidth() + 20, 26)
+    button.text:SetPoint("CENTER")
+    button.underline = button:CreateTexture(nil, "ARTWORK")
+    button.underline:SetColorTexture(1, 0.82, 0, 1)
+    button.underline:SetHeight(2)
+    button.underline:SetPoint("BOTTOMLEFT", 6, 0)
+    button.underline:SetPoint("BOTTOMRIGHT", -6, 0)
+    local previous = tabs[#tabs]
+    if previous then
+        button:SetPoint("LEFT", previous.button, "RIGHT", 2, 0)
+    else
+        button:SetPoint("TOPLEFT", area, "TOPLEFT", 8, -8)
+    end
+    button:SetScript("OnClick", function() selectTab(tab) end)
+    tab.button = button
+
+    local function place(row, key, height)
+        row:SetPoint("TOPLEFT", inner, "TOPLEFT", 0, -tab.y)
+        tab.y = tab.y + (height or ROW_HEIGHT)
+        if key then tab.keys[#tab.keys + 1] = key end
+        return row
+    end
+    function tab:checkbox(key, ...) return place(checkbox(self.inner, key, ...), key) end
+    function tab:slider(key, ...) return place(slider(self.inner, key, ...), key) end
+    function tab:action(...) return place(actionRow(self.inner, ...)) end
+    function tab:info(...) return place(infoRow(self.inner, ...)) end
+    function tab:custom(row, key, height) return place(row, key, height) end
+    function tab:note(text)
+        local line = self.inner:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        line:SetPoint("TOPLEFT", self.inner, "TOPLEFT", 0, -self.y)
+        line:SetPoint("RIGHT", self.inner, "RIGHT", -4, 0)
+        line:SetJustifyH("LEFT")
+        line:SetText(text)
+        place(line, nil, 46)
+        return line
+    end
+    function tab:gap(height) self.y = self.y + (height or 8) end
+    function tab:finish() self.inner:SetHeight(math.max(self.y + 12, 1)) end
+
+    tabs[#tabs + 1] = tab
+    return tab
+end
+
+local function resetTab(tab)
+    if not tab then return end
+    if tab.reset then
+        tab.reset()
+    else
+        for _, key in ipairs(tab.keys) do db()[key] = DEFAULTS[key] end
+    end
+    changed()
+end
+
+local function applyPreset(preset)
+    for key, value in pairs(preset.values) do
+        if BIT.Style and BIT.Style.Set then
+            BIT.Style.Set(M.moduleName, key, value)
+        end
+    end
+    changed()
+end
+
+local function buildTabs(parent, isHunter)
+    local hunterOnly = function() return isHunter end
+
+    local display = addTab("Display")
+    parent.lockButton = display:action("Position",
+        function() return settings.locked and "Unlock and move" or "Lock position" end,
+        function() setLocked(not settings.locked) end,
+        { enabledIf = hunterOnly,
+            tooltip = "Unlock, drag the rail to a screen spot of your own, then lock to save its position." })
+    parent.resetPosition = display:action("Dragged position", "Reset position", function()
+        resetPosition()
+        refreshAll()
+    end, { enabledIf = hunterOnly, tooltip = "Back to the requested centre offset." })
+    parent.attach = display:checkbox("attachToPlate", "Attach to target nameplate",
+        { enabledIf = hunterOnly,
+            tooltip = "The rail rides above the target's nameplate, like the ResourceDing dots. "
+                .. "Unchecked keeps the draggable screen position." })
+    parent.plateOffset = display:slider("plateOffset", "Offset from the health bar (- = above)", -80, 30, 1,
+        { enabledIf = function(s) return isHunter and s.attachToPlate ~= false end,
+            tooltip = "How far the rail sits from the plate's health bar. Moves the mock rail in the preview." })
+    display:gap()
+    parent.deadIcon = display:checkbox("showDeadzoneIcon", "Show Dead Zone skull (native)",
+        { tooltip = "Native Blizzard raid skull for the 5-8 yd dead zone. Unchecked hides it." })
+    parent.meleeIcon = display:checkbox("showMeleeIcon", "Show Melee mark (native sword)",
+        { tooltip = "Native Blizzard sword glyph for melee reach. Unchecked hides it." })
+    display.reset = function()
+        for _, key in ipairs(display.keys) do db()[key] = DEFAULTS[key] end
+        setLocked(DEFAULTS.locked)
+    end
+
+    local range = addTab("Range")
+    parent.longRange = range:checkbox("longRange", "Extended range past 35 yd (Hawk Eye)",
+        { enabledIf = hunterOnly,
+            tooltip = "Seven dots instead of six. Auto-detected from Auto Shot's reach when the spellbook "
+                .. "answers; tick manually otherwise." })
+    range:info("Auto Shot's reach reads", function()
+        return detectedAutoMax and (tostring(detectedAutoMax) .. " yd") or "not answered by this client"
+    end, { enabledIf = hunterOnly,
+        tooltip = "Auto Shot's own maximum range, read from the spellbook. Past 35 yd the seventh dot exists." })
+    range:gap()
+    range:note("The bands are approximate item probes, never exact yards: 8-10, 10-15, 15-20, 20-25, "
+        .. "25-30 and 30-35 yd. MELEE is Wing Clip's reach; the 5-8 yd dead zone sits between melee and the "
+        .. "first dot. /bit hunterprobe prints what the client answers for the probes.")
+
+    local appearance = addTab("Appearance")
+    local editor = BIT.UI.Appearance(appearance.inner, M.moduleName, CAPABILITIES, refreshAll, hunterLegacy)
+    editor:SetPoint("TOPLEFT", appearance.inner, "TOPLEFT", 0, 0)
+    appearance.y = (editor:GetHeight() or 0) + 8
+    appearance.editor = editor
+    appearance.reset = function()
+        if BIT.Style and BIT.Style.Reset then BIT.Style.Reset(M.moduleName) end
+    end
+    parent.hunterEditor = editor
+
+    for _, tab in ipairs(tabs) do tab:finish() end
+end
+
+----------------------------------------------------------------------------------------------
+-- The live preview: a mock enemy nameplate under the real rail, plus the TRY IT band switch.
+----------------------------------------------------------------------------------------------
+
+local function buildLivePreview(pane)
+    local SIDE = 12
+    local CARD_WIDTH = PREVIEW_WIDTH - 2 * SIDE
+
+    local title = pane:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOPLEFT", SIDE, -12)
+    title:SetText("Live preview")
+    local titleRule = pane:CreateTexture(nil, "ARTWORK")
+    titleRule:SetColorTexture(0.28, 0.28, 0.3, 1)
+    titleRule:SetHeight(1)
+    titleRule:SetPoint("TOPLEFT", 8, -34)
+    titleRule:SetPoint("TOPRIGHT", -8, -34)
+
+    -- The scene: a patch of dusky world behind the mock plate, so the rail reads in place.
+    local scene = CreateFrame("Frame", nil, pane, "BackdropTemplate")
+    scene:SetSize(CARD_WIDTH, 228)
+    scene:SetPoint("TOP", pane, "TOP", 0, -44)
+    scene:SetBackdrop({ edgeFile = WHITE, edgeSize = 1 })
+    scene:SetBackdropBorderColor(0, 0, 0, 1)
+    local ground = scene:CreateTexture(nil, "BACKGROUND", nil, -8)
+    ground:SetPoint("TOPLEFT", 1, -1)
+    ground:SetPoint("BOTTOMRIGHT", -1, 1)
+    ground:SetTexture("Interface\\FrameGeneral\\UI-Background-Rock")
+    ground:SetTexCoord(0, 0.26, 0, 0.2)
+    ground:SetVertexColor(0.75, 0.8, 0.75)
+    local sky = scene:CreateTexture(nil, "BACKGROUND", nil, -7)
+    sky:SetAllPoints(ground)
+    sky:SetColorTexture(0.06, 0.09, 0.12, 0.5)
+    local shade = scene:CreateTexture(nil, "BACKGROUND", nil, -6)
+    shade:SetPoint("BOTTOMLEFT", ground, "BOTTOMLEFT")
+    shade:SetPoint("BOTTOMRIGHT", ground, "BOTTOMRIGHT")
+    shade:SetHeight(40)
+    shade:SetColorTexture(0, 0, 0, 0.45)
+
+    -- Mock enemy nameplate: a hostile name under a red health bar with the target's selection
+    -- glow. The rail is seated above it and re-seated whenever the saved offset changes.
+    local plate = CreateFrame("Frame", nil, scene)
+    plate:SetSize(CARD_WIDTH - 24, 62)
+    plate:SetPoint("BOTTOM", scene, "BOTTOM", 0, 14)
+    local name = plate:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    name:SetPoint("BOTTOMLEFT", plate, "BOTTOMLEFT", 6, 2)
+    name:SetText("Murloc Raider")
+    name:SetTextColor(1, 0.13, 0.13)
+    local level = plate:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    level:SetPoint("BOTTOMRIGHT", plate, "BOTTOMRIGHT", -6, 2)
+    level:SetText("12")
+    level:SetTextColor(1, 0.82, 0)
+    local healthBar = CreateFrame("StatusBar", nil, plate)
+    healthBar:SetSize(CARD_WIDTH - 48, 16)
+    healthBar:SetPoint("BOTTOM", plate, "BOTTOM", 0, 22)
+    healthBar:SetMinMaxValues(0, 100)
+    healthBar:SetValue(72)
+    healthBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    healthBar:SetStatusBarColor(0.85, 0.1, 0.1)
+    local barBack = healthBar:CreateTexture(nil, "BACKGROUND")
+    barBack:SetAllPoints()
+    barBack:SetColorTexture(0.1, 0.02, 0.02, 1)
+    local barGlow = healthBar:CreateTexture(nil, "OVERLAY")
+    barGlow:SetPoint("TOPLEFT", healthBar, "TOPLEFT", -3, 2)
+    barGlow:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", 3, -2)
+    barGlow:SetColorTexture(1, 0.82, 0, 0.18)
+    local healthText = healthBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    healthText:SetPoint("LEFT", healthBar, "LEFT", 4, 0)
+    healthText:SetText("72%")
+    previewBar = healthBar
+
+    -- The rail itself: the retained scene the HUD draws, re-rendered from the resolved style
+    -- and the TRY IT band, seated above the mock bar exactly like the live anchor.
+    sample = buildScene(scene)
+    renderPreview()
+    pane.hunterRail = sample
+
+    -- Section header: small gold caps and a hairline to the right margin.
+    local function header(text, anchor, gap)
+        local label = pane:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        label:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -gap)
+        label:SetText(text)
+        label:SetTextColor(0.85, 0.7, 0.3)
+        local rule = pane:CreateTexture(nil, "ARTWORK")
+        rule:SetColorTexture(0.28, 0.28, 0.3, 1)
+        rule:SetHeight(1)
+        rule:SetPoint("LEFT", label, "RIGHT", 8, 0)
+        rule:SetPoint("RIGHT", pane, "RIGHT", -SIDE, 0)
+        return label
+    end
+
+    -- TRY IT: the mock target's own band, never a saved setting.
+    local tryIt = header("TRY IT", scene, 14)
+    local bandRow = sliderRow(pane, "Target band", 1, #BAND_ORDER, 1,
+        function() return bandIndex(previewBand) or 1 end,
+        function(value) setPreviewBand(BAND_ORDER[value]) end,
+        { layout = PREVIEW_LAYOUT,
+            format = function(v) return bandText(BAND_ORDER[v] or "") end,
+            tooltip = "Walks the mock target through every band the rail shows: Y10 to Y35, the 35+ yd "
+                .. "seventh dot, MELEE and the dead zone." })
+    bandRow:SetPoint("TOPLEFT", tryIt, "BOTTOMLEFT", -6, -6)
+    pane.hunterBandRow = bandRow
+
+    local hint = pane:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    hint:SetPoint("TOPLEFT", bandRow, "BOTTOMLEFT", 6, -14)
+    hint:SetPoint("RIGHT", pane, "RIGHT", -SIDE, 0)
+    hint:SetJustifyH("LEFT")
+    hint:SetText("Drawn by the same code as the live HUD, on a mock enemy nameplate. Six dots by "
+        .. "default; a seventh past 35 yd only with Hawk Eye.")
+end
 
 local function build(parent)
-    local UI = BIT.UI
     local _, class = UnitClass("player")
     local isHunter = class == "HUNTER"
-    local y = -6
-    if not isHunter then
-        local note = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        note:SetPoint("TOPLEFT", 12, y)
-        note:SetPoint("RIGHT", -12, 0)
-        note:SetJustifyH("LEFT")
-        note:SetText("The native range rail appears only on a Hunter. On another class this "
-            .. "module keeps its settings here, ready for the hunter alt; the appearance "
-            .. "editor and the sample below need no hunter and no target.")
-        parent.hunterNote = note
-        y = y - 44
-    end
+    settings = settings or BIT.Settings(M.moduleName, DEFAULTS)
 
-    local rows = {}
-    local function changed()
-        for _, r in ipairs(rows) do if r.Refresh then r:Refresh() end end
-    end
-    -- Forward: the retained ON sample, filled below; refreshAll re-renders it
-    -- plus the live HUD from the cached band (no new gameplay reads).
-    local sample
-    local function refreshAll()
-        local style = BIT.Style.Resolve(M.moduleName, hunterLegacy)
-        if sample then
-            renderScene(sample, style, SAMPLE_BAND, false)
+    -- Top strip: the rail's style presets on the right, the class note on the left.
+    local anchor = CreateFrame("Frame", nil, parent)
+    anchor:SetSize(1, 22)
+    anchor:SetPoint("TOPRIGHT", -10, -8)
+    local presetLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local previous
+    parent.hunterPresets = {}
+    for i = #PRESETS, 1, -1 do
+        local preset = PRESETS[i]
+        local button = pushButton(parent, preset.label, 72, function() applyPreset(preset) end)
+        if previous then
+            button:SetPoint("RIGHT", previous, "LEFT", -4, 0)
+        else
+            button:SetPoint("RIGHT", anchor, "LEFT", -8, 0)
         end
-        if hud then
-            local b = preview and "PREVIEW" or band
-            if b and b ~= "OOR" then
-                renderScene(hud, style, b, scatterRed)
-            end
-        end
-        changed()
+        previous = button
+        parent.hunterPresets[i] = button
     end
+    presetLabel:SetPoint("RIGHT", previous, "LEFT", -8, 0)
+    presetLabel:SetText("Rail style")
 
-    if isHunter then
-        parent.lockButton = UI.Button(parent, settings.locked and "Unlock and move" or "Lock position",
-            180, function()
-                setLocked(not settings.locked)
-            end)
-        parent.lockButton:SetPoint("TOPLEFT", 12, y)
-        local status = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        status:SetPoint("LEFT", parent.lockButton, "RIGHT", 10, 0)
-        status:SetText("Unlock, drag the rail, then lock to save its position.")
-        y = y - 34
-        parent.resetPosition = UI.Button(parent, "Reset position", 180, function()
-            resetPosition()
-            refreshAll()
-            if tabRefresh then tabRefresh() end
-        end)
-        parent.resetPosition:SetPoint("TOPLEFT", 12, y)
-        local rst = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        rst:SetPoint("LEFT", parent.resetPosition, "RIGHT", 10, 0)
-        rst:SetText("Back to the requested centre offset.")
-        y = y - 34
-        parent.attach = UI.Check(parent, "Attach to target nameplate",
-            function() return settings.attachToPlate ~= false end,
-            function(v)
-                settings.attachToPlate = v and true or false
-                if hud and band and band ~= "OOR" then reanchorHunterHud() end
-                if tabRefresh then tabRefresh() end
-            end,
-            "The rail rides above the target's nameplate, like the ResourceDing dots. Unchecked keeps the draggable screen position.")
-        parent.attach:SetPoint("TOPLEFT", 12, y)
-        y = y - 30
-        rows[#rows + 1] = parent.attach
-        parent.plateOffset = UI.Slider(parent, "Offset from the health bar (- = above)", -80, 30, 1,
-            function()
-                local v = finiteNum(tonumber(settings.plateOffset), -8)
-                if v < -80 then v = -80 elseif v > 30 then v = 30 end
-                return v
-            end,
-            function(v)
-                v = finiteNum(tonumber(v), DEFAULTS.plateOffset)
-                if v < -80 then v = -80 elseif v > 30 then v = 30 end
-                settings.plateOffset = v
-                if hud and band and band ~= "OOR" then reanchorHunterHud() end
-            end)
-        parent.plateOffset:SetPoint("TOPLEFT", 12, y)
-        y = y - 52
-        rows[#rows + 1] = parent.plateOffset
-        parent.longRange = UI.Check(parent, "Extended range past 35 yd (Hawk Eye)",
-            function() return settings.longRange == true or detectedLongRange end,
-            function(v)
-                settings.longRange = v and true or false
-                refreshAll()
-                if tabRefresh then tabRefresh() end
-            end,
-            "Seven dots instead of six. Auto-detected from Auto Shot's reach when the spellbook answers; tick manually otherwise.")
-        parent.longRange:SetPoint("TOPLEFT", 12, y)
-        y = y - 30
-        rows[#rows + 1] = parent.longRange
-        parent.deadIcon = UI.Check(parent, "Show Dead Zone skull (native)",
-            function() return settings.showDeadzoneIcon ~= false end,
-            function(v)
-                settings.showDeadzoneIcon = v and true or false
-                refreshAll()
-            end,
-            "Native Blizzard raid skull for the 5-8 yd dead zone. Unchecked hides it.")
-        parent.deadIcon:SetPoint("TOPLEFT", 12, y)
-        y = y - 30
-        rows[#rows + 1] = parent.deadIcon
-        parent.meleeIcon = UI.Check(parent, "Show Melee mark (native sword)",
-            function() return settings.showMeleeIcon ~= false end,
-            function(v)
-                settings.showMeleeIcon = v and true or false
-                refreshAll()
-            end,
-            "Native Blizzard sword glyph for melee reach. Unchecked hides it.")
-        parent.meleeIcon:SetPoint("TOPLEFT", 12, y)
-        y = y - 30
-        rows[#rows + 1] = parent.meleeIcon
-    end
+    local note = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    note:SetPoint("TOPLEFT", 12, -6)
+    note:SetPoint("RIGHT", presetLabel, "LEFT", -12, 0)
+    note:SetJustifyH("LEFT")
+    note:SetText(isHunter
+        and "The rail rides above the target's nameplate while a living hostile target is selected; "
+            .. "unlock to drag it to a screen spot of your own."
+        or "The native range rail appears only on a Hunter. On another class these settings wait for the "
+            .. "hunter alt; the preview and the appearance editor need no hunter and no target.")
+    parent.hunterNote = note
 
-    -- The shared editor. Its own subscription refreshes the panel; the refresh
-    -- callback below re-renders the module's retained sample (plus the live HUD
-    -- when it exists) with the same style.
-    local function refreshSample()
-        refreshAll()
-    end
-    local editor = UI.Appearance(parent, M.moduleName, CAPABILITIES, refreshSample, hunterLegacy)
-    editor:SetPoint("TOPLEFT", 12, y)
-    rows[#rows + 1] = editor
-    parent.hunterEditor = editor
-    y = y - editor:GetHeight() - 12
+    local pane = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    pane:SetPoint("TOPLEFT", 10, -46)
+    pane:SetSize(PREVIEW_WIDTH, COL_HEIGHT)
+    setBackdrop(pane, 0.09)
+    parent.hunterPane = pane
 
-    -- The retained static sample: built once, re-rendered on every style change,
-    -- never unlocked or moved. Pure fictitious data, no gameplay reads.
-    sample = buildScene(parent)
-    sample:SetPoint("TOPLEFT", editor, "BOTTOMLEFT", 0, -12)
+    area = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    area:SetPoint("TOPLEFT", pane, "TOPRIGHT", 10, 0)
+    area:SetSize(WINDOW_WIDTH - PREVIEW_WIDTH - 30, COL_HEIGHT)
+    setBackdrop(area, 0.09)
+    parent.hunterArea = area
+
+    local divider = area:CreateTexture(nil, "ARTWORK")
+    divider:SetColorTexture(0.28, 0.28, 0.3, 1)
+    divider:SetHeight(1)
+    divider:SetPoint("TOPLEFT", 8, -34)
+    divider:SetPoint("TOPRIGHT", -8, -34)
+
+    buildLivePreview(pane)
     parent.hunterSample = sample
-    renderScene(sample, BIT.Style.Resolve(M.moduleName, hunterLegacy), SAMPLE_BAND, false)
+    buildTabs(parent, isHunter)
 
-    local hint = parent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    hint:SetPoint("TOPLEFT", 12, y - sample:GetHeight() - 12)
-    hint:SetPoint("RIGHT", -12, 0)
-    hint:SetJustifyH("LEFT")
-    hint:SetText("The rail rides above the target's nameplate while a living hostile target is "
-        .. "selected (or floats at its saved screen spot when plates are off). Six dots by default; "
-        .. "a seventh past 35 yd only with Hawk Eye (auto-detected, or ticked below). The bands are approximate probes: 8-10, 10-15, 15-20, 20-25, 25-30, 30-35. "
-        .. "/bit hunterprobe prints what the client answers for the probes.")
+    local reset = pushButton(area, "Reset this tab", 120, function() resetTab(activeTab) end)
+    reset:SetPoint("BOTTOMRIGHT", -10, 10)
+    parent.hunterResetTab = reset
+    parent.hunterTabs = tabs
 
     tabRefresh = function()
-        if parent.lockButton then
-            parent.lockButton:SetText(settings.locked and "Unlock and move" or "Lock position")
-        end
-        changed()
+        refreshControls()
     end
+    selectTab(tabs[1])
+    refreshAll()
 end
 
 ----------------------------------------------------------------------------------------------
@@ -1176,7 +1607,7 @@ end
 BIT.RegisterTab("HunterRangeFinder", {
     title = "Hunter range",
     summary = "Six native dots tell a hunter the approximate range, 8-10 yd to 30-35 yd; a seventh past 35 yd with Hawk Eye.",
-    width = 700, height = 980,
+    width = WINDOW_WIDTH, height = WINDOW_HEIGHT,
     capabilities = CAPABILITIES,
     legacy = hunterLegacy,
     buildPreview = buildPreview,
@@ -1243,3 +1674,12 @@ M._hud = function() return hud end
 M._driver = function() return driver end
 M._loader = function() return loader end
 M._settings = function() return settings end
+-- The settings tab: the retained preview scene, the TRY IT band switch and the tab strip.
+M._previewScene = function() return sample end
+M._previewBand = function(name)
+    if name == nil then return previewBand end
+    setPreviewBand(name)
+    return previewBand
+end
+M._activeTab = function() return activeTab and activeTab.name end
+M._tabs = function() return tabs end

@@ -1150,51 +1150,222 @@ loader:SetScript("OnEvent", function(self, event, name)
   end
 end)
 
--- A settings-only sample: an explicit mock tooltip, not the live GameTooltip and
--- not the character's gear. No measurement, hooks or SavedVariables are touched.
+-- A settings-only sample: an explicit mock item tooltip with this module's own lines on it,
+-- not the live GameTooltip and not the character's gear. The preview is static on purpose
+-- (the policy DoTInfo's buildDoTPreview follows): every number below is hardcoded, no live
+-- API is ever read for it, and it measures nothing and hooks nothing.
+
+-- The sample item and its numbers, fixed: an item against an empty slot, so the worth line
+-- carries the whole story ("Against an empty slot: +30 health +45 mana").
+local SAMPLE = {
+  title = "Embossed Leather Vest (sample)",
+  itemLines = {
+    { "Item Level 28", 0.5, 0.5, 0.5 },
+    { "120 Armor", 1, 1, 1 },
+    { "+3 Stamina", 1, 1, 1 },
+    { "+3 Intellect", 1, 1, 1 },
+  },
+  against = "an empty slot",
+  stats = {
+    { stat = "+3 Stamina", worth = "+30 health", kind = "health" },
+    { stat = "+3 Intellect", worth = "+45 mana", kind = "mana" },
+  },
+  specs = {
+    { icon = "Interface\\Icons\\Spell_Shadow_DeathCoil", name = "Affliction", rating = ">300% better dmg spec" },
+    { icon = "Interface\\Icons\\Spell_Shadow_RainOfFire", name = "Destruction", rating = "25% better dmg spec" },
+  },
+}
+
+-- The mock tooltip's lines under the current settings: TooltipLines' own shapes, on the
+-- hardcoded numbers above. { text, r, g, b }; the divider and the icon escapes are the ones
+-- the real lines carry.
+local function sampleLines(iconSize)
+  local s = settings or DEFAULTS
+  local out = {}
+  local function add(text, r, g, b) out[#out + 1] = { text = text, r = r, g = g, b = b } end
+  add(SAMPLE.title, 1, 1, 1)
+  for _, l in ipairs(SAMPLE.itemLines) do add(l[1], l[2], l[3], l[4]) end
+  if s.compare then
+    add(DIVIDER, 1, 1, 1)
+    if s.icons then
+      add("Against " .. SAMPLE.against, 0.4, 0.73, 1)
+      if s.worth then
+        local row = {}
+        for _, d in ipairs(SAMPLE.stats) do
+          row[#row + 1] = icon(ICONS[d.kind], iconSize) .. " " .. UP .. d.worth .. "|r"
+        end
+        add(table.concat(row, "   "), 0.7, 0.7, 0.7)
+      end
+    else
+      add("Against " .. SAMPLE.against .. ":", 0.4, 0.73, 1)
+      for _, d in ipairs(SAMPLE.stats) do
+        if s.worth then
+          add("  " .. UP .. d.stat .. "|r: " .. UP .. d.worth .. "|r", 0.7, 0.7, 0.7)
+        else
+          add("  " .. UP .. d.stat .. "|r", 1, 1, 1)
+        end
+      end
+    end
+  end
+  if s.specs then
+    add(DIVIDER, 1, 1, 1)
+    for _, r in ipairs(SAMPLE.specs) do
+      if s.icons then
+        add(icon(r.icon, iconSize) .. " " .. r.name .. ": " .. r.rating, 1, 1, 1)
+      else
+        add("  " .. r.name .. ": " .. r.rating, 0.8, 0.8, 0.8)
+      end
+    end
+  end
+  return out
+end
+
+-- The mock tooltip inside scene: a dark tooltip card, and under it a bag button mock with
+-- the green up arrow (the same WHITE8X8 pieces BagMarkers paints) and the beneficiary
+-- spec's icon. scene.tipLines are re-laid-out by renderMockTooltip on every change.
+local TIP_LINES = 12 -- the sample never needs more; the pool is padded with blanks
+local function buildMockTooltip(scene)
+  local tip = CreateFrame("Frame", nil, scene, "BackdropTemplate")
+  BIT.UI.Backdrop(tip, 0.09, 0.98)
+  scene.tip = tip
+  scene.tipLines = {}
+  for i = 1, TIP_LINES do
+    local line = tip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    line:SetJustifyH("LEFT")
+    scene.tipLines[i] = line
+  end
+  local bag = CreateFrame("Frame", nil, scene)
+  bag:SetSize(32, 32)
+  scene.bag = bag
+  local face = bag:CreateTexture(nil, "BACKGROUND")
+  face:SetAllPoints()
+  face:SetTexture("Interface\\Icons\\INV_Chest_Leather_01")
+  face:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+  -- the green up arrow in the button's corner, as on a real bag button: the spec icon is
+  -- shown too, so the arrow sits one icon-width left of it (ARROW_SHIFT in BagMarkers)
+  local UP_PIECES = { { 2, 2, -4, -4 }, { 6, 3, -2, -6 }, { 10, 3, 0, -9 }, { 2, 8, -4, -12 } }
+  scene.arrow = {}
+  for i, p in ipairs(UP_PIECES) do
+    local t = bag:CreateTexture(nil, "OVERLAY")
+    t:SetTexture("Interface\\Buttons\\WHITE8X8")
+    t:SetVertexColor(0.302, 1, 0.302, 1)
+    t:SetSize(p[1], p[2])
+    t:SetPoint("TOPRIGHT", bag, "TOPRIGHT", p[3] - 14, p[4])
+    scene.arrow[i] = t
+  end
+  local specIcon = bag:CreateTexture(nil, "OVERLAY")
+  specIcon:SetSize(12, 12)
+  specIcon:SetPoint("TOPRIGHT", bag, "TOPRIGHT", -2, -12)
+  specIcon:SetTexture(SAMPLE.specs[1].icon)
+  scene.bagSpecIcon = specIcon
+  local plusN = bag:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  plusN:SetPoint("TOPRIGHT", bag, "TOPRIGHT", -2, -16)
+  plusN:SetText("+1")
+  scene.bagPlusN = plusN
+  scene.caption = scene:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  scene.caption:SetJustifyH("LEFT")
+  scene.caption:SetText("on a bag button: green up for Affliction and one more spec")
+end
+
+-- The mock tooltip redrawn at a style: font size, scale and opacity all show here, whether
+-- they come from the shared appearance editor (UI.Appearance) or from the TRY IT sliders.
+-- Pure layout over the hardcoded sample: no live API, no settings writes.
+local function renderMockTooltip(scene, style)
+  style = type(style) == "table" and style or {}
+  local fs = tonumber(style.fontSize) or 12
+  local scale = tonumber(style.scale) or 1
+  local opacity = tonumber(style.opacity) or 1
+  local font = type(style.font) == "string" and style.font or "Fonts\\FRIZQT__.TTF"
+  local outline = (style.outline == "NONE" or type(style.outline) ~= "string") and "" or style.outline
+  if scale < 0.5 then scale = 0.5 elseif scale > 3 then scale = 3 end
+  if scene.title then
+    if BIT.Style and BIT.Style.ApplyText then
+      pcall(BIT.Style.ApplyText, scene.title, style, "text")
+    end
+    scene.title:ClearAllPoints()
+    scene.title:SetPoint("TOPLEFT", 12, -4)
+    scene.title:SetHeight(fs + 8)
+  end
+  -- Reserve the painted row bounds, not just the text: native Y is positive upwards, so
+  -- large fonts and a large scale need headroom below the title and between the rows.
+  local titleDepth = fs + 16
+  local step = math.max(12, (fs + 4) * scale)
+  local iconSize = math.max(8, math.min(32, math.floor(12 * scale + 0.5)))
+  local lines = sampleLines(iconSize)
+  local tip = scene.tip
+  tip:ClearAllPoints()
+  tip:SetPoint("TOPLEFT", 12, -titleDepth)
+  tip:SetWidth(300)
+  for i, slot in ipairs(scene.tipLines) do
+    local entry = lines[i]
+    slot:ClearAllPoints()
+    if entry then
+      slot:SetText(entry.text)
+      slot:SetFont(font, fs, outline)
+      slot:SetTextColor(entry.r, entry.g, entry.b, opacity)
+      slot:Show()
+      slot:SetPoint("TOPLEFT", tip, "TOPLEFT", 8, -(6 + (i - 1) * step))
+      slot:SetPoint("RIGHT", tip, "RIGHT", -8, 0)
+    else
+      slot:SetText("")
+      slot:Hide()
+    end
+  end
+  local tipHeight = 12 + #lines * step
+  tip:SetHeight(tipHeight)
+  local bagY = titleDepth + tipHeight + 10
+  local bagSize = math.floor(32 * scale + 0.5)
+  scene.bag:ClearAllPoints()
+  scene.bag:SetPoint("TOPLEFT", 12, -bagY)
+  scene.bag:SetSize(bagSize, bagSize)
+  scene.caption:ClearAllPoints()
+  scene.caption:SetPoint("TOPLEFT", scene, "TOPLEFT", 12, -(bagY + bagSize + 4))
+  scene.caption:SetFont(font, math.max(9, fs - 2), outline)
+  scene.caption:SetTextColor(0.7, 0.7, 0.7, opacity)
+  scene:SetHeight(bagY + bagSize + 4 + math.max(9, fs - 2) + 8)
+end
+
 local function buildStatsPreview(parent)
   local scene = CreateFrame("Frame", nil, parent)
   scene:SetSize(560, 150)
   scene.title = scene:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  scene.title:SetPoint("TOPLEFT", 12, -4)
   scene.title:SetText("StatsInfo sample (not your gear)")
-  scene.tip = CreateFrame("Frame", nil, scene)
-  scene.tip:SetSize(300, 80)
-  scene.tip:SetPoint("TOPLEFT", 12, -30)
-  scene.lines = {}
-  local data = {
-    { "Embossed Leather Vest (sample)", 1, 1, 1 },
-    { "Against Worn Leather Vest", 0.4, 0.73, 1 },
-    { "+8 Armor   +2 Stamina", 1, 1, 1 },
-  }
-  for i, entry in ipairs(data) do
-    local line = scene:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    line:SetPoint("TOPLEFT", 20, -34 - (i - 1) * 18)
-    line:SetText(entry[1])
-    line:SetTextColor(entry[2], entry[3], entry[4])
-    line:SetHeight(14)
-    scene.lines[i] = line
-  end
+  buildMockTooltip(scene)
   return scene
 end
 
 local function renderStatsPreview(scene, style)
-  -- Reserve the painted row bounds, not just the text: native Y is positive
-  -- upwards, so large fonts need headroom below the title and between rows.
-  local titleHeight = style.fontSize * 2 + 8
-  local lineHeight = style.fontSize + 8
-  local step = math.max(18 * style.scale, lineHeight + 4)
-  scene.title:SetHeight(titleHeight)
-  BIT.Style.ApplyText(scene.title, style, "text")
-  local cursor = 4 + titleHeight + 8
-  for i, line in ipairs(scene.lines) do
-    line:ClearAllPoints()
-    line:SetPoint("TOPLEFT", 20, -cursor)
-    line:SetHeight(lineHeight)
-    BIT.Style.ApplyText(line, style, "text")
-    cursor = cursor + step
+  renderMockTooltip(scene, style)
+end
+
+-- The style the preview draws in: the shared appearance editor's (UI.Appearance) own
+-- fields, so changing font size, scale or opacity there -- or in the TRY IT sliders below
+-- the preview -- moves the preview.
+local function resolvedStyle()
+  if BIT.Style and BIT.Style.Resolve then
+    local ok, s = pcall(BIT.Style.Resolve, "StatsInfo")
+    if ok and type(s) == "table" then return s end
   end
-  scene:SetHeight(cursor + 8)
+  return {}
+end
+
+local previewScene -- the built mock tooltip; redrawn on every settings or style change
+local function renderPreview()
+  if previewScene then renderMockTooltip(previewScene, resolvedStyle()) end
+end
+
+local function styleGet(key, fallback)
+  return function()
+    local v = tonumber(resolvedStyle()[key])
+    return v or fallback
+  end
+end
+
+local function styleSet(key)
+  return function(v)
+    if BIT.Style and BIT.Style.Set then pcall(BIT.Style.Set, "StatsInfo", key, v) end
+    renderPreview()
+  end
 end
 
 BIT.RegisterTab("StatsInfo", {
@@ -1204,91 +1375,217 @@ BIT.RegisterTab("StatsInfo", {
     geometry = false, border = false, font = true, scale = true, opacity = true },
   title = "StatsInfo",
   summary = "In an item's tooltip: what its stats change against the item you wear in that slot.",
-  -- taller since 0.8.1: the two bag-marker boxes sit between the icons box and the legend
-  width = 640, height = 530,
+  -- the preview pane at the left, the four short sections at its right
+  width = 760, height = 520,
   build = function(parent)
     local UI = BIT.UI
-    local compare = UI.Check(parent, "Show what the item changes against the equipped one",
-      function() return settings.compare end, function(v) settings.compare = v end)
-    compare:SetPoint("TOPLEFT", 12, -10)
-    local worth = UI.Check(parent, "Under each stat, what it gives you (health, mana, armor, attack power, crit, hit...)",
-      function() return settings.worth end, function(v) settings.worth = v end)
-    worth:SetPoint("TOPLEFT", 12, -40)
-    local specs = UI.Check(parent, "How each spec of your class rates the item",
-      function() return settings.specs end, function(v) settings.specs = v end)
-    specs:SetPoint("TOPLEFT", 12, -70)
-    local icons = UI.Check(parent, "Icons instead of words",
-      function() return settings.icons end, function(v) settings.icons = v end)
-    icons:SetPoint("TOPLEFT", 12, -100)
 
-    -- The bag-markers boxes are independent of the tooltip toggles: the tooltip's
-    -- compare/specs settings do not have to be on for the arrows to work.
-    -- (Labels are deliberately SHORT: the core UI.Check label has no width/wrap, and the
-    -- details live in the legend below -- see the r1b label-width check.)
-    local bagMarkers = UI.Check(parent,
-      "Arrows on bag items: green up for an upgrade, red down only when every path is worse",
-      function() return settings.bagMarkers end,
-      function(v)
-        settings.bagMarkers = v
+    -- Left: the live preview. A static sample item (the preview never reads the live API)
+    -- with this module's own lines on it; it follows the boxes at the right and the TRY IT
+    -- sliders below it.
+    local pane = CreateFrame("Frame", nil, parent)
+    pane:SetPoint("TOPLEFT", 8, -8)
+    pane:SetWidth(336)
+    pane.title = pane:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    pane.title:SetText("Live preview (sample item, not your gear)")
+    previewScene = pane
+    buildMockTooltip(pane)
+
+    -- TRY IT: the appearance the preview is drawn in -- the same three fields the shared
+    -- appearance editor writes, so either one moves the preview.
+    local tryIt = pane:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    tryIt:SetText("TRY IT: font, scale, opacity")
+    tryIt:SetTextColor(0.85, 0.7, 0.3)
+    local fontSlider = UI.Slider(pane, "Font size (px)", 6, 48, 1,
+      styleGet("fontSize", 12), styleSet("fontSize"), nil,
+      "The size the preview's text is drawn in. The same field the shared appearance editor changes.")
+    local scaleSlider = UI.Slider(pane, "Scale", 0.5, 3, 0.05,
+      styleGet("scale", 1), styleSet("scale"), function(v) return string.format("%.2fx", v) end,
+      "Scales the preview's rows, icons and bag button. The same field the shared appearance editor changes.")
+    local opacitySlider = UI.Slider(pane, "Opacity", 0, 1, 0.05,
+      styleGet("opacity", 1), styleSet("opacity"), "%d%%",
+      "How see-through the preview's lines are. The same field the shared appearance editor changes.")
+    tryIt:SetPoint("TOPLEFT", pane, "BOTTOMLEFT", 0, -10)
+    fontSlider:SetPoint("TOPLEFT", tryIt, "BOTTOMLEFT", -4, -4)
+    scaleSlider:SetPoint("TOPLEFT", fontSlider, "BOTTOMLEFT", 0, -2)
+    opacitySlider:SetPoint("TOPLEFT", scaleSlider, "BOTTOMLEFT", 0, -2)
+
+    -- Right: the settings in four short sections instead of one wall of text. Each block
+    -- is anchored to the one above it, so a wrapped block never runs into the next.
+    local area = CreateFrame("Frame", nil, parent)
+    area:SetPoint("TOPLEFT", pane, "TOPRIGHT", 14, 0)
+    area:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -8, 0)
+    area:SetHeight(430)
+
+    local tabs = {}
+    local function selectTab(tab)
+      for _, other in ipairs(tabs) do
+        local on = other == tab
+        other.content:SetShown(on)
+        other.button.underline:SetShown(on)
+        other.button.caption:SetTextColor(on and 1 or 0.6, on and 0.82 or 0.6, on and 0 or 0.6)
+      end
+    end
+    local function addTab(name)
+      local tab = {}
+      tab.content = CreateFrame("Frame", nil, area)
+      tab.content:SetPoint("TOPLEFT", area, "TOPLEFT", 0, -32)
+      tab.content:SetPoint("TOPRIGHT", area, "TOPRIGHT", 0, -32)
+      tab.content:Hide()
+      local button = CreateFrame("Button", nil, area)
+      -- "caption", not "text": the settings and the suites read a frame's .text as the
+      -- string it shows, so a font string must not live under that name
+      button.caption = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      button.caption:SetText(name)
+      button:SetSize(button.caption:GetStringWidth() + 20, 26)
+      button.caption:SetPoint("CENTER")
+      button.underline = button:CreateTexture(nil, "ARTWORK")
+      button.underline:SetColorTexture(1, 0.82, 0, 1)
+      button.underline:SetHeight(2)
+      button.underline:SetPoint("BOTTOMLEFT", 6, 0)
+      button.underline:SetPoint("BOTTOMRIGHT", -6, 0)
+      local previous = tabs[#tabs]
+      if previous then
+        button:SetPoint("LEFT", previous.button, "RIGHT", 2, 0)
+      else
+        button:SetPoint("TOPLEFT", area, "TOPLEFT", 0, -2)
+      end
+      button:SetScript("OnClick", function() selectTab(tab) end)
+      tab.button = button
+      function tab:place(widget, gap)
+        widget:ClearAllPoints()
+        if self.last then
+          widget:SetPoint("TOPLEFT", self.last, "BOTTOMLEFT", 0, -(gap or 6))
+        else
+          widget:SetPoint("TOPLEFT", self.content, "TOPLEFT", 4, 0)
+        end
+        self.last = widget
+        return widget
+      end
+      function tab:heading(text)
+        local label = self.content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        label:SetJustifyH("LEFT")
+        label:SetText(text)
+        label:SetTextColor(0.85, 0.7, 0.3)
+        self:place(label, 0)
+        label:SetPoint("RIGHT", self.content, "RIGHT", -4, 0)
+        return label
+      end
+      function tab:body(text, muted)
+        local block = self.content:CreateFontString(nil, "OVERLAY",
+          muted and "GameFontDisableSmall" or "GameFontHighlightSmall")
+        block:SetJustifyH("LEFT")
+        block:SetText(text)
+        self:place(block, 8)
+        block:SetPoint("RIGHT", self.content, "RIGHT", -4, 0)
+        return block
+      end
+      table.insert(tabs, tab)
+      return tab
+    end
+
+    -- Display: the boxes, each with what it does on hover. The beneficiary-icon box greys
+    -- out with the arrows off: it has nothing to sit on then.
+    local display = addTab("Display")
+    local checkRows = {}
+    local updateBagIconState
+    local function toggle(key, v)
+      settings[key] = v
+      if key == "bagMarkers" then
         if v then M.EnableBagMarkers() else M.DisableBagMarkers() end
-      end)
-    bagMarkers:SetPoint("TOPLEFT", 12, -130)
-    local bagSpecIcons = UI.Check(parent,
-      "The beneficiary spec icon on an up arrow (+N for the rest, ~ for the approximate score)",
-      function() return settings.bagSpecIcons end,
-      function(v)
-        settings.bagSpecIcons = v
+        if updateBagIconState then updateBagIconState() end
+      elseif key == "bagSpecIcons" then
         M.RefreshBags(true)
-      end)
-    bagSpecIcons:SetPoint("TOPLEFT", 12, -160)
+      end
+      renderPreview()
+    end
+    local function box(key, label, tooltip)
+      local check = UI.Check(display.content, label,
+        function() return (settings or DEFAULTS)[key] end,
+        function(v) toggle(key, v) end, tooltip)
+      display:place(check)
+      checkRows[#checkRows + 1] = check
+      return check
+    end
+    box("compare", "Show what the item changes against the equipped one",
+      "The differences against the item you wear in that slot, in the item's tooltip.")
+    box("worth", "Under each stat, what it gives you",
+      "Health, mana, armor, attack power, crit, hit and the rest, under each difference. "
+        .. "The Legend tab has the icons.")
+    box("specs", "How each spec of your class rates the item",
+      "The Ratings tab explains the numbers.")
+    box("icons", "Icons instead of words",
+      "Icons and one line each, instead of words.")
+    box("bagMarkers", "Arrows on bag items",
+      "Green up for an upgrade, red down only when every path is worse. The Bag arrows tab explains them.")
+    local bagSpecIcons = box("bagSpecIcons", "The beneficiary spec icon on an up arrow",
+      "+N for the rest of the specs it is an upgrade for, ~ for the approximate healer score. "
+        .. "Needs the arrows on.")
+    updateBagIconState = function()
+      local on = (settings or DEFAULTS).bagMarkers
+      bagSpecIcons:SetAlpha(on and 1 or 0.35)
+      bagSpecIcons:EnableMouse(on)
+    end
+    display:body("Hover a box for what it does. The preview at the left follows these boxes at once.")
+    -- Reset: the six settings above, back to their defaults. The appearance is not touched.
+    local reset = UI.Button(display.content, "Reset to defaults", 150, function()
+      for k, v in pairs(DEFAULTS) do settings[k] = v end
+      if settings.bagMarkers then M.EnableBagMarkers() else M.DisableBagMarkers() end
+      M.RefreshBags(true)
+      for _, c in ipairs(checkRows) do c:Refresh() end
+      updateBagIconState()
+      renderPreview()
+    end)
+    display:place(reset, 12)
 
-    -- what the icons stand for
-    local legend = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    legend:SetPoint("TOPLEFT", 16, -196)
-    legend:SetPoint("RIGHT", -14, 0)
-    legend:SetJustifyH("LEFT")
+    -- Legend: the icons, and what the worth line says in words.
+    local legend = addTab("Legend")
+    legend:heading("What the icons stand for")
     local words = {}
     for _, kind in ipairs({ "armor", "ap", "crit", "hit", "haste", "expertise", "dodge", "parry", "block", "blockvalue", "defense",
       "health", "mana", "spellcrit", "regen", "healing", "spellpower" }) do
       words[#words + 1] = icon(ICONS[kind], 12) .. " " .. WORTH_WORDS[kind]
     end
-    legend:SetText(table.concat(words, "    ") .. "\n\nSpec ratings: how much better or worse the item is for "
-          .. "each spec than what you wear (\"25% better dmg spec\": its stats are worth a quarter more to that spec). A tank "
-          .. "has two: for survival (less damage taken) and for threat gen. (holding aggro). With nothing worth comparing, or "
-          .. "a change past the cap: \">300% ...\", at most triple. A healer spec (druid "
-          .. "Restoration) is rated by this addon's own starter heuristic, and its line is marked \"(approx.)\": an "
-          .. "approximate ITEM score, not a measured healing gain. Its weights are DESIGN CHOICES of this addon, "
-          .. "1 x +Healing, 1 x Spell Power, 0.5 x Intellect, 0.5 x Spirit and 2 x MP5; a weapon's damage per second, "
-          .. "the physical stats, damage-only spell stats and the schools' spell damage count for nothing to it, "
-          .. "and crit, haste, procs, talents, spell ranks, overheal and cast uptime are not modelled. "
-          .. "The other healers have no spec here: the simulator does not model healing."
-          .. "\n\nBag arrows (on the game's own bags and on the Baganator bag grid): always against what you wear in that slot, never a BiS verdict. "
-          .. "Green up: at least one spec's score is outright better and none of it worse. Red down: every replacement "
-          .. "path is strictly worse for every spec. Mixed, equal or unknown: no arrow. Stats the simulator does not "
-          .. "model (e.g. armor only on a damage class) are compared conservatively by the raw differences, with no "
-          .. "spec icon; the healer's approximate score gets a ~ icon. While the client hides stats (in combat) or the "
-          .. "item's data has not arrived, no arrow is shown.")
-        local about = parent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-        about:SetPoint("TOPLEFT", legend, "BOTTOMLEFT", 0, -8)
-        about:SetPoint("RIGHT", -14, 0)
-        about:SetJustifyH("LEFT")
-        about:SetText("The ratings use ForeverSim's stat weights, measured on a level 60 build of each spec with its "
-          .. "own talents, gear and buffs, so below 60 they are an estimate, and a stat that build already has enough "
-          .. "of counts for nothing (an Arms warrior's hit). A weapon's damage per second counts as the simulator "
-          .. "weighs it for the spec, in the main hand, the off hand and the ranged slot apart. Not counted: what a "
-          .. "hunter's pet gets from your stats, weapon skill, and Spirit for the specs the simulator does not weigh it for. "
-          .. "Restoration is the one exception: its weights are this addon's own starter heuristic "
-          .. "(tools/data/healer_weights.json: a design choice, not a simulated result), and the tooltip marks "
-          .. "its line \"(approx.)\" for it.")
+    legend:body(table.concat(words, "    "))
+    legend:body("Under each difference: what the stats give this character -- the game's own numbers, "
+      .. "worked out as its character sheet works them out. Green is up, red is down.")
+    legend:body("Armor is 2 per Agility and mana regeneration a quarter of Spirit, as measured on Forever. "
+      .. "In combat the game may hide these numbers; then the line is left out.")
 
-    local text = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    text:SetPoint("TOPLEFT", about, "BOTTOMLEFT", -2, -14)
-    text:SetPoint("RIGHT", -14, 0)
-    text:SetJustifyH("LEFT")
-    text:SetText("What a stat gives is the game's own number, worked out as its character sheet does: attack "
-      .. "power, critical strike, spell critical strike and dodge from the game's functions for them, health from its "
-      .. "health per Stamina. Armor is 2 per Agility and mana regeneration a quarter of Spirit, as measured on Forever. "
-      .. "In combat the game may hide these numbers; then they are left out.")
+    -- Ratings: how the spec numbers come about, and what they do not claim.
+    local ratings = addTab("Ratings")
+    ratings:heading("How each spec rates the item")
+    ratings:body("Each spec of your class rates the item against what you wear: \"25% better dmg spec\" "
+      .. "means its stats are worth a quarter more to that spec.")
+    ratings:body("A tank has two numbers: for survival (less damage taken) and for threat gen. (holding aggro).")
+    ratings:body("With nothing worth comparing, or a change past the cap: \">300% ...\", at most triple.")
+    ratings:body("A healer spec (druid Restoration) is rated by this addon's own starter heuristic, and its "
+      .. "line is marked \"(approx.)\": an approximate item score, not a measured healing gain.")
+    ratings:body("Its weights are design choices of this addon (tools/data/healer_weights.json): "
+      .. "1 x +Healing, 1 x Spell Power, 0.5 x Intellect, 0.5 x Spirit and 2 x MP5. "
+      .. "Every other stat counts for nothing to it.")
+    ratings:body("The other ratings use ForeverSim's stat weights, measured on a level 60 build of each spec "
+      .. "with its own talents, gear and buffs: below 60 they are an estimate.", true)
+    ratings:body("A weapon's damage per second counts as the simulator weighs it for the spec: main hand, "
+      .. "off hand and ranged slot apart.", true)
+    ratings:body("Not counted: what a hunter's pet gets from your stats, weapon skill, and Spirit for the "
+      .. "specs the simulator does not weigh it for.", true)
+
+    -- Bag arrows: the two arrows, and when neither shows.
+    local bags = addTab("Bag arrows")
+    bags:heading("Arrows on bag items")
+    bags:body("On the game's own bags and the Baganator bag grid: green up when at least one spec's score "
+      .. "is outright better and none of it worse.")
+    bags:body("Red down only when every replacement path is strictly worse for every spec. "
+      .. "Mixed, equal or unknown: no arrow.")
+    bags:body("Always against what you wear in that slot, never a BiS verdict.")
+    bags:body("Stats the simulator does not model are compared conservatively by the raw differences, "
+      .. "with no spec icon; the healer's approximate score gets a ~ icon.")
+    bags:body("While the client hides stats (in combat) or the item's data has not arrived, no arrow is shown.")
+
+    selectTab(tabs[1])
+
+    -- The probe row (a direct child of the tab's content): what /bit probe records.
     local count -- SI-751: declared before the button so its OnClick sees the local
     local button = UI.Button(parent, "Record the probe", 170, function()
       M.Probe()
@@ -1296,19 +1593,19 @@ BIT.RegisterTab("StatsInfo", {
       local probes = BIT.DB().probes
       count:SetText(string.format("%d recorded so far", type(probes) == "table" and #probes or 0))
     end)
-    button:SetPoint("TOPLEFT", text, "BOTTOMLEFT", 0, -14)
+    button:SetPoint("TOPLEFT", opacitySlider, "BOTTOMLEFT", 0, -12)
     count = parent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     count:SetPoint("LEFT", button, "RIGHT", 10, 0)
     parent:SetScript("OnShow", function()
       local probes = BIT.DB().probes
       count:SetText(string.format("%d recorded so far", type(probes) == "table" and #probes or 0))
-      compare:Refresh()
-      worth:Refresh()
-      specs:Refresh()
-      icons:Refresh()
-      bagMarkers:Refresh()
-      bagSpecIcons:Refresh()
+      for _, c in ipairs(checkRows) do c:Refresh() end
+      updateBagIconState()
+      renderPreview()
     end)
+    -- drawn once here too: the preview is already there the moment the tab is built
+    updateBagIconState()
+    renderPreview()
   end,
 })
 BIT.tabWords.stats = "StatsInfo"

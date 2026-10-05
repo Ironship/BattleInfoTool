@@ -445,6 +445,476 @@ local function renderRangePreview(scene, style)
   scene:SetHeight(cursor + 4)
 end
 
+---------------------------------------------------------------------------------------------
+-- The settings tab: a live preview on the left, the settings in tabs on the right
+---------------------------------------------------------------------------------------------
+
+local WHITE = "Interface\\Buttons\\WHITE8X8"
+local WINDOW_WIDTH, WINDOW_HEIGHT = 760, 470
+local PREVIEW_TOP = 40 -- the presets' row above the two columns
+local PREVIEW_WIDTH = 290
+local ROW_HEIGHT = 26
+local SETTINGS_LAYOUT = { label = 186, control = 170 }
+local PREVIEW_LAYOUT = { label = 180, control = 40 }
+local DISABLED_ALPHA = 0.35
+
+-- One click each: the two marks and the dimming. The size, the height and the measuring spell
+-- are the player's own and stay as they are.
+local PRESETS = {
+  { id = "minimal", label = "Minimal", values = { showIn = false, showOut = true, dimIcons = false } },
+  { id = "classic", label = "Classic", values = { showIn = true, showOut = true, dimIcons = true } },
+  { id = "bare", label = "Bare", values = { showIn = false, showOut = false, dimIcons = false } },
+}
+
+local window -- the tab's content frame: the preview and the settings are built into it
+local controls = {} -- every settings and preview row, refreshed after each change
+local tabs, activeTab = {}, nil
+local preview = { out = false } -- the TRY IT switch: the preview's own state, never a setting
+
+local function setBackdrop(frame, shade, alpha)
+  frame:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
+  frame:SetBackdropColor(shade, shade, shade, alpha or 1)
+  frame:SetBackdropBorderColor(0.28, 0.28, 0.3, 1)
+end
+
+local function refreshControls()
+  for _, control in ipairs(controls) do control:Refresh() end
+end
+
+-- The preview draws what update() draws on the target: the mark above the health bar at the set
+-- height and size, gone when the settings say so, and the action bar button grey and dim while
+-- the simulated target is out of range.
+local function updatePreview()
+  if not window or not window.previewIcon then return end
+  local state = preview.out and "out" or "in"
+  local want = (state == "in" and settings.showIn) or (state == "out" and settings.showOut)
+  local mark = window.previewIcon
+  mark:ClearAllPoints()
+  mark:SetPoint("BOTTOM", window.previewBar, "TOP", 0, settings.offset)
+  mark:SetSize(settings.size, settings.size)
+  mark.texture:SetTexture(ICON[state])
+  mark:SetShown(want)
+  window.previewState:SetText((state == "in" and "In range - the green checkmark" or "Out of range - the red X")
+    .. (want and "" or " (hidden)"))
+  local dim = settings.dimIcons and state == "out"
+  window.previewButtonIcon:SetDesaturated(dim)
+  local tone = dim and 0.6 or 1
+  window.previewButtonIcon:SetVertexColor(tone, tone, tone)
+  window.previewButtonNote:SetText(dim and "Grey and dim out of range"
+    or (state == "out" and "Left alone - the dimming is off" or "Its own colours in range"))
+end
+
+local function changed()
+  refreshControls()
+  updatePreview()
+  update()
+  M.RefreshDimming()
+  if window and window.spellsLine then
+    local names = table.concat(M.Spells(), ", ")
+    window.spellsLine:SetText("Measured by: " .. (names ~= "" and names or "no spell of this class"))
+  end
+end
+
+local function set(key) return function(v) settings[key] = v; changed() end end
+local function get(key) return function() return settings[key] end end
+
+---------------------------------------------------------------------------------------------
+-- Controls
+---------------------------------------------------------------------------------------------
+
+local function makeRow(parent, labelText, opts)
+  opts = opts or {}
+  local layout = opts.layout or SETTINGS_LAYOUT
+  local row = CreateFrame("Frame", nil, parent)
+  row:SetSize(layout.label + layout.control + 50, ROW_HEIGHT)
+  row.layout = layout
+  row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  row.label:SetPoint("LEFT", 6, 0)
+  row.label:SetWidth(layout.label - 8)
+  row.label:SetJustifyH("LEFT")
+  row.label:SetWordWrap(false)
+  row.label:SetText(labelText)
+  row.enabledIf = opts.enabledIf
+  if opts.tooltip then
+    row:EnableMouse(true)
+    row:SetScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      GameTooltip:SetText(labelText, 1, 1, 1)
+      GameTooltip:AddLine(opts.tooltip, nil, nil, nil, true)
+      GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  end
+  function row:ApplyEnabled(widget)
+    local enabled = not self.enabledIf or self.enabledIf(settings)
+    self:SetAlpha(enabled and 1 or DISABLED_ALPHA)
+    widget:EnableMouse(enabled)
+    if widget.EnableMouseWheel then widget:EnableMouseWheel(enabled) end
+  end
+  table.insert(controls, row)
+  return row
+end
+
+-- get/set work on the settings or on the preview's own state.
+local function checkboxRow(parent, labelText, get, set, opts)
+  opts = opts or {}
+  local row = makeRow(parent, labelText, opts)
+  local box = CreateFrame("CheckButton", nil, row)
+  box:SetSize(24, 24)
+  box:SetPoint("LEFT", row, "LEFT", row.layout.label, 0)
+  box:SetNormalTexture("Interface\\Buttons\\UI-CheckBox-Up")
+  box:SetPushedTexture("Interface\\Buttons\\UI-CheckBox-Down")
+  box:SetHighlightTexture("Interface\\Buttons\\UI-CheckBox-Highlight", "ADD")
+  box:SetCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check")
+  box:SetScript("OnClick", function(self) set(self:GetChecked() and true or false) end)
+  function row:Refresh()
+    box:SetChecked(get() and true or false)
+    self:ApplyEnabled(box)
+  end
+  return row
+end
+
+local function checkbox(parent, key, labelText, opts)
+  return checkboxRow(parent, labelText, get(key), set(key), opts)
+end
+
+local function sliderRow(parent, labelText, min, max, step, get, set, opts)
+  opts = opts or {}
+  local row = makeRow(parent, labelText, opts)
+  local slider = CreateFrame("Slider", nil, row)
+  slider:SetOrientation("HORIZONTAL")
+  slider:SetSize(row.layout.control - 44, 18)
+  slider:SetPoint("LEFT", row, "LEFT", row.layout.label + 2, 0)
+  slider:SetMinMaxValues(min, max)
+  slider:SetValueStep(step)
+  slider:SetObeyStepOnDrag(true)
+  local track = slider:CreateTexture(nil, "BACKGROUND")
+  track:SetColorTexture(0.3, 0.3, 0.32, 1)
+  track:SetHeight(4)
+  track:SetPoint("LEFT")
+  track:SetPoint("RIGHT")
+  slider:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+  slider:GetThumbTexture():SetSize(18, 24)
+  local valueText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  valueText:SetPoint("LEFT", slider, "RIGHT", 8, 0)
+  local suffix = opts.suffix or ""
+  local updating = false
+  slider:SetScript("OnValueChanged", function(_, value)
+    if updating then return end
+    value = math.floor(value / step + 0.5) * step
+    valueText:SetText(value .. suffix)
+    set(value)
+  end)
+  slider:SetScript("OnMouseWheel", function(self, delta) self:SetValue(self:GetValue() + delta * step) end)
+  function row:Refresh()
+    updating = true
+    local value = get()
+    slider:SetValue(value)
+    valueText:SetText(math.floor(value / step + 0.5) * step .. suffix)
+    updating = false
+    self:ApplyEnabled(slider)
+  end
+  return row
+end
+
+local function slider(parent, key, labelText, min, max, step, opts)
+  return sliderRow(parent, labelText, min, max, step, get(key), set(key), opts)
+end
+
+-- A one-line text setting: a spell name or id.
+local function editRow(parent, key, labelText, opts)
+  opts = opts or {}
+  local row = makeRow(parent, labelText, opts)
+  local getText, setText = get(key), set(key)
+  local box = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+  box:SetSize(row.layout.control, 20)
+  box:SetPoint("LEFT", row, "LEFT", row.layout.label + 2, 0)
+  box:SetAutoFocus(false)
+  box:SetScript("OnEnterPressed", function(self) setText(self:GetText() or ""); self:ClearFocus() end)
+  box:SetScript("OnEditFocusLost", function(self) setText(self:GetText() or "") end)
+  box:SetScript("OnEscapePressed", function(self) self:SetText(getText() or ""); self:ClearFocus() end)
+  function row:Refresh()
+    box:SetText(getText() or "")
+    self:ApplyEnabled(box)
+  end
+  return row
+end
+
+local function pushButton(parent, text, width, onClick)
+  local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+  button:SetSize(width, 22)
+  button:SetText(text)
+  button:SetScript("OnClick", onClick)
+  return button
+end
+
+---------------------------------------------------------------------------------------------
+-- Tabs
+---------------------------------------------------------------------------------------------
+
+local function selectTab(tab)
+  activeTab = tab
+  for _, other in ipairs(tabs) do
+    local selected = other == tab
+    other.content:SetShown(selected)
+    other.button.text:SetTextColor(selected and 1 or 0.6, selected and 0.82 or 0.6, selected and 0 or 0.6)
+    other.button.underline:SetShown(selected)
+    if other.footer then other.footer:SetShown(selected) end
+  end
+end
+
+-- A tab whose methods add rows top to bottom and remember the setting keys, for "Reset this tab".
+local function addTab(name)
+  local area = window.settingsArea
+  local tab = { keys = {}, y = 0 }
+  tab.content = CreateFrame("Frame", nil, area)
+  tab.content:SetPoint("TOPLEFT", area, "TOPLEFT", 8, -40)
+  tab.content:SetPoint("BOTTOMRIGHT", area, "BOTTOMRIGHT", -8, 40)
+  tab.content:Hide()
+
+  local button = CreateFrame("Button", nil, area)
+  button.text = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  button.text:SetText(name)
+  button:SetSize(button.text:GetStringWidth() + 20, 26)
+  button.text:SetPoint("CENTER")
+  button.underline = button:CreateTexture(nil, "ARTWORK")
+  button.underline:SetColorTexture(1, 0.82, 0, 1)
+  button.underline:SetHeight(2)
+  button.underline:SetPoint("BOTTOMLEFT", 6, 0)
+  button.underline:SetPoint("BOTTOMRIGHT", -6, 0)
+  local previous = tabs[#tabs]
+  if previous then
+    button:SetPoint("LEFT", previous.button, "RIGHT", 2, 0)
+  else
+    button:SetPoint("TOPLEFT", area, "TOPLEFT", 8, -8)
+  end
+  button:SetScript("OnClick", function() selectTab(tab) end)
+  tab.button = button
+
+  local function place(row, key)
+    row:SetPoint("TOPLEFT", tab.content, "TOPLEFT", 0, -tab.y)
+    tab.y = tab.y + ROW_HEIGHT
+    if key then table.insert(tab.keys, key) end
+    return row
+  end
+  function tab:checkbox(key, ...) return place(checkbox(self.content, key, ...), key) end
+  function tab:slider(key, ...) return place(slider(self.content, key, ...), key) end
+  function tab:edit(key, ...) return place(editRow(self.content, key, ...), key) end
+  function tab:gap() self.y = self.y + 8 end
+
+  table.insert(tabs, tab)
+  return tab
+end
+
+local function resetTab(tab)
+  for _, key in ipairs(tab.keys) do settings[key] = DEFAULTS[key] end
+  changed()
+end
+
+local function applyPreset(preset)
+  for key, value in pairs(preset.values) do settings[key] = value end
+  changed()
+  BIT.Say(preset.label .. " preset applied.")
+end
+
+---------------------------------------------------------------------------------------------
+-- The live preview: a mock nameplate and a mock action bar button
+---------------------------------------------------------------------------------------------
+
+local function buildLivePreview(pane)
+  local SIDE = 12
+  local CARD_WIDTH = PREVIEW_WIDTH - 2 * SIDE -- 266
+
+  local title = pane:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  title:SetPoint("TOPLEFT", SIDE, -12)
+  title:SetText("Live preview")
+  local titleRule = pane:CreateTexture(nil, "ARTWORK")
+  titleRule:SetColorTexture(0.28, 0.28, 0.3, 1)
+  titleRule:SetHeight(1)
+  titleRule:SetPoint("TOPLEFT", 8, -34)
+  titleRule:SetPoint("TOPRIGHT", -8, -34)
+
+  -- A mock nameplate of an enemy: the mark goes above its health bar, where the real one goes.
+  local scene = CreateFrame("Frame", nil, pane, "BackdropTemplate")
+  scene:SetSize(CARD_WIDTH, 184)
+  scene:SetPoint("TOP", pane, "TOP", 0, -44)
+  setBackdrop(scene, 0.07)
+  local ground = scene:CreateTexture(nil, "BACKGROUND")
+  ground:SetPoint("TOPLEFT", 1, -1)
+  ground:SetPoint("BOTTOMRIGHT", -1, 1)
+  ground:SetTexture("Interface\\FrameGeneral\\UI-Background-Rock")
+  ground:SetTexCoord(0, 0.26, 0, 0.18) -- about 1:1 texels on the card
+  ground:SetVertexColor(0.75, 0.8, 0.75)
+
+  local plate = CreateFrame("Frame", nil, scene)
+  plate:SetSize(190, 36)
+  plate:SetPoint("BOTTOM", scene, "BOTTOM", 0, 12)
+  local bar = CreateFrame("StatusBar", nil, plate)
+  bar:SetSize(133, 13)
+  bar:SetPoint("BOTTOMLEFT", plate, "BOTTOMLEFT", 12, 6)
+  bar:SetMinMaxValues(0, 100)
+  bar:SetValue(72)
+  bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+  bar:SetStatusBarColor(0.85, 0.1, 0.1) -- hostile
+  local back = plate:CreateTexture(nil, "BACKGROUND")
+  back:SetPoint("TOPLEFT", bar, "TOPLEFT", -2, 3)
+  back:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 6, -6)
+  back:SetColorTexture(0.1, 0.02, 0.02, 1)
+  local name = plate:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  name:SetPoint("BOTTOMLEFT", bar, "TOPLEFT", 0, 5)
+  name:SetText("Murloc Raider")
+  name:SetTextColor(1, 0.13, 0.13) -- hostile
+  local level = plate:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  level:SetPoint("LEFT", bar, "RIGHT", 6, 0)
+  level:SetText("12")
+  level:SetTextColor(1, 0.82, 0)
+
+  -- The mark, painted above the mock nameplate as the real one is above the real one.
+  local mark = CreateFrame("Frame", nil, scene)
+  mark:SetFrameLevel(plate:GetFrameLevel() + 10)
+  mark.texture = mark:CreateTexture(nil, "OVERLAY")
+  mark.texture:SetAllPoints()
+  mark.texture:SetTexture(ICON["in"])
+  window.previewBar, window.previewIcon = bar, mark
+
+  window.previewState = pane:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  window.previewState:SetPoint("TOPLEFT", scene, "BOTTOMLEFT", 0, -6)
+  window.previewState:SetPoint("TOPRIGHT", scene, "BOTTOMRIGHT", 0, -6)
+  window.previewState:SetJustifyH("LEFT")
+
+  local function header(text, anchor, gap)
+    local label = pane:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    label:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -gap)
+    label:SetText(text)
+    label:SetTextColor(0.85, 0.7, 0.3)
+    local rule = pane:CreateTexture(nil, "ARTWORK")
+    rule:SetColorTexture(0.28, 0.28, 0.3, 1)
+    rule:SetHeight(1)
+    rule:SetPoint("LEFT", label, "RIGHT", 8, 0)
+    rule:SetPoint("RIGHT", pane, "RIGHT", -SIDE, 0)
+    return label
+  end
+
+  -- Try it: the preview's own state, not a setting.
+  local tryIt = header("TRY IT", window.previewState, 12)
+  local toggle = checkboxRow(pane, "Simulate: out of range",
+    function() return preview.out end,
+    function(v) preview.out = v; changed() end,
+    { layout = PREVIEW_LAYOUT,
+      tooltip = "The preview only: the red X while it is checked, the green checkmark while it is not." })
+  toggle:SetPoint("TOPLEFT", tryIt, "BOTTOMLEFT", -6, -4)
+
+  -- The action bar button the module dims.
+  local barCard = CreateFrame("Frame", nil, pane, "BackdropTemplate")
+  barCard:SetSize(CARD_WIDTH, 56)
+  barCard:SetPoint("TOPLEFT", toggle, "BOTTOMLEFT", -6, -10)
+  setBackdrop(barCard, 0.07)
+  local button = CreateFrame("Frame", nil, barCard, "BackdropTemplate")
+  button:SetSize(36, 36)
+  button:SetPoint("LEFT", barCard, "LEFT", 12, 0)
+  button:SetBackdrop({ edgeFile = WHITE, edgeSize = 1 })
+  button:SetBackdropBorderColor(0, 0, 0, 1)
+  local buttonIcon = button:CreateTexture(nil, "BACKGROUND")
+  buttonIcon:SetPoint("TOPLEFT", 1, -1)
+  buttonIcon:SetPoint("BOTTOMRIGHT", -1, 1)
+  buttonIcon:SetTexture("Interface\\Icons\\Spell_Fire_Immolation")
+  buttonIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+  local hotkey = button:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmallGray")
+  hotkey:SetPoint("TOPRIGHT", button, "TOPRIGHT", -2, -2)
+  hotkey:SetText("1")
+  window.previewButtonIcon = buttonIcon
+  window.previewButtonNote = barCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  window.previewButtonNote:SetPoint("LEFT", button, "RIGHT", 10, 0)
+  window.previewButtonNote:SetPoint("RIGHT", barCard, "RIGHT", -8, 0)
+  window.previewButtonNote:SetJustifyH("LEFT")
+
+  local hint = pane:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  hint:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", SIDE, 12)
+  hint:SetWidth(CARD_WIDTH)
+  hint:SetJustifyH("LEFT")
+  hint:SetText("A sample only: the mark and the dimming happen on your own target and bars.")
+end
+
+local function buildTabs()
+  local iconTab = addTab("Icon")
+  iconTab:checkbox("showIn", "Checkmark in range",
+    { tooltip = "The green checkmark over your target while one of the measuring spells reaches it." })
+  iconTab:checkbox("showOut", "Red X out of range",
+    { tooltip = "The red X over your target while none of the measuring spells reaches it." })
+  iconTab:checkbox("besideFrame", "Beside the target frame",
+    { tooltip = "Without a nameplate (nameplates off, the target off screen) the mark sits beside "
+      .. "the target frame instead." })
+  iconTab:gap()
+  local shown = function(s) return s.showIn or s.showOut end
+  iconTab:slider("size", "Size", 12, 64, 2,
+    { enabledIf = shown, tooltip = "The mark's size in pixels." })
+  iconTab:slider("offset", "Height above the bar", -20, 80, 1,
+    { enabledIf = shown, tooltip = "Pixels above the nameplate's health bar: over the row of "
+      .. "debuff icons there." })
+
+  local barTab = addTab("Action bar")
+  barTab:checkbox("dimIcons", "Grey out action bar icons",
+    { tooltip = "While the target is out of an action's range its icon goes grey and dim, on top "
+      .. "of the game's red key binding." })
+
+  local spellTab = addTab("Spell")
+  spellTab:edit("spell", "Measure by this spell",
+    { tooltip = "A spell name or id of your own to measure the range by; empty: your class's "
+      .. "main attacks." })
+  spellTab:gap()
+  window.spellsLine = spellTab.content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  window.spellsLine:SetPoint("TOPLEFT", spellTab.content, "TOPLEFT", 0, -spellTab.y)
+end
+
+-- The presets, the preview and the settings in the tab's content frame: the presets
+-- right-aligned above the two columns, the live preview on the left, the tabs on the right.
+local function buildContent(top, anchor)
+  local presetLabel = window:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  local previous
+  for i = #PRESETS, 1, -1 do
+    local preset = PRESETS[i]
+    local button = pushButton(window, preset.label, 72, function() applyPreset(preset) end)
+    if previous then
+      button:SetPoint("RIGHT", previous, "LEFT", -4, 0)
+    else
+      button:SetPoint("RIGHT", anchor, "LEFT", -8, 0)
+    end
+    previous = button
+  end
+  presetLabel:SetPoint("RIGHT", previous, "LEFT", -8, 0)
+  presetLabel:SetText("Presets")
+
+  local pane = CreateFrame("Frame", nil, window, "BackdropTemplate")
+  pane:SetPoint("TOPLEFT", 10, -top)
+  pane:SetPoint("BOTTOMLEFT", 10, 10)
+  pane:SetWidth(PREVIEW_WIDTH)
+  setBackdrop(pane, 0.09)
+  buildLivePreview(pane)
+
+  local area = CreateFrame("Frame", nil, window, "BackdropTemplate")
+  area:SetPoint("TOPLEFT", pane, "TOPRIGHT", 10, 0)
+  area:SetPoint("BOTTOMRIGHT", -10, 10)
+  setBackdrop(area, 0.09)
+  window.settingsArea = area
+
+  local divider = area:CreateTexture(nil, "ARTWORK")
+  divider:SetColorTexture(0.28, 0.28, 0.3, 1)
+  divider:SetHeight(1)
+  divider:SetPoint("TOPLEFT", 8, -34)
+  divider:SetPoint("TOPRIGHT", -8, -34)
+
+  buildTabs()
+  local reset = pushButton(area, "Reset this tab", 120, function() resetTab(activeTab) end)
+  reset:SetPoint("BOTTOMRIGHT", -10, 10)
+
+  window:SetScript("OnShow", function()
+    refreshControls()
+    updatePreview()
+  end)
+  selectTab(tabs[1])
+  changed()
+end
+
 BIT.RegisterTab("Range", {
   buildPreview = buildRangePreview,
   previewRender = renderRangePreview,
@@ -452,63 +922,13 @@ BIT.RegisterTab("Range", {
     geometry = false, border = false, font = true, scale = true, opacity = true },
   title = "Range",
   summary = "A red X over your target while it is out of range, a green checkmark while it is in range.",
-  width = 640, height = 330,
+  width = WINDOW_WIDTH, height = WINDOW_HEIGHT,
   build = function(parent)
-    local UI = BIT.UI
-    local rows = {}
-    local function changed()
-      for _, r in ipairs(rows) do if r.Refresh then r:Refresh() end end
-      parent.spellsLine:SetText("Measured by: " .. (table.concat(M.Spells(), ", ") ~= "" and table.concat(M.Spells(), ", ")
-        or "no spell of this class"))
-      update()
-      M.RefreshDimming()
-    end
-    local function set(key) return function(v) settings[key] = v; changed() end end
-    local function get(key) return function() return settings[key] end end
-
-    local y = -10
-    local function add(row, height)
-      row:SetPoint("TOPLEFT", 12, y)
-      rows[#rows + 1] = row
-      y = y - (height or 30)
-      return row
-    end
-    add(UI.Check(parent, "Green checkmark while the target is in range", get("showIn"), set("showIn")))
-    add(UI.Check(parent, "Red X while the target is out of range", get("showOut"), set("showOut")))
-    add(UI.Check(parent, "Beside the target frame when the target has no nameplate", get("besideFrame"), set("besideFrame")))
-    add(UI.Check(parent, "Grey out action bar icons while the target is out of their range", get("dimIcons"), set("dimIcons")))
-    add(UI.Slider(parent, "Size", 12, 64, 2, get("size"), set("size")), 46)
-    add(UI.Slider(parent, "Height above the nameplate's health bar", -20, 80, 1, get("offset"), set("offset")), 50)
-
-    local label = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    label:SetPoint("TOPLEFT", 12, y)
-    label:SetText("Measure by this spell (a name or id; empty: your class's main attacks)")
-    local box = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
-    box:SetSize(220, 20)
-    box:SetPoint("TOPLEFT", 18, y - 20)
-    box:SetAutoFocus(false)
-    box:SetText(settings.spell or "")
-    box:SetScript("OnEnterPressed", function(self) settings.spell = self:GetText() or ""; self:ClearFocus(); changed() end)
-    box:SetScript("OnEditFocusLost", function(self) settings.spell = self:GetText() or ""; changed() end)
-    box:SetScript("OnEscapePressed", function(self) self:SetText(settings.spell or ""); self:ClearFocus() end)
-    parent.spellsLine = parent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    parent.spellsLine:SetPoint("TOPLEFT", 12, y - 48)
-
-    -- what the two icons look like at this size
-    local sample = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    sample:SetPoint("TOPRIGHT", -80, -14)
-    sample:SetText("Looks like:")
-    local inIcon = parent:CreateTexture(nil, "OVERLAY")
-    inIcon:SetTexture(ICON["in"])
-    inIcon:SetPoint("TOPRIGHT", -44, -8)
-    local outIcon = parent:CreateTexture(nil, "OVERLAY")
-    outIcon:SetTexture(ICON.out)
-    outIcon:SetPoint("TOPRIGHT", -10, -8)
-    rows[#rows + 1] = { Refresh = function()
-      inIcon:SetSize(settings.size, settings.size)
-      outIcon:SetSize(settings.size, settings.size)
-    end }
-    changed()
+    window = parent
+    local anchor = CreateFrame("Frame", nil, parent)
+    anchor:SetSize(1, 22)
+    anchor:SetPoint("TOPRIGHT", -10, -8)
+    buildContent(PREVIEW_TOP, anchor)
   end,
 })
 BIT.tabWords.range = "Range"
