@@ -587,7 +587,7 @@ local function sliderRow(parent, labelText, min, max, step, get, set, opts)
   slider:SetPoint("LEFT", row, "LEFT", row.layout.label + 2, 0)
   slider:SetMinMaxValues(min, max)
   slider:SetValueStep(step)
-  slider:SetObeyStepOnDrag(true)
+  if slider.SetObeyStepOnDrag then slider:SetObeyStepOnDrag(true) end
   local track = slider:CreateTexture(nil, "BACKGROUND")
   track:SetColorTexture(0.3, 0.3, 0.32, 1)
   track:SetHeight(4)

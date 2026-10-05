@@ -1004,7 +1004,7 @@ local function hookTooltips()
   local function add(tooltip)
     if not (tooltip == GameTooltip or tooltip == ItemRefTooltip) then return end
     local _, link = ask(tooltip.GetItem, tooltip)
-    if type(link) ~= "string" then return end
+    if type(link) ~= "string" or isSecret(link) then return end
     -- the game compares by itself when the setting says so, or while Shift is held
     local gameCompares = TooltipUtil and ask(TooltipUtil.ShouldDoItemComparison, tooltip) == true
     -- A throwing client anywhere in the comparison must not cost the tooltip.

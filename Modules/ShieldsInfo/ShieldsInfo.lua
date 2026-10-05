@@ -702,7 +702,7 @@ local ROW_HEIGHT = 26
 local SETTINGS_LAYOUT = { label = 150, control = 190 }
 local PREVIEW_LAYOUT = { label = 96, control = 128 }
 local DISABLED_ALPHA = 0.35
-local WINDOW_WIDTH, WINDOW_HEIGHT = 760, 640
+local WINDOW_WIDTH, WINDOW_HEIGHT = 760, 460
 
 -- The preview's own numbers (plain sample data, in % of SAMPLE_MAX) and the mock the frame
 -- switch shows. The sample starts at SAMPLE_ABSORB; the sliders move health and absorb only,
@@ -1215,6 +1215,7 @@ local function buildLivePreview(pane)
     end
   end
   controls[#controls + 1] = switchRow
+  controls[#controls + 1] = fillBox
 
   -- TRY IT: the preview's own numbers, in % of the sample bar. Plain sample percentages --
   -- the live overlays read the real absorb in combat, and no reading is taken here.

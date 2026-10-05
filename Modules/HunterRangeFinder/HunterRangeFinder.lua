@@ -1627,7 +1627,7 @@ local function rawSpellInRange(id)
     local name = spellName(id)
     if name and IsSpellInRange then
         local ok, value = pcall(IsSpellInRange, name, "target")
-        if ok and value ~= nil then return value end
+        if ok and value ~= nil and not isSecret(value) then return value end
     end
     if C_Spell and C_Spell.IsSpellInRange then
         local ok, value = pcall(C_Spell.IsSpellInRange, id, "target")

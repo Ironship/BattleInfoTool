@@ -48,7 +48,7 @@ Rip and Rupture are finishers: the marker uses the combo points you have. DoTs f
 
 ![shields info](https://i.imgur.com/iqUSKt4.png) ![shield in party](https://i.imgur.com/NkpFqdh_d.png?maxwidth=520&shape=thumb&fidelity=high)
 
-**HunterRangeFinder**: a range rail that rides above the target's nameplate (or floats at a saved screen spot): six dots, a seventh past 35 yd with Hawk Eye (auto-detected), crossed swords in melee and a skull in the dead zone. Bands are approximate, not exact yard measurements. Works only for hunter. Every module now has a live preview on the left and settings tabs on the right in `/bit`, with presets and per-tab reset.
+**HunterRangeFinder**: a range rail that rides above the target's nameplate (or floats at a saved screen spot): six dots, a seventh past 35 yd with Hawk Eye (auto-detected), crossed swords in melee and a skull in the dead zone. Bands are approximate, not exact yard measurements. Works only for hunter. Every module now has a live preview on the left and settings tabs on the right in `/bit`, with per-tab reset (presets in DoTInfo, Range, ShieldsInfo and HunterRangeFinder).
 
 ![range indicator](https://i.imgur.com/L7bopvP.png) ![dead zone](https://i.imgur.com/Ur0rxKh.png) ![meelee range](https://i.imgur.com/4CfMLky.png)
 
