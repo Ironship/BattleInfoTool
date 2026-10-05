@@ -65,6 +65,28 @@ local function requestLoad(spellID)
   loadRequested[spellID] = true
   if C_Spell and type(C_Spell.RequestLoadSpellData) == "function" then
     pcall(C_Spell.RequestLoadSpellData, spellID)
+  elseif type(RequestLoadSpellData) == "function" then
+    -- the same request under its older name, on clients without the C_Spell table
+    pcall(RequestLoadSpellData, spellID)
+  end
+end
+
+local itemLoadRequested = {} -- [itemID] = true once the client was asked for the item's data
+
+-- An item's data can arrive after its button was drawn (GetItemSpell answers nothing at
+-- all until it does), so the item is asked for once and the bars are painted again when
+-- it lands (GET_ITEM_INFO_RECEIVED / ITEM_DATA_LOAD_RESULT). The spelling is the
+-- documented C_Item.RequestLoadItemDataByID, the one HunterRangeFinder already uses;
+-- the older clients load an item's data simply by being asked for it.
+local function requestItemLoad(itemID)
+  if itemLoadRequested[itemID] then return end
+  itemLoadRequested[itemID] = true
+  if C_Item and type(C_Item.RequestLoadItemDataByID) == "function" then
+    pcall(C_Item.RequestLoadItemDataByID, itemID)
+  elseif type(GetItemInfo) == "function" then
+    pcall(GetItemInfo, itemID)
+  elseif C_Item and type(C_Item.GetItemInfo) == "function" then
+    pcall(C_Item.GetItemInfo, itemID)
   end
 end
 
@@ -582,28 +604,93 @@ function ns.Compute(spellID, pet)
 end
 
 -- The use-effect spell of an item (a potion's "Use:" spell), or nil when the item
--- casts none or the client does not say. GetItemSpell answers (name, spellID); the
--- raw values are guarded with issecretvalue before anything is read from them.
+-- casts none or the client does not say. The client's own API documentation
+-- (Blizzard_APIDocumentationGenerated/ItemDocumentation.lua) lists the lookup as
+-- C_Item.GetItemSpell answering (name, spellID) and possibly nothing at all while the
+-- item's data is still arriving (MayReturnNothing); the bare GetItemSpell is only the
+-- deprecated alias of it, kept in a deprecation file some clients load on demand (the
+-- same shelf as GetActionCount below), so the namespaced one is asked first. The raw
+-- values are guarded with issecretvalue before anything is read from them.
 local function itemUseSpell(itemID)
-  if isSecret(itemID) or type(itemID) ~= "number" or type(GetItemSpell) ~= "function" then return nil end
-  local ok, name, id = pcall(GetItemSpell, itemID)
+  if isSecret(itemID) or type(itemID) ~= "number" then return nil end
+  local fn = (C_Item and C_Item.GetItemSpell) or GetItemSpell
+  if type(fn) ~= "function" then return nil end
+  local ok, name, id = pcall(fn, itemID)
   if not ok or isSecret(name) or isSecret(id) then return nil end
   if type(id) == "number" then return id end
   if type(name) == "number" then return name end
   return nil
 end
 
+-- The "Use:" line of an item's own tooltip ("Use: Heals 611 damage over 6 sec." /
+-- "Benutzen: Heilt 611 Schaden über 6 Sek."), for when the use spell's description
+-- cannot be read: an item's amounts are stated on the item, and the spell behind them
+-- need not be in the client's text cache at all. Read through C_TooltipInfo.GetHyperlink,
+-- the accessor StatsInfo already reads enchant lines with; only the item's own use line
+-- is taken (never requirements, flavour or price), and ParseItemHeal reads the amounts
+-- out of it exactly as out of a spell description. Nil when the client has no tooltip
+-- data or the item's data has not arrived yet (a tooltip with no use line). What a built
+-- tooltip answered is kept (the use line of an item does not change); a tooltip that is
+-- still on its way, or one holding a hidden line, is scanned again like the enchant scan.
+local itemTextMemo = {} -- [itemID] = the use line, or "" when a built tooltip has none
+local USE_PREFIXES = { "Use:", "use:", "Benutzen:", "benutzen:" }
+
+local function itemUseText(itemID)
+  if isSecret(itemID) or type(itemID) ~= "number" then return nil end
+  local memo = itemTextMemo[itemID]
+  if memo ~= nil then return memo ~= "" and memo or nil end
+  if type(C_TooltipInfo) ~= "table" or type(C_TooltipInfo.GetHyperlink) ~= "function" then return nil end
+  local ok, data = pcall(C_TooltipInfo.GetHyperlink, "item:" .. tostring(itemID))
+  if not ok or isSecret(data) or type(data) ~= "table" or type(data.lines) ~= "table" then return nil end
+  local out, cacheable, shown = {}, true, 0
+  for _, line in ipairs(data.lines) do
+    if type(line) ~= "table" or isSecret(line) then
+      cacheable = false -- the hidden line may be the use line: not a final answer
+    else
+      shown = shown + 1
+      local text = line.leftText
+      if isSecret(text) then
+        cacheable = false
+      elseif type(text) == "string" then
+        -- a trailing "(2 Min Cooldown)" is the item's cooldown, not a duration its
+        -- amount ticks over; ParseItemHeal would read the wording as over-time for it
+        local t = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("^%s+", "")
+        t = t:gsub("%s*%([^(]*[Cc]ooldown[^)]*%)%s*$", "")
+        for _, prefix in ipairs(USE_PREFIXES) do
+          if t:sub(1, #prefix) == prefix then
+            out[#out + 1] = t
+            break
+          end
+        end
+      end
+    end
+  end
+  local joined = table.concat(out, "\n")
+  if joined ~= "" then
+    itemTextMemo[itemID] = joined
+    return joined
+  end
+  -- one line is the item's name alone: the tooltip has not built its text yet
+  if cacheable and shown >= 2 then itemTextMemo[itemID] = "" end
+  return nil
+end
+
 -- What to show for a consumable on the bar: its raw instant healing or mana,
 -- or a bandage's stated total (no estimate; a consumable's amount is fixed),
 -- or nil. Damage wordings are never read here, so the damage numbers cannot
--- move. Anything over time except a Heals/Heilt bandage stays unread.
+-- move. Anything over time except a Heals/Heilt bandage stays unread. The text
+-- comes from the use spell's description where that can be read, else from the
+-- item's own "Use:" line; when neither is readable yet nothing is guessed -- the
+-- item's data and the spell's text are asked for and the button is painted again
+-- on GET_ITEM_INFO_RECEIVED / SPELL_TEXT_UPDATE.
 function ns.ComputeItem(itemID)
   if isSecret(itemID) or type(itemID) ~= "number" then return nil end
   local spellID = itemUseSpell(itemID)
-  if not spellID then return nil end
-  local text = getDescription(spellID)
-  if not text then -- not loaded yet; SPELL_TEXT_UPDATE asks again
-    requestLoad(spellID)
+  local text = spellID and getDescription(spellID) or nil
+  if not text then text = itemUseText(itemID) end
+  if not text then
+    if spellID then requestLoad(spellID) end
+    requestItemLoad(itemID)
     return nil
   end
   local parsed = Parser.ParseItemHeal(text, ns.DescriptionLang())
@@ -1638,6 +1725,9 @@ local frame = CreateFrame("Frame")
 local UPDATE_EVENTS = {
   "ACTIONBAR_SLOT_CHANGED", "ACTIONBAR_PAGE_CHANGED", "UPDATE_BONUS_ACTIONBAR", "UPDATE_SHAPESHIFT_FORM",
   "PLAYER_EQUIPMENT_CHANGED", "PLAYER_REGEN_ENABLED", "PET_BAR_UPDATE", "PET_BAR_UPDATE_USABLE",
+  -- an item's data can arrive after its button was drawn (a consumable dragged onto a
+  -- bar): paint the numbers again once it is here
+  "GET_ITEM_INFO_RECEIVED", "ITEM_DATA_LOAD_RESULT",
 }
 local RESET_EVENTS = { "SPELLS_CHANGED", "CHARACTER_POINTS_CHANGED", "PLAYER_TALENT_UPDATE" }
 
