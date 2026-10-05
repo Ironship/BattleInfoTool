@@ -90,7 +90,8 @@ end
 -- The spells the range is measured by now: { name, id, whenUsable }.
 local function measures()
   local custom = settings and settings.spell or ""
-  custom = custom:match("^%s*(.-)%s*$")
+  if type(custom) ~= "string" then custom = "" end
+  custom = custom:match("^%s*(.-)%s*$") or ""
   if custom ~= "" then
     local id = tonumber(custom)
     return { { name = id and (spellName(id) or custom) or custom, id = id } }
