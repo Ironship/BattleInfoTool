@@ -987,7 +987,6 @@ local function buttonText(view, reduction)
     end
     -- Health Funnel: the same cost, but it goes to the pet, so it is a red cost, not a heal
     local mainColor = view.petHeal and Format.REDUCTION_COLOR or Format.HEAL_COLOR
-    if view.petHeal then mainText = mainText .. " (" .. ns.L.PET .. ")" end
     return mainText, mainColor, sideText, Format.WEAPON_COLOR, "stacked"
   end
   -- Drain Life and other health transfers: one amount damages the target and heals the caster.
