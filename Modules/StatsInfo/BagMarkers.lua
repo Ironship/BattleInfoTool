@@ -426,6 +426,7 @@ function M.BagProbe(link)
     say("final=" .. tostring(state) .. (verdict and ("/" .. tostring(verdict.verdict)) or "")
       .. (state == "wait" and " (keep bags open)" or state == "dead" and " (see reason above)" or ""))
   end
+  if M.BagProbeButtons then M.BagProbeButtons(link) end
 end
 if BIT.RegisterCommand then BIT.RegisterCommand("bagprobe", function(rest) M.BagProbe(rest) end) end
 
@@ -606,26 +607,51 @@ M._applyMarker = applyMarker -- test seam, not part of the addon's interface
 -------------------------------------------------------------------------------------------------
 
 local WIDGET_ID = "statsinfo_bag_arrows"
-local BAG_TYPES_OWNED = { backpack = true, character_bank = true }
 local baganatorRegistered = false
+
+-- Which live slot is THIS player's own to mark. details.bagType is the BAG's own type
+-- (0 = regular bag, 1..10 = a specialty bag, or "quiver"/"reagentBag"/"keyring" --
+-- Baganator ItemViewCommon/Utilities.lua:325-341 GetBagType against Core/Constants.lua:
+-- 192-208 ContainerKeyToInfo), never the CONTAINER context: "backpack"/"character_bank"/
+-- "warband_bank" live only on the sort API (Baganator.API.Constants.ContainerType,
+-- API/Main.lua) and never appear on a button's details, so a context gate keyed on
+-- bagType could not match a single slot (BagLayout puts the GetBagType answer there,
+-- CategoryViews/BagLayout.lua:50-54) and no arrow could ever show. The live
+-- itemLocation IS the context: bags and the character bank are the player's own, an
+-- account/warband bank tab is a shared context and is never marked.
+local function ownSlot(loc)
+  local bag = loc.bagID
+  -- {equipmentSlotIndex} and any other shape is not a container slot: never marked
+  if type(bag) ~= "number" or isSecret(bag) then return false end
+  if type(Enum) == "table" and type(Enum.BagIndex) == "table" then
+    for i = 1, 9 do
+      local tab = Enum.BagIndex["AccountBankTab_" .. i]
+      if tab ~= nil and bag == tab then return false end -- the shared warband bank
+    end
+  end
+  return true
+end
 
 -- Current-player ownership of a Baganator button: Baganator sets BGR.guid and
 -- BGR.itemLocation ONLY for live containers the player can see (ItemViewCommon/
--- ItemButton.lua:667-674, 1177-1182); cached other-character/alt/bank views have
--- neither, and the warband/bank contexts cannot be proven to be this player's gear.
--- The guid must still match the live item (pool reuse), exactly like Baganator's own
--- stale check (ItemButton.lua:164).
+-- ItemButton.lua:667-674, 1177-1182); cached other-character/alt/mail/auction/guild
+-- views have neither. The guid must still match the live item (pool reuse), exactly
+-- like Baganator's own stale check (ItemButton.lua:164).
 local function liveOwned(details)
   local loc = details.itemLocation
   if type(loc) ~= "table" then return false end
+  if not ownSlot(loc) then return false end
   if not (C_Item and type(C_Item.DoesItemExist) == "function") then return false end
   if ask(C_Item.DoesItemExist, loc) ~= true then return false end
   local guid = details.guid
   if guid == nil or isSecret(guid) then return false end
   local live = ask(C_Item.GetItemGUID, loc)
-  -- Only a proven-plain string may be compared with the recorded guid: a secret one
+  -- Only a proven-plain guid may be compared with the recorded one: a secret one
   -- raises on the comparison itself (and on every table touch it would flow into).
-  if type(live) ~= "string" or isSecret(live) then return false end
+  -- The client hands back either a string or a number guid (Baganator's own "none"
+  -- sentinel is the string "-1", Sorting/OrderBags.lua:54), so both are plain here.
+  local liveType = type(live)
+  if (liveType ~= "string" and liveType ~= "number") or isSecret(live) then return false end
   if live ~= guid then return false end
   return true
 end
@@ -645,15 +671,12 @@ local function baganatorOnUpdate(widget, details)
   widget:Hide()
   if not active then return false end
   if type(details) ~= "table" then return false end
-  local bagType = details.bagType
-  if not BAG_TYPES_OWNED[bagType] then return false end -- alt/warband/unverifiable context
-  if not liveOwned(details) then return false end
+  if not liveOwned(details) then return false end -- context/guid gate (ownSlot inside)
   -- the hyperlink the client itself reads for the live container; the BGR link as the
   -- guarded fallback (Syndicator may lag the container by a tick)
   local link
   local loc = details.itemLocation
-  local info = type(loc) == "table"
-      and ask(C_Container and C_Container.GetContainerItemInfo, loc.bagID, loc.slotIndex)
+  local info = ask(C_Container and C_Container.GetContainerItemInfo, loc.bagID, loc.slotIndex)
   if type(info) == "table" and type(info.hyperlink) == "string" and not isSecret(info.hyperlink) then
     link = info.hyperlink
   elseif type(details.itemLink) == "string" and not isSecret(details.itemLink) then
@@ -756,20 +779,25 @@ local function eachVisibleButton(cb)
   end
 end
 
--- One button: the hyperlink the native code itself reads at UpdateItems
+-- One slot's hyperlink: the one the native code itself reads at UpdateItems
 -- (C_Container.GetContainerItemInfo; the classic global GetContainerItemInfo as the
--- guarded fallback), then the verdict, then the marker.
-local function evaluate(button, bag, slot)
-  local link
+-- guarded fallback), else nil (an empty or unreadable slot).
+local function linkOf(bag, slot)
   local info = ask(C_Container and C_Container.GetContainerItemInfo, bag, slot)
   if type(info) == "table" then
-    if type(info.hyperlink) == "string" and not isSecret(info.hyperlink) then link = info.hyperlink end
-  else
-    -- the classic global answers (texture, itemCount, locked, quality, readable, lootable,
-    -- itemLink, ...): the link is the 7th return, never the first (that one is the texture)
-    local _, _, _, _, _, _, l = ask(GetContainerItemInfo, bag, slot)
-    if type(l) == "string" and not isSecret(l) then link = l end
+    if type(info.hyperlink) == "string" and not isSecret(info.hyperlink) then return info.hyperlink end
+    return nil
   end
+  -- the classic global answers (texture, itemCount, locked, quality, readable, lootable,
+  -- itemLink, ...): the link is the 7th return, never the first (that one is the texture)
+  local _, _, _, _, _, _, l = ask(GetContainerItemInfo, bag, slot)
+  if type(l) == "string" and not isSecret(l) then return l end
+  return nil
+end
+
+-- One button: the hyperlink, then the verdict, then the marker.
+local function evaluate(button, bag, slot)
+  local link = linkOf(bag, slot)
   if not link then
     applyMarker(button, nil)
     return
@@ -799,6 +827,39 @@ end
 -- A narrow refresh API for the settings boxes (and the tests): immediate, no events sway.
 function M.RefreshBags(force)
   refreshVisible()
+end
+
+-- The marker pipeline over the buttons the client shows right now: one line per button --
+-- which link (if any) the client reads there, what it verdicts to, and whether a marker
+-- frame exists and is shown. /bit bagprobe runs it after the per-link report; want (a
+-- shift-clicked link) narrows it to that item's buttons.
+function M.BagProbeButtons(want)
+  local function say(m) if BIT.Say then BIT.Say("bagprobe: " .. tostring(m)) end end
+  local setting = M.settings and M.settings.bagMarkers
+  say("buttons: bagMarkers=" .. tostring(setting) .. " running=" .. tostring(BIT.IsRunning("StatsInfo"))
+    .. " switch=" .. tostring(moduleOn()) .. " baganator="
+    .. (baganatorRegistered and "widget registered" or "no widget (Baganator not loaded)"))
+  if not (setting and BIT.IsRunning("StatsInfo") and moduleOn()) then
+    say("buttons: the gate above is off, nothing is drawn")
+    return
+  end
+  local wanted = type(want) == "string" and tonumber(want:match("item:(%d+)")) or nil
+  local n, shown = 0, 0
+  eachVisibleButton(function(button, bag, slot)
+    local link = linkOf(bag, slot)
+    if not link then return end
+    if wanted and tonumber(link:match("item:(%d+)")) ~= wanted then return end
+    n = n + 1
+    local state, verdict = M.BagVerdictState(link)
+    local marker = markers[button]
+    local isShown = marker and type(marker.IsShown) == "function" and marker:IsShown() or false
+    if isShown then shown = shown + 1 end
+    say(string.format("button %s/%s: link=ok state=%s verdict=%s marker=%s",
+      tostring(bag), tostring(slot), tostring(state),
+      tostring(verdict and verdict.verdict or "-"),
+      marker and (isShown and "shown" or "hidden") or "none"))
+  end)
+  say("buttons: " .. n .. " with this item, " .. shown .. " marker(s) shown")
 end
 
 -------------------------------------------------------------------------------------------------

@@ -658,9 +658,11 @@ local function buildShieldsPreview(parent)
   scene.bar:SetMinMaxValues(0, SAMPLE_MAX)
   scene.bar:SetValue(SAMPLE_MAX)
   -- The overlay, exactly as overlayFor builds it on a live bar: its own StatusBar
-  -- covering the health bar, carrying the sample reading.
+  -- covering the health bar, one frame level up so the fill draws over the bar's own,
+  -- carrying the sample reading.
   scene.overlay = CreateFrame("StatusBar", nil, scene.bar)
   scene.overlay:SetAllPoints(scene.bar)
+  scene.overlay:SetFrameLevel((scene.bar:GetFrameLevel() or 0) + 1)
   scene.overlay:SetMinMaxValues(0, SAMPLE_MAX)
   scene.overlay:SetValue(SAMPLE_ABSORB)
   return scene
@@ -702,23 +704,29 @@ local ROW_HEIGHT = 26
 local SETTINGS_LAYOUT = { label = 150, control = 190 }
 local PREVIEW_LAYOUT = { label = 96, control = 128 }
 local DISABLED_ALPHA = 0.35
-local WINDOW_WIDTH, WINDOW_HEIGHT = 760, 460
+-- 470 is Core/Settings.lua's MAX_CONTENT_HEIGHT: the tallest content the window shows without
+-- its own page scroll, the same as Range's tab. Shorter (the 460 a review once settled on)
+-- leaves the page a stub shorter than the window and the Effects tab still cannot fit its
+-- editor -- that one scrolls inside its tab instead (addTab below).
+local WINDOW_WIDTH, WINDOW_HEIGHT = 760, 470
 
 -- The preview's own numbers (plain sample data, in % of SAMPLE_MAX) and the mock the frame
 -- switch shows. The sample starts at SAMPLE_ABSORB; the sliders move health and absorb only,
 -- and nothing here ever asks the game for a reading.
 local preview = { frame = "player", health = 100, absorb = SAMPLE_ABSORB * 100 / SAMPLE_MAX }
 
--- The four mocks the frame switch offers, named and sized as the real frames read.
+-- The four mocks the frame switch offers, named and sized as the real frames read. x centres
+-- the bar in the preview card; the cluster (name above, caption below) is seated on the card's
+-- floor by buildLivePreview, so the mock reads like a unit frame standing in the world.
 local FRAME_MOCKS = {
   { id = "player", label = "Player", caption = "Your player frame", name = "You",
-    nameColor = { 1, 1, 1 }, barColor = { 0.12, 0.85, 0.12 }, width = 224, height = 18, x = 21, y = -96 },
+    nameColor = { 1, 1, 1 }, barColor = { 0.12, 0.85, 0.12 }, width = 224, height = 18, x = 21 },
   { id = "target", label = "Target", caption = "Your target frame", name = "Murloc Raider",
-    nameColor = { 1, 0.2, 0.15 }, barColor = { 0.12, 0.85, 0.12 }, width = 224, height = 18, x = 21, y = -96 },
+    nameColor = { 1, 0.2, 0.15 }, barColor = { 0.12, 0.85, 0.12 }, width = 224, height = 18, x = 21 },
   { id = "party", label = "Party", caption = "A party frame", name = "Kaya",
-    nameColor = { 0.65, 0.8, 1 }, barColor = { 0.12, 0.85, 0.12 }, width = 192, height = 15, x = 37, y = -98 },
+    nameColor = { 0.65, 0.8, 1 }, barColor = { 0.12, 0.85, 0.12 }, width = 192, height = 15, x = 37 },
   { id = "nameplate", label = "Nameplate", caption = "An enemy nameplate", name = "Murloc Raider",
-    nameColor = { 1, 0.13, 0.13 }, barColor = { 0.85, 0.1, 0.1 }, width = 214, height = 12, x = 26, y = -102 },
+    nameColor = { 1, 0.13, 0.13 }, barColor = { 0.85, 0.1, 0.1 }, width = 214, height = 12, x = 26 },
 }
 
 local function findMock(id)
@@ -1102,13 +1110,30 @@ local function selectTab(tab)
 end
 
 -- A tab whose methods add rows top to bottom and remember the setting keys, for "Reset this
--- tab". A tab may add resetExtra for the style keys its rows write.
+-- tab". A tab may add resetExtra for the style keys its rows write. Every tab's content is a
+-- scroll frame (Modules/HunterRangeFinder/HunterRangeFinder.lua): the Effects tab hosts the
+-- shared appearance editor, which is taller than the area, and a scroll each keeps the
+-- overflow inside the tab -- clipped and reachable -- instead of spilling past the window.
 local function addTab(name, area)
   local tab = { keys = {}, y = 0 }
-  tab.content = CreateFrame("Frame", nil, area)
-  tab.content:SetPoint("TOPLEFT", area, "TOPLEFT", 8, -40)
-  tab.content:SetPoint("BOTTOMRIGHT", area, "BOTTOMRIGHT", -8, 40)
-  tab.content:Hide()
+  local content = CreateFrame("ScrollFrame", nil, area)
+  content:SetPoint("TOPLEFT", area, "TOPLEFT", 8, -40)
+  content:SetPoint("BOTTOMRIGHT", area, "BOTTOMRIGHT", -8, 40)
+  content:EnableMouseWheel(true)
+  -- SetScrollChild owns the child's anchors (Core/Settings.lua): explicit geometry only.
+  local inner = CreateFrame("Frame", nil, content)
+  inner:SetWidth((area:GetWidth() or 400) - 16)
+  content:SetScrollChild(inner)
+  content:SetScript("OnMouseWheel", function(_, delta)
+    local maxScroll = math.max(0, (inner:GetHeight() or 0) - (content:GetHeight() or 0))
+    local at = (content:GetVerticalScroll() or 0) - delta * 24
+    content:SetVerticalScroll(math.min(math.max(at, 0), maxScroll))
+  end)
+  content:SetScript("OnSizeChanged", function(_, width)
+    if type(width) == "number" and width > 0 then inner:SetWidth(width) end
+  end)
+  tab.content, tab.inner = content, inner
+  content:Hide()
 
   local button = CreateFrame("Button", nil, area)
   button.text = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1130,13 +1155,15 @@ local function addTab(name, area)
   tab.button = button
 
   local function place(row, height, key)
-    row:SetPoint("TOPLEFT", tab.content, "TOPLEFT", 0, -tab.y)
+    row:SetPoint("TOPLEFT", inner, "TOPLEFT", 0, -tab.y)
     tab.y = tab.y + (height or ROW_HEIGHT)
     if key then tab.keys[#tab.keys + 1] = key end
     return row
   end
   function tab:add(row, height, key) return place(row, height, key) end
   function tab:gap(n) self.y = self.y + (n or 8) end
+  -- The scroll child grows to the rows just added; a tab that fits never scrolls.
+  function tab:finish() self.inner:SetHeight(math.max(self.y + 12, 1)) end
 
   tabs[#tabs + 1] = tab
   return tab
@@ -1165,6 +1192,8 @@ local function buildLivePreview(pane)
   local SIDE = 12
   local CARD_WIDTH = PREVIEW_WIDTH - 2 * SIDE
   local RULE = { 0.28, 0.28, 0.3 }
+  local SCENE_HEIGHT = 170
+  local BAR_SEAT = 40 -- the bar's bottom edge, above the caption it hangs over the floor
 
   local title = pane:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   title:SetPoint("TOPLEFT", pane, "TOPLEFT", SIDE, -12)
@@ -1175,31 +1204,53 @@ local function buildLivePreview(pane)
   titleRule:SetPoint("TOPLEFT", 8, -34)
   titleRule:SetPoint("TOPRIGHT", -8, -34)
 
+  -- Section header: small gold caps and a hairline to the right margin (the Range and
+  -- DoTInfo previews). Every block below is anchored to the one over it, never to a
+  -- hard-coded y, so the column holds together at any pane height.
+  local function header(text, anchor, gap)
+    local label = pane:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    label:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -gap)
+    label:SetText(text)
+    label:SetTextColor(0.85, 0.7, 0.3)
+    local rule = pane:CreateTexture(nil, "ARTWORK")
+    rule:SetColorTexture(RULE[1], RULE[2], RULE[3], 1)
+    rule:SetHeight(1)
+    rule:SetPoint("LEFT", label, "RIGHT", 8, 0)
+    rule:SetPoint("RIGHT", pane, "RIGHT", -SIDE, 0)
+    return label
+  end
+
   scene = CreateFrame("Frame", nil, pane, "BackdropTemplate")
-  scene:SetSize(CARD_WIDTH, 220)
+  scene:SetSize(CARD_WIDTH, SCENE_HEIGHT)
   scene:SetPoint("TOP", pane, "TOP", 0, -44)
   setBackdrop(scene, 0.06)
-  local bg = scene:CreateTexture(nil, "BACKGROUND")
-  bg:SetAllPoints()
-  bg:SetColorTexture(0.05, 0.06, 0.08, 1)
+  local ground = scene:CreateTexture(nil, "BACKGROUND")
+  ground:SetPoint("TOPLEFT", 1, -1)
+  ground:SetPoint("BOTTOMRIGHT", -1, 1)
+  ground:SetTexture("Interface\\FrameGeneral\\UI-Background-Rock")
+  ground:SetTexCoord(0, 0.26, 0, 0.18) -- about 1:1 texels on the card
+  ground:SetVertexColor(0.75, 0.8, 0.75)
 
   -- The mock health bar the overlay lies on, and the overlay itself: exactly as overlayFor
-  -- builds it on a live bar (its own StatusBar covering the health bar), carrying the sample
-  -- reading instead of a game one.
+  -- builds it on a live bar (its own StatusBar covering the health bar, one frame level up so
+  -- the fill draws over the bar's own), carrying the sample reading instead of a game one.
   scene.bar = CreateFrame("StatusBar", nil, scene)
+  scene.bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
   scene.bar:SetMinMaxValues(0, SAMPLE_MAX)
   scene.bar:SetValue(SAMPLE_MAX)
   scene.name = scene:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   scene.caption = scene:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   scene.overlay = CreateFrame("StatusBar", nil, scene.bar)
   scene.overlay:SetAllPoints(scene.bar)
+  scene.overlay:SetFrameLevel((scene.bar:GetFrameLevel() or 0) + 1)
   scene.overlay:SetMinMaxValues(0, SAMPLE_MAX)
   scene.overlay:SetValue(SAMPLE_ABSORB)
 
   -- The frame switch: which of the module's frames the mock stands for.
+  local which = header("FRAME", scene, 12)
   local switch = CreateFrame("Frame", nil, pane)
   switch:SetSize(CARD_WIDTH, 24)
-  switch:SetPoint("TOPLEFT", pane, "TOPLEFT", SIDE, -276)
+  switch:SetPoint("TOPLEFT", which, "BOTTOMLEFT", 0, -4)
   local switchButtons = {}
   local switchRow = {}
   for i = 1, #FRAME_MOCKS do
@@ -1217,20 +1268,10 @@ local function buildLivePreview(pane)
     end
   end
   controls[#controls + 1] = switchRow
-  controls[#controls + 1] = fillBox
 
   -- TRY IT: the preview's own numbers, in % of the sample bar. Plain sample percentages --
   -- the live overlays read the real absorb in combat, and no reading is taken here.
-  local tryLabel = pane:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  tryLabel:SetPoint("TOPLEFT", pane, "TOPLEFT", SIDE, -316)
-  tryLabel:SetText("TRY IT")
-  tryLabel:SetTextColor(0.85, 0.7, 0.3)
-  local tryRule = pane:CreateTexture(nil, "ARTWORK")
-  tryRule:SetColorTexture(RULE[1], RULE[2], RULE[3], 1)
-  tryRule:SetHeight(1)
-  tryRule:SetPoint("LEFT", tryLabel, "RIGHT", 8, 0)
-  tryRule:SetPoint("RIGHT", pane, "RIGHT", -SIDE, 0)
-
+  local tryIt = header("TRY IT", switch, 12)
   local health = sliderRow(pane, "Bar health", 0, 100, 1,
     function() return preview.health end,
     function(value)
@@ -1239,7 +1280,7 @@ local function buildLivePreview(pane)
     end,
     { layout = PREVIEW_LAYOUT,
       tooltip = "How full the mock health bar is, in % of its sample maximum." })
-  health:SetPoint("TOPLEFT", pane, "TOPLEFT", SIDE - 6, -340)
+  health:SetPoint("TOPLEFT", tryIt, "BOTTOMLEFT", -6, -6)
 
   local absorb = sliderRow(pane, "Shield absorb", 0, 100, 1,
     function() return preview.absorb end,
@@ -1250,12 +1291,12 @@ local function buildLivePreview(pane)
     { layout = PREVIEW_LAYOUT,
       tooltip = "How much of the bar the sample shield covers, in % of its sample maximum. "
         .. "The preview runs on this fixed sample number only." })
-  absorb:SetPoint("TOPLEFT", pane, "TOPLEFT", SIDE - 6, -366)
+  absorb:SetPoint("TOPLEFT", health, "BOTTOMLEFT", 0, 0)
   M._previewRows = { health = health, absorb = absorb }
 
   local hint = pane:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  hint:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", SIDE, 12)
-  hint:SetWidth(CARD_WIDTH)
+  hint:SetPoint("TOPLEFT", absorb, "BOTTOMLEFT", 6, -12)
+  hint:SetPoint("RIGHT", pane, "RIGHT", -SIDE, 0)
   hint:SetJustifyH("LEFT")
   hint:SetText("The preview paints a fixed sample with the same painter as the live overlays; "
     .. "no live absorb is read here.")
@@ -1273,7 +1314,7 @@ local function buildLivePreview(pane)
       local m = findMock(preview.frame)
       scene.bar:SetSize(m.width, m.height)
       scene.bar:ClearAllPoints()
-      scene.bar:SetPoint("TOPLEFT", scene, "TOPLEFT", m.x, m.y)
+      scene.bar:SetPoint("BOTTOMLEFT", scene, "BOTTOMLEFT", m.x, BAR_SEAT)
       scene.bar:SetStatusBarColor(m.barColor[1], m.barColor[2], m.barColor[3], 1)
       scene.bar:SetMinMaxValues(0, SAMPLE_MAX)
       scene.bar:SetValue(SAMPLE_MAX * clampPercent(preview.health) / 100)
@@ -1285,6 +1326,7 @@ local function buildLivePreview(pane)
       scene.caption:ClearAllPoints()
       scene.caption:SetPoint("TOPLEFT", scene.bar, "BOTTOMLEFT", 0, -6)
       scene.overlay:SetAllPoints(scene.bar)
+      scene.overlay:SetFrameLevel((scene.bar:GetFrameLevel() or 0) + 1)
       scene.overlay:SetMinMaxValues(0, SAMPLE_MAX)
       scene.overlay:SetValue(SAMPLE_MAX * clampPercent(preview.absorb) / 100)
       styleOverlay(scene.overlay)
@@ -1303,7 +1345,7 @@ local function buildTabs(area)
   -- Frames: the saved switches, exactly the four the runtime reads.
   local frames = addTab("Frames", area)
   local function toggle(key, labelText, tooltip)
-    local row = checkbox(frames.content, key, labelText, { tooltip = tooltip })
+    local row = checkbox(frames.inner, key, labelText, { tooltip = tooltip })
     frames:add(row, ROW_HEIGHT, key)
     local box = row.widget
     if box then
@@ -1323,7 +1365,7 @@ local function buildTabs(area)
 
   -- Fill: the art, its translucency and the absorb colour.
   local fill = addTab("Fill", area)
-  local fillBox = CreateFrame("Frame", nil, fill.content)
+  local fillBox = CreateFrame("Frame", nil, fill.inner)
   fillBox:SetSize(400, 78)
   fillBox.label = fillBox:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   fillBox.label:SetPoint("TOPLEFT", 0, 0)
@@ -1362,7 +1404,7 @@ local function buildTabs(area)
   fill:add(fillBox, 78, "fillTexture")
 
   -- The shield translucency: clamped to the range the overlay painter accepts.
-  local alpha = sliderRow(fill.content, "Fill opacity", ALPHA_MIN, ALPHA_MAX, 0.05,
+  local alpha = sliderRow(fill.inner, "Fill opacity", ALPHA_MIN, ALPHA_MAX, 0.05,
     function() return clampAlpha(settings.overlayAlpha) end,
     function(v)
       settings.overlayAlpha = clampAlpha(v)
@@ -1373,7 +1415,7 @@ local function buildTabs(area)
   fill:add(alpha, ROW_HEIGHT, "overlayAlpha")
   M._alpha = alpha
 
-  local color = absorbColorRow(fill.content, "Absorb color")
+  local color = absorbColorRow(fill.inner, "Absorb color")
   fill:add(color, ROW_HEIGHT)
   M._colorButton = color.widget
   -- The colour is a style write, so the tab's reset puts it back to no override.
@@ -1384,9 +1426,11 @@ local function buildTabs(area)
   end
 
   -- Effects: room for the future (glow, flash), with the shared appearance editor today.
+  -- The editor is taller than the tab area: it lives in the tab's scroll child and the tab
+  -- scrolls to it (addTab), so "Reset this tab" and the window's bottom stay in view.
   local effects = addTab("Effects", area)
-  local note = effects.content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  note:SetPoint("TOPLEFT", effects.content, "TOPLEFT", 0, 0)
+  local note = effects.inner:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  note:SetPoint("TOPLEFT", effects.inner, "TOPLEFT", 0, 0)
   note:SetWidth(400)
   note:SetJustifyH("LEFT")
   note:SetText("Extra shield effects land here later. The shared appearance editor below "
@@ -1395,10 +1439,11 @@ local function buildTabs(area)
   if type(BIT.UI) == "table" and type(BIT.UI.Appearance) == "function" then
     local caps = { roles = CAPABILITIES.roles, shapes = false, geometry = false, border = false,
       font = true, scale = false, opacity = true, width = 400 }
-    local ok, editor = pcall(BIT.UI.Appearance, effects.content, "ShieldsInfo", caps, changed)
+    local ok, editor = pcall(BIT.UI.Appearance, effects.inner, "ShieldsInfo", caps, changed)
     if ok and type(editor) == "table" then
-      editor:SetPoint("TOPLEFT", effects.content, "TOPLEFT", 0, -effects.y)
+      editor:SetPoint("TOPLEFT", effects.inner, "TOPLEFT", 0, -effects.y)
       effects.editor = editor
+      effects.y = effects.y + (editor:GetHeight() or 0) + 8
     end
   end
   effects.resetExtra = function()
@@ -1406,6 +1451,8 @@ local function buildTabs(area)
       pcall(BIT.Style.Reset, "ShieldsInfo")
     end
   end
+
+  for _, tab in ipairs(tabs) do tab:finish() end
 end
 
 -- The tab's content: presets in the top strip (DoTInfo's title-bar row), the preview pane on

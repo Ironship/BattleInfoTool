@@ -2,7 +2,7 @@
 ## Title: BattleInfoTool
 ## Notes: Spell damage on your action buttons, DoTs that will kill your target, stats against what you wear, sounds for full combo points, mana and Soul Shards, and a range mark over your target. Every part can be switched off. /bit
 ## Author: Ironship
-## Version: 0.9.33-test
+## Version: 0.9.34-test
 ## SavedVariables: BattleInfoToolDB, BattleInfoTool_SpellDamageInfoDB, BattleInfoTool_DoTInfoDB, BattleInfoTool_ResourceDingDB
 
 Core\Init.lua

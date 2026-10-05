@@ -1270,64 +1270,102 @@ end
 -- The mock tooltip redrawn at a style: font size, scale and opacity all show here, whether
 -- they come from the shared appearance editor (UI.Appearance) or from the TRY IT sliders.
 -- Pure layout over the hardcoded sample: no live API, no settings writes.
+--
+-- The card keeps one fixed height at every font and scale: the rows wrap inside it and the
+-- ones that do not fit are dropped, so the scene can never stretch over the pane and push the
+-- TRY IT sliders and the buttons below it around. The style is clamped here as well -- the
+-- shared appearance editor's own bounds (fontSize 6..48, scale 0.1..10) are wider than what
+-- the sample can draw legibly, and a stored 48px font must not run off the card either.
+local SCENE_HEIGHT = 280
+local MIN_FONT, MAX_FONT = 6, 24
+local MIN_SCALE, MAX_SCALE = 0.5, 2
+
+local function clamp(v, lo, hi)
+  if type(v) ~= "number" then return lo end
+  if v < lo then return lo elseif v > hi then return hi end
+  return v
+end
+
 local function renderMockTooltip(scene, style)
   style = type(style) == "table" and style or {}
-  local fs = tonumber(style.fontSize) or 12
-  local scale = tonumber(style.scale) or 1
-  local opacity = tonumber(style.opacity) or 1
+  local fs = clamp(tonumber(style.fontSize) or 12, MIN_FONT, MAX_FONT)
+  local scale = clamp(tonumber(style.scale) or 1, MIN_SCALE, MAX_SCALE)
+  local opacity = clamp(tonumber(style.opacity) or 1, 0, 1)
   local font = type(style.font) == "string" and style.font or "Fonts\\FRIZQT__.TTF"
   local outline = (style.outline == "NONE" or type(style.outline) ~= "string") and "" or style.outline
-  if scale < 0.5 then scale = 0.5 elseif scale > 3 then scale = 3 end
+  local width = tonumber(ask(scene.GetWidth, scene)) or 336
+  scene:SetHeight(SCENE_HEIGHT)
+  -- One row's own wrapped height (the client measures the text at its constrained width),
+  -- or the font's line height where the client cannot say.
+  local function measure(slot, fallback)
+    local h = tonumber(ask(slot.GetStringHeight, slot))
+    if h and h > 0 then return h end
+    return fallback
+  end
   if scene.title then
     if BIT.Style and BIT.Style.ApplyText then
       pcall(BIT.Style.ApplyText, scene.title, style, "text")
     end
+    scene.title:SetFont(font, fs, outline) -- the clamped size, not the raw style's
     scene.title:ClearAllPoints()
     scene.title:SetPoint("TOPLEFT", 12, -4)
+    scene.title:SetPoint("RIGHT", scene, "RIGHT", -12, 0) -- wrapped into the card
     scene.title:SetHeight(fs + 8)
   end
-  -- Reserve the painted row bounds, not just the text: native Y is positive upwards, so
-  -- large fonts and a large scale need headroom below the title and between the rows.
-  local titleDepth = fs + 16
-  local step = math.max(12, (fs + 4) * scale)
-  local iconSize = math.max(8, math.min(32, math.floor(12 * scale + 0.5)))
+  local titleDepth = scene.title and (measure(scene.title, fs + 8) + 8) or (fs + 16)
+  -- The foot of the card first -- the bag button mock and the caption -- so the rows above
+  -- can never run into them or past the card. Both wrap at the card's own width.
+  local bagSize = clamp(math.floor(32 * scale + 0.5), 16, 48)
+  local captionFont = clamp(fs - 2, 9, 14)
+  local caption = scene.caption
+  caption:ClearAllPoints()
+  caption:SetPoint("BOTTOMLEFT", scene, "BOTTOMLEFT", 12, 6)
+  caption:SetPoint("BOTTOMRIGHT", scene, "BOTTOMRIGHT", -12, 6)
+  caption:SetFont(font, captionFont, outline)
+  caption:SetTextColor(0.7, 0.7, 0.7, opacity)
+  local captionH = measure(caption, captionFont + 2)
+  local bagTop = SCENE_HEIGHT - 6 - captionH - 4 - bagSize
+  scene.bag:ClearAllPoints()
+  scene.bag:SetPoint("TOPLEFT", 12, -bagTop)
+  scene.bag:SetSize(bagSize, bagSize)
+  local iconSize = clamp(math.floor(12 * scale + 0.5), 8, 24)
   local lines = sampleLines(iconSize)
   local tip = scene.tip
   tip:ClearAllPoints()
   tip:SetPoint("TOPLEFT", 12, -titleDepth)
-  tip:SetWidth(300)
+  tip:SetWidth(math.min(300, width - 24))
+  -- The rows fill the tip from its top and stop above the bag button mock; what does not
+  -- fit is dropped instead of spilling over the card and the controls below it.
+  local room = bagTop - 2 - titleDepth
+  local y = 6
   for i, slot in ipairs(scene.tipLines) do
     local entry = lines[i]
     slot:ClearAllPoints()
-    if entry then
+    if entry and y + fs + 2 <= room then
       slot:SetText(entry.text)
       slot:SetFont(font, fs, outline)
       slot:SetTextColor(entry.r, entry.g, entry.b, opacity)
-      slot:Show()
-      slot:SetPoint("TOPLEFT", tip, "TOPLEFT", 8, -(6 + (i - 1) * step))
+      slot:SetPoint("TOPLEFT", tip, "TOPLEFT", 8, -y)
       slot:SetPoint("RIGHT", tip, "RIGHT", -8, 0)
+      local h = measure(slot, fs + 4)
+      if y + h <= room then
+        slot:Show()
+        y = y + h
+      else
+        slot:SetText("")
+        slot:Hide()
+      end
     else
       slot:SetText("")
       slot:Hide()
     end
   end
-  local tipHeight = 12 + #lines * step
-  tip:SetHeight(tipHeight)
-  local bagY = titleDepth + tipHeight + 10
-  local bagSize = math.floor(32 * scale + 0.5)
-  scene.bag:ClearAllPoints()
-  scene.bag:SetPoint("TOPLEFT", 12, -bagY)
-  scene.bag:SetSize(bagSize, bagSize)
-  scene.caption:ClearAllPoints()
-  scene.caption:SetPoint("TOPLEFT", scene, "TOPLEFT", 12, -(bagY + bagSize + 4))
-  scene.caption:SetFont(font, math.max(9, fs - 2), outline)
-  scene.caption:SetTextColor(0.7, 0.7, 0.7, opacity)
-  scene:SetHeight(math.min(280, bagY + bagSize + 4 + math.max(9, fs - 2) + 8))
+  tip:SetHeight(math.max(10, math.min(y + 2, math.max(10, room))))
 end
 
 local function buildStatsPreview(parent)
   local scene = CreateFrame("Frame", nil, parent)
-  scene:SetSize(560, 150)
+  scene:SetSize(560, SCENE_HEIGHT)
   scene.title = scene:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   scene.title:SetText("StatsInfo sample (not your gear)")
   buildMockTooltip(scene)
@@ -1396,10 +1434,10 @@ BIT.RegisterTab("StatsInfo", {
     local tryIt = pane:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     tryIt:SetText("TRY IT: font, scale, opacity")
     tryIt:SetTextColor(0.85, 0.7, 0.3)
-    local fontSlider = UI.Slider(pane, "Font size (px)", 6, 48, 1,
+    local fontSlider = UI.Slider(pane, "Font size (px)", 6, 24, 1,
       styleGet("fontSize", 12), styleSet("fontSize"), nil,
       "The size the preview's text is drawn in. The same field the shared appearance editor changes.")
-    local scaleSlider = UI.Slider(pane, "Scale", 0.5, 3, 0.05,
+    local scaleSlider = UI.Slider(pane, "Scale", 0.5, 2, 0.05,
       styleGet("scale", 1), styleSet("scale"), function(v) return string.format("%.2fx", v) end,
       "Scales the preview's rows, icons and bag button. The same field the shared appearance editor changes.")
     local opacitySlider = UI.Slider(pane, "Opacity", 0, 1, 0.05,
@@ -1418,19 +1456,34 @@ BIT.RegisterTab("StatsInfo", {
     area:SetHeight(430)
 
     local tabs = {}
+    local active -- the tab whose content is on screen; re-asserted whenever the tab is shown
+    -- Only the active tab's content is ever shown. Every flip is its own pcall and Show/Hide,
+    -- not SetShown: the underline is a texture and SetShown is not a method every widget has
+    -- (see BagMarkers' own guard), so one raising call used to stop the loop half way -- the
+    -- clicked tab's content never came up and the leftovers stayed visible together.
+    local function setVisible(widget, on)
+      if not widget then return end
+      pcall(on and widget.Show or widget.Hide, widget)
+    end
     local function selectTab(tab)
+      if not tab or not tab.content then return end
+      active = tab
       for _, other in ipairs(tabs) do
         local on = other == tab
-        other.content:SetShown(on)
-        other.button.underline:SetShown(on)
-        other.button.caption:SetTextColor(on and 1 or 0.6, on and 0.82 or 0.6, on and 0 or 0.6)
+        setVisible(other.content, on)
+        setVisible(other.button and other.button.underline, on)
+        local caption = other.button and other.button.caption
+        if caption then
+          pcall(caption.SetTextColor, caption,
+            on and 1 or 0.6, on and 0.82 or 0.6, on and 0 or 0.6)
+        end
       end
     end
     local function addTab(name)
       local tab = {}
       tab.content = CreateFrame("Frame", nil, area)
       tab.content:SetPoint("TOPLEFT", area, "TOPLEFT", 0, -32)
-      tab.content:SetPoint("TOPRIGHT", area, "TOPRIGHT", 0, -32)
+      tab.content:SetPoint("BOTTOMRIGHT", area, "BOTTOMRIGHT", 0, 0)
       tab.content:Hide()
       local button = CreateFrame("Button", nil, area)
       -- "caption", not "text": the settings and the suites read a frame's .text as the
@@ -1597,6 +1650,8 @@ BIT.RegisterTab("StatsInfo", {
     count = parent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     count:SetPoint("LEFT", button, "RIGHT", 10, 0)
     parent:SetScript("OnShow", function()
+      -- re-asserted here too: whatever re-showed a content in between, one tab at a time
+      selectTab(active or tabs[1])
       local probes = BIT.DB().probes
       count:SetText(string.format("%d recorded so far", type(probes) == "table" and #probes or 0))
       for _, c in ipairs(checkRows) do c:Refresh() end

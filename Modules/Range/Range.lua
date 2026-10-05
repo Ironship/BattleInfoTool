@@ -483,20 +483,23 @@ local function refreshControls()
 end
 
 -- The preview draws what update() draws on the target: the mark above the health bar at the set
--- height and size, gone when the settings say so, and the action bar button grey and dim while
--- the simulated target is out of range.
+-- height and size, and the action bar button grey and dim while the simulated target is out of
+-- range. The sample always wears the real mark, as the game wears it over the target: showIn and
+-- showOut hide only the live mark (update), never this one, so the icon is here to look at and
+-- tune whatever those settings hide on the target. The line under the sample names the mark and
+-- says when its setting keeps it off the real target.
 local function updatePreview()
   if not window or not window.previewIcon then return end
   local state = preview.out and "out" or "in"
-  local want = (state == "in" and settings.showIn) or (state == "out" and settings.showOut)
+  local on = (state == "in" and settings.showIn) or (state == "out" and settings.showOut)
   local mark = window.previewIcon
   mark:ClearAllPoints()
   mark:SetPoint("BOTTOM", window.previewBar, "TOP", 0, settings.offset)
   mark:SetSize(settings.size, settings.size)
   mark.texture:SetTexture(ICON[state])
-  mark:SetShown(want)
+  mark:Show()
   window.previewState:SetText((state == "in" and "In range - the green checkmark" or "Out of range - the red X")
-    .. (want and "" or " (hidden)"))
+    .. (on and "" or " (off on your target)"))
   local dim = settings.dimIcons and state == "out"
   window.previewButtonIcon:SetDesaturated(dim)
   local tone = dim and 0.6 or 1
@@ -506,7 +509,9 @@ local function updatePreview()
 end
 
 local function changed()
-  if rows then for _, r in ipairs(rows) do if r.Refresh then r:Refresh() end end end
+  -- The rows follow the settings again after a preset or a reset (a stale ticked box over a
+  -- hidden mark reads as a broken preview).
+  refreshControls()
   updatePreview()
   -- Slider drags must not re-probe the spell list each step: the poll (0.1s)
   -- re-runs update() and the dimming follows the next range indicator call.
