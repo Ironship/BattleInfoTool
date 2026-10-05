@@ -212,15 +212,17 @@ local function buildPage(name)
   scroll:SetPoint("TOPLEFT", 0, -SWITCH_HEIGHT)
   scroll:SetPoint("BOTTOMRIGHT", 0, 0)
   scroll:EnableMouseWheel(true)
-  scroll:SetScript("OnMouseWheel", function(_, delta)
-    scroll:SetVerticalScroll(scroll:GetVerticalScroll() - delta * 24)
-  end)
   local content = CreateFrame("Frame", nil, scroll)
   -- SetScrollChild owns the child's anchors: the native API replaces them with
   -- TOPLEFT, so an opposing RIGHT anchor set before it cannot supply a width.
   -- Give the child explicit geometry, as Blizzard's scroll frames do.
   content:SetWidth(window:GetWidth() - 2 * MARGIN)
   scroll:SetScrollChild(content)
+  scroll:SetScript("OnMouseWheel", function(_, delta)
+    local maxScroll = math.max(0, content:GetHeight() - scroll:GetHeight())
+    local at = scroll:GetVerticalScroll() - delta * 24
+    scroll:SetVerticalScroll(math.min(math.max(at, 0), maxScroll))
+  end)
   scroll:SetScript("OnSizeChanged", function(_, width)
     if width > 0 then content:SetWidth(width) end
   end)

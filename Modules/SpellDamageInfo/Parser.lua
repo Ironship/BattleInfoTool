@@ -9,6 +9,15 @@
 --   heal   = { min = n, max = n }         instant healing
 --   hot    = { total = n, duration = s }  healing over time
 --   school = "shadow" | "fire" | "nature" | "frost" | "arcane" | "holy" | "frostfire" | "physical" | "volcanic" | nil
+--   transfer = true       "Transfers X health from the target to the caster" (Drain Life): one
+--                         amount at both ends, damage in dot/direct and the same healing in
+--                         hot/heal
+--   petHeal = true        "Gives X health to the caster's pet" (Health Funnel): the pet is given
+--                         health the caster pays, so the amount is a cost in healthCost
+--   healthCost = n        health the caster pays (the pet transfer above; Life Tap's own pair is
+--                         read by ParseSpecial)
+--   hp5 = n               "increases health regeneration by X health per Y sec" (Demon Skin),
+--                         the regeneration per 5 sec
 -- It returns nil (plus a short reason) for any wording it does not understand, and never guesses.
 -- ParseReduction(text, lang) reads how much a debuff lowers the enemy's damage or attack power.
 -- English and German wordings are understood; lang is "en", "de" or nil (detect from the text).
@@ -290,7 +299,11 @@ local function classifyAfter(after, lang, sentence)
       if find(sentence, "\195\188bertr\195\164gt") then return "drain", nil end
       -- "Gibt dem Begleiter ...", Forever's "Gewährt dem Begleiter ... 12 Gesundheit" (not
       -- Sentry Totem's "über 100 Gesundheit verfügt ... und Sicht ... gewährt")
-      if find(sentence, "gibt ") or find(sentence, "gew\195\164hrt dem begleiter") then return "giveheal", nil end
+      if find(sentence, "gibt ") or find(sentence, "gew\195\164hrt dem begleiter") then
+        -- Health Funnel, "Gibt dem Begleiter des Zaubernden ... Gesundheit": the caster's own
+        if find(sentence, "begleiter", 1, true) then return "petheal", nil end
+        return "giveheal", nil
+      end
     end
   else
     local s = stripFillers(after, FILLERS_EN)
@@ -299,7 +312,11 @@ local function classifyAfter(after, lang, sentence)
     if word and SCHOOL_EN[word] then return "damage", SCHOOL_EN[word] end
     if sub(s, 1, 6) == "health" then
       if find(sentence, "transfers ") then return "drain", nil end
-      if find(sentence, "gives ") then return "giveheal", nil end
+      if find(sentence, "gives ") then
+        -- Health Funnel, "Gives X health to the caster's pet": the caster's own
+        if (find(sentence, " pet", 1, true) or find(sentence, "pet ", 1, true) or find(sentence, "pet'", 1, true) or find(sentence, "pets", 1, true)) then return "petheal", nil end
+        return "giveheal", nil
+      end
     end
   end
   return nil
@@ -324,7 +341,7 @@ local function healAmountOK(before, after, lang)
   return sub(s, 1, 6) == "damage" or sub(s, 1, 6) == "health"
 end
 
--- Find the amounts in one clause. Each is { kind = "damage"|"heal"|"drain", min, max, school }.
+-- Find the amounts in one clause. Each is { kind = "damage"|"heal"|"drain"|"petheal", min, max, school }.
 local function findAmounts(c, lang, healMode, sentence)
   local amounts = {}
   local rangeWord = (lang == "de") and "bis" or "to"
@@ -353,7 +370,7 @@ local function findAmounts(c, lang, healMode, sentence)
         end
       else
         local kind, school = classifyAfter(after, lang, sentence)
-        if kind == "damage" or kind == "drain" then
+        if kind == "damage" or kind == "drain" or kind == "petheal" then
           amounts[#amounts + 1] = { kind = kind, min = valueMin, max = valueMax, school = school }
         elseif kind == "giveheal" then
           amounts[#amounts + 1] = { kind = "heal", min = valueMin, max = valueMax }
@@ -413,6 +430,22 @@ function Parser.Parse(text, lang)
 
   local lasts, lastsAmbiguous
   t, lasts, lastsAmbiguous = extractLasts(t, lang)
+
+  -- "increases health regeneration by X health per Y sec" (Demon Skin / Demon Armor): the figure
+  -- the buff is named by, health per 5 sec. German: "erhöht die Gesundheitsregeneration um X
+  -- Gesundheit pro Y Sek." Its clause reads as no amount of its own (health, but nothing
+  -- transfers or is given), so the figure is read here on its own.
+  local hp5
+  do
+    local a, iv = match(t, "health regeneration by (" .. NUM .. ") health per (" .. NUM .. ") sec")
+    if not a and lang == "de" then
+      a, iv = match(t, "gesundheitsregeneration um (" .. NUM .. ") gesundheit pro (" .. NUM .. ") sek")
+    end
+    if a then
+      iv = tonumber(iv)
+      if iv and iv > 0 then hp5 = tonumber(a) * 5 / iv end
+    end
+  end
 
   local result = {}
   local found = false
@@ -480,22 +513,44 @@ function Parser.Parse(text, lang)
           return nil, "several-durations"
         end
         for _, a in ipairs(cl.amounts) do
-          local isHeal = (a.kind == "heal")
-          if periodic then
-            if a.min ~= a.max then return nil, "periodic-range" end
-            local slot = isHeal and "hot" or "dot"
-            if not put(slot, { total = a.min * ticks, duration = duration }) then return nil, "second-" .. slot end
+          if a.kind == "petheal" then
+            -- Health Funnel: the health the pet is given is health the caster pays, so it is
+            -- the caster's cost (Life Tap's own shape), never a heal
+            if periodic and a.min ~= a.max then return nil, "periodic-range" end
+            result.petHeal = true
+            if not result.healthCost then
+              result.healthCost = periodic and (a.min * ticks) or ((a.min + a.max) / 2)
+              found = true
+            end
           else
-            local slot = isHeal and "heal" or "direct"
-            if not put(slot, { min = a.min, max = a.max }) then return nil, "second-" .. slot end
+            local isHeal = (a.kind == "heal")
+            if periodic then
+              if a.min ~= a.max then return nil, "periodic-range" end
+              local slot = isHeal and "hot" or "dot"
+              if not put(slot, { total = a.min * ticks, duration = duration }) then return nil, "second-" .. slot end
+            else
+              local slot = isHeal and "heal" or "direct"
+              if not put(slot, { min = a.min, max = a.max }) then return nil, "second-" .. slot end
+            end
+            if a.kind == "drain" then
+              -- Drain Life: a transfer has both ends - the same amount damages the target and
+              -- heals the caster, so the healing sits beside the damage as well
+              result.transfer = true
+              local slot = periodic and "hot" or "heal"
+              if not result[slot] then
+                result[slot] = periodic and { total = a.min * ticks, duration = duration }
+                  or { min = a.min, max = a.max }
+              end
+            end
+            if not isHeal and result.school == nil and a.kind == "damage" then result.school = a.school end
           end
-          if not isHeal and result.school == nil and a.kind == "damage" then result.school = a.school end
         end
       end
     end
   end
 
-  if not found then return nil, "no-amount" end
+  if hp5 then result.hp5 = hp5 end
+  if not found and not hp5 then return nil, "no-amount" end
   return result
 end
 

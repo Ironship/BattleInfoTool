@@ -729,7 +729,7 @@ end
 -- first one was taken as the tick. If this one is closer to the expected size, it was the real tick.
 local SAME_SLOT_SECONDS = 0.2
 local function trySwapSameSlot(dot, name, amount, isCrit, now)
-    if isCrit or dot.lastTickCrit or not dot.lastTickAt or now - dot.lastTickAt > SAME_SLOT_SECONDS then
+    if isCrit or amount <= 0 or dot.lastTickCrit or not dot.lastTickAt or now - dot.lastTickAt > SAME_SLOT_SECONDS then
         return false
     end
     local factor = dot.lastTickShape
@@ -753,7 +753,7 @@ local RELEARN_MAX_DESC_RATIO = 3
 local function tryRelearn(dot, name, amount, isCrit, index, distance, now)
     local window = dot.firstTickAt and TICK_MATCH_WINDOW_ANCHORED or TICK_MATCH_WINDOW
     local freshSlot = not dot.firstTickAt or index > dot.lastTickIndex
-    if isCrit or not freshSlot or distance > window then return false end
+    if isCrit or amount <= 0 or not freshSlot or distance > window then return false end
     local previous = dot.offBeatCandidate
     local factor = tickShape(dot, tickNumberAt(dot, now))
     local average = amount / factor
@@ -867,7 +867,7 @@ local function onUnitCombat(unit, action, flag, amount, school)
     best.ticksSeen = best.ticksSeen + 1
     best.lastTickAmount, best.lastTickShape, best.lastTickCrit = amount, factor, isCrit
     best.offBeatCandidate = nil
-    if not isCrit then
+    if not isCrit and amount > 0 then
         best.tickSum = best.tickSum + amount / factor
         best.normalTicks = best.normalTicks + 1
         saveLearnedTick(best)
@@ -887,12 +887,12 @@ local function housekeep(now)
                 dot.nextTickAt = dot.nextTickAt + dot.interval
                 dot.missed = dot.missed + 1
             end
-            if now > dot.expiresAt + TICK_MATCH_WINDOW then
-                dots[name] = nil
-                trace("EXPIRE " .. name)
-            elseif dot.ticksSeen == 0 and dot.missed >= MISSED_TICKS_BEFORE_DROP then
+            if dot.ticksSeen == 0 and dot.missed >= math.max(MISSED_TICKS_BEFORE_DROP, dot.totalTicks) then
                 dots[name] = nil
                 trace("DROP " .. name .. " never ticked (resisted or immune?)")
+            elseif now > dot.expiresAt + TICK_MATCH_WINDOW then
+                dots[name] = nil
+                trace("EXPIRE " .. name)
             end
         end
         if next(dots) == nil then dotsByTarget[key] = nil end

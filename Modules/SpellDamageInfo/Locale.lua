@@ -25,6 +25,7 @@ Locales.en = {
   AP_SHORT = "AP", -- after a reduction of attack power on the button: "-48 AP"
   REDUCE_AP_HIT = "Enemy attack power: %s, about -%s damage per hit from your target (it attacks every %s sec)",
   PET = "pet",
+  HP5 = "HP/5s",
   ON = "on",
   OFF = "off",
   HELP = {
@@ -147,6 +148,7 @@ Locales.de = {
   AP_SHORT = "AK",
   REDUCE_AP_HIT = "Angriffskraft des Gegners: %s, etwa -%s Schaden pro Treffer Eures Ziels (es greift alle %s Sek. an)",
   PET = "Begleiter",
+  HP5 = "LP/5s",
   ON = "an",
   OFF = "aus",
   HELP = {
@@ -481,7 +483,10 @@ function Format.TooltipLines(view, L)
     return lines
   end
   if view.healthCost then
-    lines[1] = { "-" .. Format.Thousands(view.healthCost, L) .. " HP", HEAL_COLOR[1], HEAL_COLOR[2], HEAL_COLOR[3] }
+    -- Health Funnel's cost goes to the pet: a red cost line naming it, not a heal
+    local text = "-" .. Format.Thousands(view.healthCost, L) .. " HP" .. (view.petHeal and (" (" .. L.PET .. ")") or "")
+    local c = view.petHeal and REDUCTION_COLOR or HEAL_COLOR
+    lines[1] = { text, c[1], c[2], c[3] }
     if view.manaGain and view.manaGain >= 0.5 then
       lines[2] = { "+" .. Format.Thousands(view.manaGain, L) .. " mana", WEAPON_COLOR[1], WEAPON_COLOR[2], WEAPON_COLOR[3] }
     end
@@ -507,6 +512,10 @@ function Format.TooltipLines(view, L)
   if view.dot then add(L.DOT, periodic(view.dot), view.dot.added, DAMAGE_COLOR) end
   if view.heal then add(L.HEAL, rangeText(view.heal, L), view.heal.added, HEAL_COLOR) end
   if view.hot then add(L.HOT, periodic(view.hot), view.hot.added, HEAL_COLOR) end
+  if view.hp5 then
+    -- Demon Skin's regeneration: health per 5 sec, green like healing
+    lines[#lines + 1] = { "+" .. Format.Thousands(view.hp5, L) .. " " .. (L.HP5 or "HP/5s"), HEAL_COLOR[1], HEAL_COLOR[2], HEAL_COLOR[3] }
+  end
   if view.perRage then
     lines[#lines + 1] = { string.format(L.PER_RAGE, Format.Thousands(view.perRage, L)), DAMAGE_COLOR[1], DAMAGE_COLOR[2], DAMAGE_COLOR[3] }
   end

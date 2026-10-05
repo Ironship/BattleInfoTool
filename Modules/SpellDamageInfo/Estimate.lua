@@ -106,7 +106,17 @@ function Estimate.Apply(parsed, castTime, damageBonus, healBonus, coef)
   end
 
   pair(parsed.direct, parsed.dot, damageBonus, "direct", "dot", "d", "o")
-  pair(parsed.heal, parsed.hot, healBonus, "heal", "hot", "h", "ho")
+  -- A transfer's two ends must stay equal (Drain Life damages and heals the same amount):
+  -- the damage end gets no estimate (drain has no school), so the heal end gets none either.
+  if parsed.transfer then
+    if parsed.heal then view.heal = { min = parsed.heal.min, max = parsed.heal.max, added = 0 } end
+    if parsed.hot then view.hot = { total = parsed.hot.total, duration = parsed.hot.duration, added = 0 } end
+  else
+    pair(parsed.heal, parsed.hot, healBonus, "heal", "hot", "h", "ho")
+  end
+  -- A health cost and regeneration get no spell power: the description's own figures, as they
+  -- are (a pet transfer's cost in healthCost, a transfer's flag beside its two ends)
+  view.healthCost, view.petHeal, view.hp5, view.transfer = parsed.healthCost, parsed.petHeal, parsed.hp5, parsed.transfer
   return view
 end
 

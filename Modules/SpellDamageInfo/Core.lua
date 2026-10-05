@@ -898,7 +898,25 @@ local function buttonText(view, reduction)
     if view.manaGain and view.manaGain >= 0.5 then
       sideText = "+" .. Format.Short(view.manaGain) .. " mana"
     end
-    return mainText, Format.HEAL_COLOR, sideText, Format.WEAPON_COLOR, "stacked"
+    -- Health Funnel: the same cost, but it goes to the pet, so it is a red cost, not a heal
+    local mainColor = view.petHeal and Format.REDUCTION_COLOR or Format.HEAL_COLOR
+    if view.petHeal then mainText = mainText .. " (" .. ns.L.PET .. ")" end
+    return mainText, mainColor, sideText, Format.WEAPON_COLOR, "stacked"
+  end
+  -- Drain Life and other health transfers: one amount damages the target and heals the caster.
+  -- Two stacked labels like Life Tap: the damage in gold above, the healing in green below.
+  if view and view.transfer then
+    local value = Estimate.ButtonValue(view, db.button)
+    if value and value >= 0.5 then
+      local healValue
+      if db.button == "direct" then
+        if view.heal then healValue = (view.heal.min + view.heal.max) / 2 end
+      else
+        healValue = (view.hot and view.hot.total or 0) + (view.heal and (view.heal.min + view.heal.max) / 2 or 0)
+      end
+      local sideText = (healValue and healValue >= 0.5) and ("+" .. Format.Short(healValue)) or nil
+      return Format.Short(value), Format.DAMAGE_COLOR, sideText, Format.HEAL_COLOR, "stacked"
+    end
   end
   if not db.reduction then reduction = nil end
   local value, kind = Estimate.ButtonValue(view, db.button)
@@ -939,6 +957,10 @@ local function buttonText(view, reduction)
     -- the combo count the client cannot say: a neutral placeholder, never a precise amount
     mainText = "?"
     mainColor = Format.NOTE_COLOR
+  elseif view and view.hp5 then
+    -- Demon Skin's regeneration: "+5 HP/5s", green like healing
+    mainText = "+" .. Format.Short(view.hp5) .. " " .. (ns.L.HP5 or "HP/5s")
+    mainColor = Format.HEAL_COLOR
   elseif reduction then
     mainText = Format.ReductionText(reduction, ns.L, ns.ReductionPerHit(reduction))
     mainColor = Format.REDUCTION_COLOR
