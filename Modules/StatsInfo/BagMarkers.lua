@@ -380,9 +380,9 @@ local function wearable(link)
   elseif not equipLocOf(link) then
     return false
   end
-  if C_Item and type(C_Item.IsUsableItem) == "function" then
-    if ask(C_Item.IsUsableItem, link) == false then return false end
-  end
+  -- IsUsableItem is deliberately NOT a veto (the probe showed it false on a belt the
+  -- tooltip rates up): Pawn checks only the item level, and the tooltip has no such gate.
+  -- An explicit equippable=false still vetoes; a missing or erroring API proves nothing.
   return true
 end
 
