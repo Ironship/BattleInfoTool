@@ -81,6 +81,8 @@ local active = false -- the badge part is running (module on, setting on AND the
 -- defined earlier (Lua locals are captured by reference, so these forward declarations
 -- keep the closures bound to the real functions, not to nil globals).
 local scheduleRefresh, requestBaganatorRefresh
+-- /bit bagprobe reads these while it is defined before them, same capture rule.
+local widgetProbes, baganatorRegistered, moduleOn
 
 local safeBound
 local function safeStatBound()
@@ -187,7 +189,10 @@ local function requestState(link)
   -- the client raises "cannot be indexed with secret keys" on any touch, and type() reads a
   -- secret number as a number. Asked once here, before any of them is indexed at all.
   if isSecret(id) then return "dead" end
-  if arrived[id] then return "dead" end
+  -- One arrival may land BEFORE the data is queryable (the result event races the cache):
+  -- a single arrived mark re-arms one bounded request cycle instead of killing the item
+  -- forever. The second arrival with the data still unreadable is final.
+  if (arrived[id] or 0) >= 2 then return "dead" end
   if waits[id] and waits[id] >= MAX_WAIT_STATE then return "dead" end
   if outstanding[id] or wanted[id] then return "wait" end
   wanted[id] = true
@@ -217,7 +222,13 @@ local function itemReadiness(link)
     if v ~= v or v == math.huge or v == -math.huge then return "dead" end
     if math.abs(v) > bound then return "dead" end
   end
-  if n == 0 then return requestState(link) end -- {}: unloaded/failed, not a zero-stat item
+  if n == 0 then
+    -- {} is either "not loaded yet" or a GENUINELY statless item (a shirt, a bag, a gray):
+    -- the cache boundary tells them apart. A cached {} is known (the verdict below prices
+    -- it honestly); only an uncached {} asks for the data.
+    if cacheState(link) == "proceed" then return "ok" end
+    return requestState(link)
+  end
   local cached = cacheState(link)
   if cached == "wait" then return requestState(link) end -- not cached -> request it
   if cached ~= "proceed" then return cached end
@@ -231,10 +242,11 @@ local function onItemDataArrived(id)
   -- secret id must never key outstanding/wanted/arrived below ("cannot be indexed with
   -- secret keys"), so it is asked once here, before any of them is touched.
   if type(id) ~= "number" or isSecret(id) then return end
-  if outstanding[id] or wanted[id] then
+  if outstanding[id] or wanted[id] or arrived[id] then
     outstanding[id] = nil
     wanted[id] = nil
-    arrived[id] = true
+    arrived[id] = (arrived[id] or 0) + 1
+    waits[id] = nil -- the arrival starts a fresh bounded wait cycle
   end
   scheduleRefresh()
   requestBaganatorRefresh()
@@ -347,6 +359,33 @@ local function levelGate(link)
   return "ok"
 end
 
+-- The item's equip location, from the client's own GetItemInfoInstant answer (its 4th
+-- return): nil for anything that goes nowhere.
+local function equipLocOf(link)
+  local _, _, _, loc = ask(C_Item and C_Item.GetItemInfoInstant, link)
+  return type(loc) == "string" and loc ~= "" and loc or nil
+end
+
+-- Whether the player can wear and use link. The client's own answers are the whole truth:
+-- an explicit FALSE is a veto (an item nobody can wear, or one this class cannot use), and
+-- a missing API -- or one that raises/returns nothing -- proves nothing and is NEVER a veto
+-- on its own: the equip location the client itself reports stands in. A badge is a hint
+-- against what you wear, never a claim about class restrictions; a hint must never vanish
+-- silently because one API is absent (the tooltip path has no such gate and kept working).
+local function wearable(link)
+  if C_Item and type(C_Item.IsEquippableItem) == "function" then
+    local r = ask(C_Item.IsEquippableItem, link)
+    if r == false then return false end
+    if r ~= true and not equipLocOf(link) then return false end
+  elseif not equipLocOf(link) then
+    return false
+  end
+  if C_Item and type(C_Item.IsUsableItem) == "function" then
+    if ask(C_Item.IsUsableItem, link) == false then return false end
+  end
+  return true
+end
+
 -- The badge verdict for a bag item. BagVerdictState answers the tri-state the Baganator
 -- corner contract needs:
 --   "dead"                 permanent unknown (secret/malformed/nonfinite/unresolved,
@@ -363,10 +402,9 @@ function M.BagVerdictState(link)
   if r ~= "ok" then return r end
   if levelGate(link) ~= "ok" then return "dead" end -- above the player's level: never a badge
   -- Equippability AND current-player usability, from the pinned C_Item boundaries
-  -- (forever-item-documentation.lua:1324/1627). false/error/secret/missing => no marker;
-  -- a missing API is never permission to invent class restrictions.
-  if ask(C_Item and C_Item.IsEquippableItem, link) ~= true then return "dead" end
-  if ask(C_Item and C_Item.IsUsableItem, link) ~= true then return "dead" end
+  -- (forever-item-documentation.lua:1324/1627). An explicit "cannot wear/use" vetoes; a
+  -- missing, erroring or silent API proves nothing and never vetoes (see wearable).
+  if not wearable(link) then return "dead" end
   local comparisons = M.Compare(link)
   if not comparisons then return "dead" end
   for _, c in ipairs(comparisons) do
@@ -417,11 +455,21 @@ end
 -- the marker pipeline, so a never-showing arrow can be pinned to one cause.
 function M.BagProbe(link)
   local function say(m) if BIT.Say then BIT.Say("bagprobe: " .. tostring(m)) end end
+  -- the wiring itself first: a gate here means no badge can ever draw, whatever the item
+  say(string.format("wiring: active=%s running=%s switch=%s setting=%s baganator=%s",
+    tostring(active), tostring(BIT.IsRunning("StatsInfo")), tostring(moduleOn()),
+    tostring(M.settings and M.settings.bagMarkers),
+    (baganatorRegistered and "widget registered" or "NO WIDGET (Baganator missing at load)")))
   if type(link) ~= "string" or link == "" then
     say("shift-click an item after the command, e.g. /bit bagprobe [Sword]")
     return
   end
   if isSecret(link) then say("link is secret -> dead (wait for data, then retry)") return end
+  say("item id=" .. tostring(itemIDOf(link)))
+  local stats = ask(C_Item and C_Item.GetItemStats, link)
+  local n = 0
+  if type(stats) == "table" then for _ in pairs(stats) do n = n + 1 end else n = -1 end
+  say("stats entries=" .. tostring(n) .. " cached=" .. tostring(cacheState(link)))
   local r = itemReadiness(link)
   say("readiness=" .. tostring(r))
   if r ~= "ok" then
@@ -430,9 +478,13 @@ function M.BagProbe(link)
     return
   end
   local gate = levelGate(link)
-  say("level gate=" .. tostring(gate) .. (gate == "dead" and " (above the player's level: never a badge)" or ""))
+  local _, _, _, _, minLevel = ask(C_Item and C_Item.GetItemInfo, link)
+  say("level gate=" .. tostring(gate) .. " (requires " .. tostring(minLevel)
+    .. ", player " .. tostring(ask(UnitLevel, "player")) .. ")"
+    .. (gate == "dead" and " (above the player's level: never a badge)" or ""))
   say("equippable=" .. tostring(ask(C_Item and C_Item.IsEquippableItem, link))
-    .. " usable=" .. tostring(ask(C_Item and C_Item.IsUsableItem, link)))
+    .. " usable=" .. tostring(ask(C_Item and C_Item.IsUsableItem, link))
+    .. " wearable(gate)=" .. tostring(wearable(link)))
   local comparisons = M.Compare(link)
   if not comparisons then say("no worn slot to compare against -> dead") return end
   say("paths=" .. tostring(#comparisons))
@@ -448,6 +500,16 @@ function M.BagProbe(link)
   else
     say("final=" .. tostring(state) .. (verdict and ("/" .. tostring(verdict.verdict)) or "")
       .. (state == "wait" and " (keep bags open)" or state == "dead" and " (see reason above)" or ""))
+  end
+  -- what the Baganator corner widget itself answered for this item since the reload
+  local d = widgetProbes and widgetProbes[itemIDOf(link) or -1]
+  if d then
+    say(string.format("widget: last=%s up=%s down=%s none=%s wait=%s dead=%s not-owned=%s no-link=%s guidTypes=%s/%s",
+      tostring(d.last), tostring(d.up), tostring(d.down), tostring(d.none), tostring(d.wait),
+      tostring(d.dead), tostring(d["not-owned"]), tostring(d["no-link"]),
+      tostring(d.guidType), tostring(d.liveGuidType)))
+  else
+    say("widget: never asked for this item (is the bag open? the corner widget runs per visible button)")
   end
   if M.BagProbeButtons then M.BagProbeButtons(link) end
 end
@@ -631,7 +693,7 @@ M._applyMarker = applyMarker -- test seam, not part of the addon's interface
 -------------------------------------------------------------------------------------------------
 
 local WIDGET_ID = "statsinfo_bag_arrows"
-local baganatorRegistered = false
+baganatorRegistered = false
 
 -- Which live slot is THIS player's own to mark. details.bagType is the BAG's own type
 -- (0 = regular bag, 1..10 = a specialty bag, or "quiver"/"reagentBag"/"keyring" --
@@ -656,28 +718,64 @@ local function ownSlot(loc)
   return true
 end
 
--- Current-player ownership of a Baganator button: Baganator sets BGR.guid and
--- BGR.itemLocation ONLY for live containers the player can see (ItemViewCommon/
--- ItemButton.lua:667-674, 1177-1182); cached other-character/alt/mail/auction/guild
--- views have neither. The guid must still match the live item (pool reuse), exactly
--- like Baganator's own stale check (ItemButton.lua:164).
-local function liveOwned(details)
+-- Current-player ownership of a Baganator button, and the stale-pool guard. Baganator sets
+-- BGR.guid and BGR.itemLocation ONLY for live containers the player can see (ItemViewCommon/
+-- ItemButton.lua:667-674, 1177-1182); cached other-character/alt/mail/auction/guild views
+-- have neither. The slot must still hold the item the button was filled with (pool reuse).
+--
+-- That stale proof is the LIVE ITEM ID (the client's own field on its own info table) with
+-- the guid as a tie-breaker -- never the guid alone. The guid's Lua representation is
+-- client-specific (forever-item-documentation.lua:501-514 types it WOWGUID, and this client
+-- has already answered with a non-string once): a boxed, secret or otherwise uncomparable
+-- guid must never read as "stale", or EVERY button silently loses its badge while the
+-- tooltip -- which never touches the guid -- keeps working. Only two proven-plain values
+-- that differ prove a stale button.
+local function liveOwned(details, info)
   local loc = details.itemLocation
   if type(loc) ~= "table" then return false end
   if not ownSlot(loc) then return false end
   if not (C_Item and type(C_Item.DoesItemExist) == "function") then return false end
   if ask(C_Item.DoesItemExist, loc) ~= true then return false end
+  -- stale proof 1: the live slot's item id is the button's item id
+  local liveID = type(info) == "table" and info.itemID or nil
+  local wantID = details.itemID
+  if type(liveID) == "number" and not isSecret(liveID)
+      and type(wantID) == "number" and not isSecret(wantID) then
+    return liveID == wantID
+  end
+  -- stale proof 2: the guid, only when both sides are plain comparable values
   local guid = details.guid
-  if guid == nil or isSecret(guid) then return false end
+  if guid == nil or isSecret(guid) then
+    -- no recorded guid and no comparable item id: nothing proven stale, the live slot
+    -- exists and is this player's own (checked above)
+    return true
+  end
   local live = ask(C_Item.GetItemGUID, loc)
-  -- Only a proven-plain guid may be compared with the recorded one: a secret one
-  -- raises on the comparison itself (and on every table touch it would flow into).
-  -- The client hands back either a string or a number guid (Baganator's own "none"
-  -- sentinel is the string "-1", Sorting/OrderBags.lua:54), so both are plain here.
-  local liveType = type(live)
-  if (liveType ~= "string" and liveType ~= "number") or isSecret(live) then return false end
-  if live ~= guid then return false end
+  -- Only a proven-plain guid may be compared with the recorded one: a secret one raises
+  -- on the comparison itself (and on every table touch it would flow into). The client
+  -- hands back either a string or a number guid (Baganator's own "none" sentinel is the
+  -- string "-1", Sorting/OrderBags.lua:54), so both are plain here.
+  local liveType, guidType = type(live), type(guid)
+  local bothPlain = (liveType == "string" or liveType == "number")
+    and (guidType == "string" or guidType == "number")
+  if bothPlain and not isSecret(live) then return live == guid end
+  -- representations this client does not expose as plain Lua values (a boxed WOWGUID,
+  -- a combat secret): unknown is never "stale"
   return true
+end
+
+-- /bit bagprobe diagnostics: what the Baganator corner callback actually answered for each
+-- item id since the last reload. Counters only (no timers, no scans), so a never-showing
+-- arrow can be pinned to one gate of the live widget path instead of guessed at.
+widgetProbes = {}
+M._widgetProbes = widgetProbes -- test seam, not part of the addon's interface
+local function noteWidget(id, outcome, extra)
+  if type(id) ~= "number" or isSecret(id) then return end
+  local d = widgetProbes[id]
+  if not d then d = {} widgetProbes[id] = d end
+  d[outcome] = (d[outcome] or 0) + 1
+  d.last = outcome
+  if type(extra) == "table" then for k, v in pairs(extra) do d[k] = v end end
 end
 
 local function baganatorOnInit(itemButton)
@@ -695,12 +793,19 @@ local function baganatorOnUpdate(widget, details)
   widget:Hide()
   if not active then return false end
   if type(details) ~= "table" then return false end
-  if not liveOwned(details) then return false end -- context/guid gate (ownSlot inside)
+  local loc = details.itemLocation
+  if type(loc) ~= "table" then
+    noteWidget(details.itemID, "not-owned")
+    return false
+  end
   -- the hyperlink the client itself reads for the live container; the BGR link as the
   -- guarded fallback (Syndicator may lag the container by a tick)
-  local link
-  local loc = details.itemLocation
   local info = ask(C_Container and C_Container.GetContainerItemInfo, loc.bagID, loc.slotIndex)
+  if not liveOwned(details, info) then
+    noteWidget(details.itemID, "not-owned", { guidType = type(details.guid) })
+    return false
+  end
+  local link
   local stackCount
   if type(info) == "table" then stackCount = info.stackCount end
   if isSecret(stackCount) then stackCount = nil end
@@ -710,7 +815,10 @@ local function baganatorOnUpdate(widget, details)
   elseif type(details.itemLink) == "string" and not isSecret(details.itemLink) then
     link = details.itemLink
   end
-  if not link then return false end
+  if not link then
+    noteWidget(details.itemID, "no-link")
+    return false
+  end
   local state, verdict = M.BagVerdictState(link)
   if state == "wait" then
     -- the client retries while the data loads; we already issued the coalesced request.
@@ -718,12 +826,21 @@ local function baganatorOnUpdate(widget, details)
     -- A secret id never keys waits either (type() reads it as a number; indexing raises).
     local id = details.itemID
     if type(id) == "number" and not isSecret(id) then waits[id] = (waits[id] or 0) + 1 end
+    noteWidget(id, "wait")
     return nil
   end
-  if state ~= "ok" then return false end
-  if verdict.verdict == "none" then return false end
+  if state ~= "ok" then
+    noteWidget(details.itemID, "dead")
+    return false
+  end
+  if verdict.verdict == "none" then
+    noteWidget(details.itemID, "none")
+    return false
+  end
   paintContents(widget, verdict)
   widget:Show()
+  noteWidget(details.itemID, verdict.verdict,
+    { guidType = type(details.guid), liveGuidType = type(ask(C_Item and C_Item.GetItemGUID, loc)) })
   return true
 end
 
@@ -863,10 +980,13 @@ end
 -- The live module switch (Core/Settings.lua writes BIT.SetSwitchedOn): the reload-scoped
 -- core latch stays as it is for every module, but THIS marker subsystem reads the live
 -- IsSwitchedOn switch at every refresh and clears/registers through a narrow seam.
-local function moduleOn() return BIT.IsSwitchedOn("StatsInfo") end
+moduleOn = function() return BIT.IsSwitchedOn("StatsInfo") end
 
 local function refreshVisible()
-  if not (M.settings and M.settings.bagMarkers) or not BIT.IsRunning("StatsInfo") or not moduleOn() then
+  -- `active` first: DisableBagMarkers must stop the drawing at once even when the setting
+  -- itself is still on (the live module switch), or the very refresh it calls repaints.
+  if not active or not (M.settings and M.settings.bagMarkers)
+      or not BIT.IsRunning("StatsInfo") or not moduleOn() then
     hideAll()
     return
   end
@@ -889,12 +1009,15 @@ function M.BagProbeButtons(want)
   local function say(m) if BIT.Say then BIT.Say("bagprobe: " .. tostring(m)) end end
   local setting = M.settings and M.settings.bagMarkers
   say("buttons: bagMarkers=" .. tostring(setting) .. " running=" .. tostring(BIT.IsRunning("StatsInfo"))
-    .. " switch=" .. tostring(moduleOn()) .. " baganator="
+    .. " switch=" .. tostring(moduleOn()) .. " active=" .. tostring(active) .. " baganator="
     .. (baganatorRegistered and "widget registered" or "no widget (Baganator not loaded)"))
-  if not (setting and BIT.IsRunning("StatsInfo") and moduleOn()) then
+  if not (setting and BIT.IsRunning("StatsInfo") and moduleOn() and active) then
     say("buttons: the gate above is off, nothing is drawn")
     return
   end
+  -- the native path only ever sees the game's own ContainerFrame buttons: with Baganator
+  -- (or any bag addon) they are not what the player looks at -- the widget lines above are
+  -- the live path. Both are printed so a zero here is never read as "broken".
   local wanted = type(want) == "string" and tonumber(want:match("item:(%d+)")) or nil
   local n, shown = 0, 0
   eachVisibleButton(function(button, bag, slot)
@@ -911,7 +1034,24 @@ function M.BagProbeButtons(want)
       tostring(verdict and verdict.verdict or "-"),
       marker and (isShown and "shown" or "hidden") or "none"))
   end)
-  say("buttons: " .. n .. " with this item, " .. shown .. " marker(s) shown")
+  say("native buttons: " .. n .. " with this item, " .. shown .. " marker(s) shown")
+  say("native note: " .. (n == 0
+    and "no game ContainerFrame button holds it (a bag addon owns the view: see the widget line above)"
+    or "these are the game's own frames; Baganator users see the widget line above"))
+  -- what the corner widget answered for EVERY item since the reload (cap the spam)
+  if type(want) ~= "string" then
+    local ids = {}
+    for id in pairs(widgetProbes or {}) do ids[#ids + 1] = id end
+    table.sort(ids)
+    for i = 1, math.min(#ids, 12) do
+      local d = widgetProbes[ids[i]]
+      say(string.format("widget item %s: last=%s up=%s down=%s none=%s wait=%s dead=%s not-owned=%s no-link=%s guidTypes=%s/%s",
+        tostring(ids[i]), tostring(d.last), tostring(d.up), tostring(d.down), tostring(d.none),
+        tostring(d.wait), tostring(d.dead), tostring(d["not-owned"]), tostring(d["no-link"]),
+        tostring(d.guidType), tostring(d.liveGuidType)))
+    end
+    say("widget items tracked: " .. tostring(#ids))
+  end
 end
 
 -------------------------------------------------------------------------------------------------
