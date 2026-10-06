@@ -66,10 +66,49 @@ local statsMemo, charMemo = {}, {}
 local memoDepth = 0
 local NO_VALUE = {}
 
+-- Build-scoped scratch tables, one arena per allocation site (take below). One tooltip
+-- build used to allocate a fresh table for every part, row, record and buffer in it --
+-- 140 tables per hover (harness-measured), all garbage the moment the tooltip is built,
+-- and a hover storm turns that into GC stutter. take() hands out the next table of a
+-- site's arena, wiped, and the arena rewinds when a new build opens: after the first
+-- hover's high-water mark a warm hover allocates none of them and the live tables stop
+-- growing. Only builds share them (memoDepth > 0, i.e. inside memoized's pcall): a
+-- direct call outside a build gets plain fresh tables, so every result that leaves a
+-- build (M.Compare, M.SpecRatings, M.TooltipLines to BagMarkers, QuestMarkers and the
+-- test suites) is exactly the private table it always was.
+local scratch = {}
+
+local function resetScratch()
+  for _, site in pairs(scratch) do site.n = 0 end
+end
+
+local function take(name)
+  if memoDepth <= 0 then return {} end
+  local site = scratch[name]
+  if not site then
+    site = { n = 0 }
+    scratch[name] = site
+  end
+  local i = site.n + 1
+  site.n = i
+  local t = site[i]
+  if t == nil then
+    t = {}
+    site[i] = t
+  else
+    for k in pairs(t) do t[k] = nil end -- reuse must read as a fresh {}
+  end
+  return t
+end
+
+-- Fresh tables, never pooled: the public entries' own results outlive their build.
+local function fresh() return {} end
+
 local function memoOpen()
   if memoDepth == 0 then
     for k in pairs(statsMemo) do statsMemo[k] = nil end
     for k in pairs(charMemo) do charMemo[k] = nil end
+    resetScratch()
   end
   memoDepth = memoDepth + 1
 end
@@ -116,12 +155,16 @@ local function charFact(key, compute)
   return v
 end
 
--- The class behind M.SPECS, or nil; one read per build.
+-- The class behind M.SPECS, or nil; one read per build. The compute bodies are named
+-- functions, hoisted out of the call sites: a closure literal per call is itself one
+-- allocation per hover and per spec line, and these run a dozen times per tooltip.
+local function computeClass()
+  local _, class = ask(UnitClass, "player")
+  return class
+end
+
 local function charClass()
-  return charFact("class", function()
-    local _, class = ask(UnitClass, "player")
-    return class
-  end)
+  return charFact("class", computeClass)
 end
 
 -- The name the client gives a stat key ("Beweglichkeit"), or nil when it has none.
@@ -144,10 +187,10 @@ local withoutEnchant, tooltipEnchant
 -- clean answer or enchant never drops or doubles a stat. A secret clean stat (the client hides a
 -- value in combat, marking it with issecretvalue) is never added to or guessed from: the baseline
 -- keeps the stat.
-local function itemStats(link)
+local function itemStats(link, alloc)
   -- A nil or secret link (in combat) must never reach the link rewrite or the enchant memo: the
   -- client raises on secret keys, so nothing is asked and nothing is cached.
-  if type(link) ~= "string" or isSecret(link) then return {} end
+  if type(link) ~= "string" or isSecret(link) then return alloc("itemStats") end
   -- Within one tooltip build the answer is asked for the same link a dozen times and more: it
   -- is computed once per build and handed out read-only for the rest of it (see memoOpen).
   if memoDepth > 0 then
@@ -160,7 +203,7 @@ local function itemStats(link)
   -- enchant field exist, a key the enchant names reads base + enchant; every other key keeps the
   -- baseline. Without the clean answer (an error, a nil) nothing is invented or doubled: the
   -- baseline stands, a missing enchant beats a wrong stat.
-  local out = {}
+  local out = alloc("itemStats")
   local stats = ask(C_Item and C_Item.GetItemStats, link)
   if type(stats) ~= "table" then stats = ask(GetItemStats, link) end
   if type(stats) == "table" then
@@ -191,7 +234,8 @@ local function itemStats(link)
   if memoDepth > 0 then statsMemo[link] = out end
   return out
 end
-M.ItemStats = memoized(itemStats)
+local function itemStatsFresh(link) return itemStats(link, fresh) end
+M.ItemStats = memoized(itemStatsFresh)
 
 local function equipLoc(link)
   local _, _, _, loc = ask(C_Item and C_Item.GetItemInfoInstant, link)
@@ -218,85 +262,165 @@ local function itemCached(link)
   return ask(C_Item.IsItemDataCachedByID, id) ~= false
 end
 
+-- The differences' order: the stat block's own order first (RANK), then the client's name.
+-- Named and shared: an anonymous comparator was one more closure per comparison per hover.
+local function diffSort(a, b)
+  local ra, rb = RANK[a.key] or 100, RANK[b.key] or 100
+  if ra ~= rb then return ra < rb end
+  return (statName(a.key) or a.key) < (statName(b.key) or b.key)
+end
+
+-- target: the slot the item would go into, when it is not the one compared with (a shield
+-- against the two-hander it would take off). Named, not a closure per M.Compare call:
+-- it runs twice per hover and used to allocate twice per hover.
+local function compareWith(slots, target, new, comparisons, alloc)
+  local old, names, wornSlots = alloc("cmpOld"), alloc("cmpNames"), alloc("cmpWornSlots")
+  for _, slot in ipairs(slots) do
+    local worn = equipped(slot)
+    if worn then
+      local wornStats = itemStats(worn, alloc)
+      if next(wornStats) == nil and not itemCached(worn) then
+        return -- stats still loading: no invented block; the tooltip rebuilds on arrival
+      end
+      names[#names + 1] = worn
+      wornSlots[#wornSlots + 1] = slot
+      for k, v in pairs(wornStats) do old[k] = (old[k] or 0) + v end
+    end
+  end
+  local diffs, keys = alloc("cmpDiffs"), alloc("cmpKeys")
+  for k in pairs(new) do keys[k] = true end
+  for k in pairs(old) do keys[k] = true end
+  for k in pairs(keys) do
+    local d = (new[k] or 0) - (old[k] or 0)
+    -- SI-124: a diff that renders as +0.0 (e.g. +0.04 DPS) is noise, not a line.
+    if d ~= 0 and math.abs(d) >= 0.05 then
+      local entry = alloc("cmpDiff")
+      entry.key, entry.diff = k, d
+      diffs[#diffs + 1] = entry
+    end
+  end
+  -- A named comparison with no worn stats behind it would print the new item's full
+  -- numbers under the worn item's name (a duplicated recommendation): the worn data was
+  -- unavailable (uncached heirloom, an answer the parser does not name). The block is
+  -- skipped; the empty-slot block carries the same numbers honestly. An all-empty
+  -- comparison ("the same stats") stays: it is true either way.
+  if #names > 0 and next(old) == nil and #diffs > 0 then return end
+  -- a sort of zero or one element is already in order (no call, no comparator run)
+  if #diffs > 1 then table.sort(diffs, diffSort) end
+  -- againstSlots: the slots compared with, an empty one included; wornSlots lists only the
+  -- ones carrying an item (it indexes against, SpecRatings needs it so). The tooltip names
+  -- the block's slot from againstSlots: a ring's two blocks otherwise read as one repeated.
+  local record = alloc("cmpRecord")
+  record.against, record.slots, record.againstSlots = names, wornSlots, slots
+  record.diffs = diffs
+  record.offHand = (target or (#slots == 1 and slots[1])) == 17
+  comparisons[#comparisons + 1] = record
+end
+
 -- What wearing link instead of what is in its slot changes: a list of { key, diff }, sorted,
 -- and what it is compared with; nil when there is nothing to compare with, or when link is
 -- worn (in either of two slots). Rings and trinkets: one comparison with each worn. A one-hand
 -- weapon: with the main hand, an empty one too (it goes there, and a weapon in the off hand stays;
 -- set against the off hand, an identical dagger was rated as its main-hand worth over its off-hand one).
-function M.Compare(link)
+local function compareBody(link, alloc)
   local loc = equipLoc(link)
   if not loc then return nil end
   -- Not before the client has the item: its stats would read as none, every stat lost. The tooltip is
   -- built again when the data arrives.
   local id = ask(C_Item and C_Item.GetItemInfoInstant, link)
   if id and C_Item and C_Item.IsItemDataCachedByID and ask(C_Item.IsItemDataCachedByID, id) == false then return nil end
-  local slots = BOTH_HANDS[loc] and { 16, 17 } or SLOTS[loc] or {}
+  local slots
+  if BOTH_HANDS[loc] then
+    slots = alloc("compSlots")
+    slots[1], slots[2] = 16, 17
+  else
+    slots = SLOTS[loc]
+    if not slots then slots = alloc("compSlots") end
+  end
   for _, slot in ipairs(slots) do
     if equipped(slot) == link then return nil end -- the item worn
   end
-  local new = itemStats(link)
-  local comparisons = {}
-  -- target: the slot the item would go into, when it is not the one compared with (a shield against the
-  -- two-hander it would take off)
-  local function compareWith(slots, target)
-    local old, names, wornSlots = {}, {}, {}
-    for _, slot in ipairs(slots) do
-      local worn = equipped(slot)
-      if worn then
-        local wornStats = itemStats(worn)
-        if next(wornStats) == nil and not itemCached(worn) then
-          return -- stats still loading: no invented block; the tooltip rebuilds on arrival
-        end
-        names[#names + 1] = worn
-        wornSlots[#wornSlots + 1] = slot
-        for k, v in pairs(wornStats) do old[k] = (old[k] or 0) + v end
-      end
-    end
-    local diffs = {}
-    local keys = {}
-    for k in pairs(new) do keys[k] = true end
-    for k in pairs(old) do keys[k] = true end
-    for k in pairs(keys) do
-      local d = (new[k] or 0) - (old[k] or 0)
-      -- SI-124: a diff that renders as +0.0 (e.g. +0.04 DPS) is noise, not a line.
-      if d ~= 0 and math.abs(d) >= 0.05 then diffs[#diffs + 1] = { key = k, diff = d } end
-    end
-    -- A named comparison with no worn stats behind it would print the new item's full
-    -- numbers under the worn item's name (a duplicated recommendation): the worn data was
-    -- unavailable (uncached heirloom, an answer the parser does not name). The block is
-    -- skipped; the empty-slot block carries the same numbers honestly. An all-empty
-    -- comparison ("the same stats") stays: it is true either way.
-    if #names > 0 and next(old) == nil and #diffs > 0 then return end
-    table.sort(diffs, function(a, b)
-      local ra, rb = RANK[a.key] or 100, RANK[b.key] or 100
-      if ra ~= rb then return ra < rb end
-      return (statName(a.key) or a.key) < (statName(b.key) or b.key)
-    end)
-    -- againstSlots: the slots compared with, an empty one included; wornSlots lists only the
-    -- ones carrying an item (it indexes against, SpecRatings needs it so). The tooltip names
-    -- the block's slot from againstSlots: a ring's two blocks otherwise read as one repeated.
-    comparisons[#comparisons + 1] = { against = names, slots = wornSlots, againstSlots = slots,
-      diffs = diffs, offHand = (target or (#slots == 1 and slots[1])) == 17 }
-  end
+  local new = itemStats(link, alloc)
+  local comparisons = alloc("comparisons")
   local mainHand = equipped(16)
   if BOTH_HANDS[loc] then
-    compareWith({ 16, 17 })
+    local s = alloc("compSlots")
+    s[1], s[2] = 16, 17
+    compareWith(s, nil, new, comparisons, alloc)
   elseif loc == "INVTYPE_WEAPON" then
-    compareWith({ 16 }) -- it goes into the main hand
+    local s = alloc("compSlots")
+    s[1] = 16
+    compareWith(s, nil, new, comparisons, alloc) -- it goes into the main hand
   elseif #slots == 1 and slots[1] == 17 and mainHand and equipLoc(mainHand) == "INVTYPE_2HWEAPON" then
-    compareWith({ 16 }, 17) -- an off-hand item takes the two-hander off
+    local s = alloc("compSlots")
+    s[1] = 16
+    compareWith(s, 17, new, comparisons, alloc) -- an off-hand item takes the two-hander off
   else
-    for _, slot in ipairs(slots) do compareWith({ slot }) end
+    for _, slot in ipairs(slots) do
+      local s = alloc("compSlots")
+      s[1] = slot
+      compareWith(s, nil, new, comparisons, alloc)
+    end
   end
   return #comparisons > 0 and comparisons or nil
 end
+
+function M.Compare(link)
+  return compareBody(link, fresh)
+end
 M.Compare = memoized(M.Compare)
 
+-- Pure number -> text formatters, memoized. One hover of the same item formats the same
+-- values again and again ("+8", "-0.2", "0.28% crit", "13% better for survival"), and
+-- every call allocated fresh strings -- they are the other half of the hover's garbage.
+-- Same input, same bytes out: a lookup cannot change a tooltip. Bounded like the enchant
+-- memo: when a cache fills, it is wiped and grows again (never without limit).
+local TEXT_MEMO_MAX = 256
+
+-- (number) -> text
+local function memo1(fn)
+  local cache, n = {}, 0
+  return function(v)
+    if v ~= v then return fn(v) end -- NaN is never a table key; nor a number here
+    local hit = cache[v]
+    if hit then return hit end
+    local text = fn(v)
+    if n >= TEXT_MEMO_MAX then
+      for k in pairs(cache) do cache[k] = nil end
+      n = 0
+    end
+    cache[v] = text
+    n = n + 1
+    return text
+  end
+end
+
+-- (number, flag) -> text, one cache per flag bucket
+local function memo2(fn)
+  local yesCache, noCache, yesN, noN = {}, {}, 0, 0
+  return function(v, flag)
+    if v ~= v then return fn(v, flag) end
+    local cache, n
+    if flag then cache, n = yesCache, yesN else cache, n = noCache, noN end
+    local hit = cache[v]
+    if hit then return hit end
+    local text = fn(v, flag)
+    if n >= TEXT_MEMO_MAX then
+      for k in pairs(cache) do cache[k] = nil end
+      n = 0
+    end
+    cache[v] = text
+    n = n + 1
+    if flag then yesN = n else noN = n end
+    return text
+  end
+end
+
 -- A stat's change as text: whole numbers as they are, others to one decimal (1.9 damage per second).
-local function signed(v)
+local signed = memo1(function(v)
   local text = (v == math.floor(v)) and string.format("%d", v) or string.format("%.1f", v)
   return (v > 0 and "+" or "") .. text
-end
+end)
 
 ---------------------------------------------------------------------------------------------
 -- What a stat gives
@@ -339,29 +463,37 @@ local function tankRead(key, compute)
   return v
 end
 
+-- The compute bodies below are named functions shared by every caller: a closure literal
+-- in a call position is allocated on every call, and these run a dozen times per hover.
+local function readLevel() return num(ask(UnitLevel, "player")) end
+
 -- The character's level, as tankMissChance and the uncrittable target read it.
 local function tankLevel()
-  return tankRead("lvl", function() return num(ask(UnitLevel, "player")) end)
+  return tankRead("lvl", readLevel)
+end
+
+local function computeMana()
+  local max = num(ask(UnitPowerMax, "player", 0))
+  return max ~= nil and max > 0
 end
 
 local function usesMana()
-  return charFact("mana", function()
-    local max = num(ask(UnitPowerMax, "player", 0))
-    return max ~= nil and max > 0
-  end)
+  return charFact("mana", computeMana)
 end
 
 -- Mana a second, out of casting, per point of Spirit, to the thousandth the game gives it in
 -- (7.751 and 0.001 for 31 Spirit: 0.25, not the 0.2499... the subtraction leaves).
+local function computeRegen()
+  local _, spirit = ask(UnitStat, "player", 5)
+  spirit = num(spirit)
+  local base, casting = ask(GetManaRegen)
+  base, casting = num(base), num(casting) or 0
+  if not (spirit and base and spirit > 0) then return nil end
+  return math.floor((base - casting) / spirit * 1000 + 0.5) / 1000
+end
+
 local function regenPerSpirit()
-  return charFact("regen", function()
-    local _, spirit = ask(UnitStat, "player", 5)
-    spirit = num(spirit)
-    local base, casting = ask(GetManaRegen)
-    base, casting = num(base), num(casting) or 0
-    if not (spirit and base and spirit > 0) then return nil end
-    return math.floor((base - casting) / spirit * 1000 + 0.5) / 1000
-  end)
+  return charFact("regen", computeRegen)
 end
 
 local function attackPower(stat, n)
@@ -379,14 +511,16 @@ local function chanceFromStat(fn, stat, n)
 end
 
 -- Dodge a point of Agility gives: the dodge the character's Agility brings, over that Agility.
+local function computeDodgePerAgi()
+  local total = num(ask(GetDodgeChanceFromAttribute))
+  local _, agi = ask(UnitStat, "player", 2)
+  agi = num(agi)
+  if not (total and agi and agi > 0) then return nil end
+  return total * 100 / agi
+end
+
 local function dodgePerAgility()
-  return charFact("dodgePerAgi", function()
-    local total = num(ask(GetDodgeChanceFromAttribute))
-    local _, agi = ask(UnitStat, "player", 2)
-    agi = num(agi)
-    if not (total and agi and agi > 0) then return nil end
-    return total * 100 / agi
-  end)
+  return charFact("dodgePerAgi", computeDodgePerAgi)
 end
 
 local function constant(name, fallback)
@@ -394,7 +528,7 @@ local function constant(name, fallback)
   return type(v) == "number" and v or fallback
 end
 
-local function percent(v) return string.format("%+.2f%%", v) end
+local percent = memo1(function(v) return string.format("%+.2f%%", v) end)
 local function worthShowing(v) return v and math.abs(v) >= 0.005 end
 
 -- An item's rating and what it is: its kind, and the game's rating index (a global of the character sheet,
@@ -432,11 +566,23 @@ local RATINGS = {
 -- tooltip with a secret line: the scan is re-run when the lines may have arrived.
 ---------------------------------------------------------------------------------------------
 
+-- The link without its enchant field (the second number after "item:", everything else
+-- kept: the base for GetItemStats; a link without the field is returned as it is),
+-- memoized per link (the same handful of links is rewritten on every hover), bounded like
+-- the other memos: a plain gsub allocated a fresh string per link per hover.
+local plainMemo, plainCount = {}, 0
 withoutEnchant = function(link)
-  -- The link without its enchant field (the second number after "item:"), everything else kept:
-  -- the base for GetItemStats. A link without the field is returned as it is.
   if type(link) ~= "string" then return link end
-  return (link:gsub("item:(%d+):(%d+)", "item:%1:", 1))
+  local hit = plainMemo[link]
+  if hit then return hit end
+  local plain = (link:gsub("item:(%d+):(%d+)", "item:%1:", 1))
+  if plainCount >= TEXT_MEMO_MAX then
+    for k in pairs(plainMemo) do plainMemo[k] = nil end
+    plainCount = 0
+  end
+  plainMemo[link] = plain
+  plainCount = plainCount + 1
+  return plain
 end
 
 -- The keys an enchant can give, by their client names; the longer name first, so "Attack Power"
@@ -637,7 +783,7 @@ end
 -- prose, and the enchant adds nothing: only the stats this module knows are taken, and a
 -- missing enchant beats a wrong stat.
 local function parseEnchantText(text)
-  local out = {}
+  local out = take("parseOut") -- merged into tooltipEnchant's own table at once
   local names = enchantNames()
   local pos, len = 1, #text
   local first = true
@@ -708,19 +854,33 @@ tooltipEnchant = function(link)
   return out
 end
 
+-- The live chance reads behind the tank lines and the shield check: named (shared), so a
+-- hover allocates no closure per read.
+local function readBlock() return num(ask(GetBlockChance)) end
+local function readDodge() return num(ask(GetDodgeChance)) end
+local function readParry() return num(ask(GetParryChance)) end
+
+local function computeShield()
+  local class = charClass()
+  if not class or isSecret(class) then return false end
+  if class ~= "WARRIOR" and class ~= "PALADIN" and class ~= "SHAMAN" then return false end
+  local bv = tankRead("block", readBlock)
+  return (bv or 0) > 0
+end
+
 -- Strength gives block value (0.05 per point, RatingBuster Classic / StatLogic VanillaLogic
 -- ADD_BLOCK_VALUE_MOD_STR value 0.05) but only while actually blocking: a shield-capable
 -- class (warrior, paladin, shaman) with nonzero block chance. A 2H or empty off-hand
 -- blocks nothing, so the line stays out. Class and chance both guarded (ask + pcall);
 -- a secret class (in combat) fails silent: no line.
 local function usesShield()
-  return charFact("shield", function()
-    local class = charClass()
-    if not class or isSecret(class) then return false end
-    if class ~= "WARRIOR" and class ~= "PALADIN" and class ~= "SHAMAN" then return false end
-    local bv = tankRead("block", function() return num(ask(GetBlockChance)) end)
-    return (bv or 0) > 0
-  end)
+  return charFact("shield", computeShield)
+end
+
+local function computeForm()
+  local form = ask(GetShapeshiftFormID)
+  if form == nil or isSecret(form) then return false end
+  return form == 1 or form == 5 or form == 8
 end
 
 -- Feral Attack Power is attack power 1:1 (RatingBuster Classic / StatLogic VanillaLogic
@@ -729,20 +889,22 @@ end
 -- it (GetShapeshiftFormID: Cat 1, Bear 5, Dire Bear 8, see Range.lua DRUID_FORM_SPELLS and
 -- SpellDamageInfo CAT_FORM); a secret or unknown form fails silent: no line.
 local function inFeralForm()
-  return charFact("form", function()
-    local form = ask(GetShapeshiftFormID)
-    if form == nil or isSecret(form) then return false end
-    return form == 1 or form == 5 or form == 8
-  end)
+  return charFact("form", computeForm)
 end
 
--- One part of a worth line, appended where it belongs (no closure per call: WorthParts runs
--- per stat of every hover).
-local function addPart(parts, kind, value) parts[#parts + 1] = { kind = kind, value = value } end
+-- One part of a worth line, appended where it belongs: kind and value flat in one array
+-- (a { kind =, value = } table per part was 13 of a hover's 140 allocations).
+local function addPart(parts, kind, value)
+  local n = #parts
+  parts[n + 1] = kind
+  parts[n + 2] = value
+end
 
--- What n points of the stat under key give this character: { { kind, value } }, in the order shown.
+-- What n points of the stat under key give this character: { kind, value, kind, value, ... },
+-- flat, in the order shown. The array is build-scoped scratch (see take): every caller
+-- reads it out at once (M.Worth joins it, TooltipLines sums it), so a hover allocates none.
 function M.WorthParts(key, n)
-  local parts = {}
+  local parts = take("worthParts")
   if key == "ITEM_MOD_STRENGTH_SHORT" then
     local ap = attackPower(1, n)
     if ap then addPart(parts, "ap", ap) end
@@ -821,20 +983,59 @@ local WORTH_SHORT = {
 }
 local function worthValue(kind, value) return PERCENT_KINDS[kind] and percent(value) or signed(value) end
 
--- Up green, down red: the colour of a value by its sign.
-local UP, DOWN = "|cff4dff4d", "|cffff5959"
-local function bySign(v, text)
-  if v > 0 then return UP .. text .. "|r" elseif v < 0 then return DOWN .. text .. "|r" end
+-- The worth segment in words ("+0.28% crit"), memoized per (kind, value): the same item's
+-- hover builds the same handful of segments every time it is hovered.
+local worthWordMemo, worthWordCount = {}, 0
+local function worthWord(kind, value)
+  if value ~= value then return worthValue(kind, value) .. " " .. WORTH_WORDS[kind] end -- NaN keys raise
+  local byValue = worthWordMemo[kind]
+  if not byValue then
+    byValue = {}
+    worthWordMemo[kind] = byValue
+  end
+  local hit = byValue[value]
+  if hit then return hit end
+  local text = worthValue(kind, value) .. " " .. WORTH_WORDS[kind]
+  if worthWordCount >= TEXT_MEMO_MAX then
+    for k in pairs(worthWordMemo) do worthWordMemo[k] = nil end
+    worthWordCount = 0
+  end
+  byValue[value] = text
+  worthWordCount = worthWordCount + 1
   return text
+end
+
+-- Up green, down red: the colour of a value by its sign. Memoized per (sign, text): the
+-- same coloured segment recurs on every hover of the same item.
+local UP, DOWN = "|cff4dff4d", "|cffff5959"
+local bySignMemo = { [1] = {}, [-1] = {}, [0] = {} }
+local bySignCount = { [1] = 0, [-1] = 0, [0] = 0 }
+local function bySign(v, text)
+  local bucket = v > 0 and 1 or v < 0 and -1 or 0
+  local cache = bySignMemo[bucket]
+  local hit = cache[text]
+  if hit then return hit end
+  local out = text
+  if bucket == 1 then out = UP .. text .. "|r" elseif bucket == -1 then out = DOWN .. text .. "|r" end
+  local n = bySignCount[bucket]
+  if n >= TEXT_MEMO_MAX then
+    for k in pairs(cache) do cache[k] = nil end
+    n = 0
+  end
+  cache[text] = out
+  bySignCount[bucket] = n + 1
+  return out
 end
 
 -- What n points of the stat under key give this character, as text, or nil; each value coloured by
 -- whether it goes up or down when coloured is set.
 function M.Worth(key, n, coloured)
-  local out = {}
-  for _, p in ipairs(M.WorthParts(key, n)) do
-    local text = worthValue(p.kind, p.value) .. " " .. WORTH_WORDS[p.kind]
-    out[#out + 1] = coloured and bySign(p.value, text) or text
+  local out = take("worthOut")
+  local parts = M.WorthParts(key, n)
+  for i = 1, #parts, 2 do
+    local kind, value = parts[i], parts[i + 1]
+    local text = worthWord(kind, value)
+    out[#out + 1] = coloured and bySign(value, text) or text
   end
   return #out > 0 and table.concat(out, ", ") or nil
 end
@@ -854,8 +1055,8 @@ local RANGED_LOCS = { INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE
 -- (or would be) in the off hand. A weapon's damage per second has the sim's own weight for where it is:
 -- main hand, off hand or ranged slot (0 where the spec does not fight with it: a caster, the paw of Cat
 -- and Bear Form, an Arms warrior's off hand).
-local function worthTo(measure, link, offHand)
-  local stats = itemStats(link)
+local function worthTo(measure, link, offHand, alloc)
+  local stats = itemStats(link, alloc)
   local total = 0
   for key, amount in pairs(stats) do
     local w = measure.weights[key]
@@ -883,22 +1084,28 @@ local TANK_MEASURES = { "survival", "threat" }
 local HEAL_MEASURES = { "healing" }
 local DAMAGE_MEASURES = { "damage" }
 
-function M.SpecRatings(link, against, slots, offHand)
+local EMPTY = {} -- a read-only stand-in for "nothing to compare with"; never written to
+
+local function specRatingsBody(link, against, slots, offHand, alloc)
   local class = charClass()
   local specs = type(class) == "string" and M.SPECS and M.SPECS[class]
   if not specs then return nil end
-  local out = {}
+  local out = alloc("specRows")
+  against = against or EMPTY
   for _, spec in ipairs(specs) do
-    local row = { spec = spec, parts = {} }
+    local row = alloc("specRow")
+    row.spec = spec
+    row.parts = alloc("specRowParts")
     local measures
     if spec.role == "tank" then measures = TANK_MEASURES
     elseif spec.role == "healing" then measures = HEAL_MEASURES
     else measures = DAMAGE_MEASURES end
     for _, kind in ipairs(measures) do
       local measure = spec[kind]
-      local new, old = worthTo(measure, link, offHand), 0
-      for i, worn in ipairs(against or {}) do old = old + worthTo(measure, worn, slots and slots[i] == 17) end
-      local part = { kind = kind, reference = measure.reference }
+      local new, old = worthTo(measure, link, offHand, alloc), 0
+      for i, worn in ipairs(against) do old = old + worthTo(measure, worn, slots and slots[i] == 17, alloc) end
+      local part = alloc("specPart")
+      part.kind, part.reference = kind, measure.reference
       if measure.approximate then part.approx = true end
       if math.abs(old) > 0.05 then
         local p = (new - old) / math.abs(old) * 100
@@ -918,11 +1125,30 @@ function M.SpecRatings(link, against, slots, offHand)
   end
   return out
 end
+
+function M.SpecRatings(link, against, slots, offHand)
+  return specRatingsBody(link, against, slots, offHand, fresh)
+end
 M.SpecRatings = memoized(M.SpecRatings)
 
+-- The colour a rating line is tinted by: memoized per (threshold bucket, text), like bySign.
+local colouredMemo = { [1] = {}, [-1] = {}, [0] = {} }
+local colouredCount = { [1] = 0, [-1] = 0, [0] = 0 }
 local function coloured(v, text)
-  local colour = v > 0.05 and "|cff4dff4d" or v < -0.05 and "|cffff5959" or "|cffb3b3b3"
-  return colour .. text .. "|r"
+  local bucket = v > 0.05 and 1 or v < -0.05 and -1 or 0
+  local cache = colouredMemo[bucket]
+  local hit = cache[text]
+  if hit then return hit end
+  local colour = bucket == 1 and "|cff4dff4d" or bucket == -1 and "|cffff5959" or "|cffb3b3b3"
+  local out = colour .. text .. "|r"
+  local n = colouredCount[bucket]
+  if n >= TEXT_MEMO_MAX then
+    for k in pairs(cache) do cache[k] = nil end
+    n = 0
+  end
+  cache[text] = out
+  colouredCount[bucket] = n + 1
+  return out
 end
 
 -- What a tank's two numbers are for, and a damage spec's one: terse, so it cannot read
@@ -933,18 +1159,20 @@ local MEASURE_WORDS = { damage = "dmg spec", survival = "for survival", threat =
   healing = "healer score" }
 
 -- A number to one decimal under 10, whole from 10 up, and no ".0" on a whole number: "+8 Agility", as
--- the stat line says it, and 9.96 is "10", not "10.0".
-local function shortNumber(n, sign)
+-- the stat line says it, and 9.96 is "10", not "10.0". Memoized (see memo1/memo2).
+local shortNumber = memo2(function(n, sign)
   local fmt = (math.abs(n) < 10) and "%.1f" or "%.0f"
   return (string.format(sign and ("%+" .. fmt:sub(2)) or fmt, n):gsub("%.0$", ""))
-end
+end)
 
 -- A rating in words, always a percentage: "25% better dmg spec", "12% worse for survival".
 -- Past the cap it reads ">300% ..."/"<-300% ...": a ring worth 0.15 against nothing,
 -- an empty slot, or a change past MAX_PERCENT. No points currency ("like +8 Agility").
 -- A heuristic part (the healer's) is marked "(approx.)": an approximate item score, not a
--- measured gain.
-local function ratingText(part)
+-- measured gain. Memoized per (percent, flags, kind): the same item's hover rates the same
+-- numbers for the same specs every time.
+local ratingMemo, ratingCount = {}, 0
+local function ratingTextBuild(part)
   local v = part.percent or 0
   local what = MEASURE_WORDS[part.kind]
   local word = (v > 0 and "better" or "worse") .. (what and (" " .. what) or "")
@@ -953,6 +1181,33 @@ local function ratingText(part)
     return coloured(v, (v > 0 and ">" or "<-") .. MAX_PERCENT .. "% " .. word .. approx)
   end
   return coloured(v, shortNumber(math.abs(v)) .. "% " .. word .. approx)
+end
+
+local function ratingText(part)
+  local v = part.percent or 0
+  local kind = part.kind
+  if v ~= v or kind == nil then return ratingTextBuild(part) end -- never a table key
+  local byV = ratingMemo[v]
+  if not byV then
+    byV = {}
+    ratingMemo[v] = byV
+  end
+  local flags = (part.capped and 1 or 0) + (part.approx and 2 or 0)
+  local byFlags = byV[flags]
+  if not byFlags then
+    byFlags = {}
+    byV[flags] = byFlags
+  end
+  local hit = byFlags[kind]
+  if hit then return hit end
+  local text = ratingTextBuild(part)
+  if ratingCount >= TEXT_MEMO_MAX then
+    for k in pairs(ratingMemo) do ratingMemo[k] = nil end
+    ratingCount = 0
+  end
+  byFlags[kind] = text
+  ratingCount = ratingCount + 1
+  return text
 end
 
 local ICONS = {
@@ -970,9 +1225,24 @@ M.ICONS = ICONS
 local DIVIDER = "|TInterface\\Common\\UI-TooltipDivider-Transparent:8:200|t"
 
 -- An icon in a line of text, its baked-in border trimmed.
+-- An icon in a line of text, its baked-in border trimmed. Memoized per (path, size): the
+-- same ~20 icons at two sizes make up every icon on every hover, and each call formatted a
+-- fresh string. The paths are the constant tables above and the specs' own, so the cache is
+-- bounded by them and by the two sizes.
+local iconMemo = {}
 local function icon(path, size)
   size = size or 14
-  return string.format("|T%s:%d:%d:0:0:64:64:5:59:5:59|t", path, size, size)
+  local bySize = iconMemo[path]
+  if not bySize then
+    bySize = {}
+    iconMemo[path] = bySize
+  end
+  local text = bySize[size]
+  if not text then
+    text = string.format("|T%s:%d:%d:0:0:64:64:5:59:5:59|t", path, size, size)
+    bySize[size] = text
+  end
+  return text
 end
 M.IconText = icon
 
@@ -982,59 +1252,106 @@ local function changesNothing(part) return math.abs(part.percent or 0) < 0.05 en
 -- The ratings with something to say: a spec the item changes nothing for is left out, and so is a
 -- tank's number that stays the same. { { spec, parts } }, possibly empty.
 local function worthSaying(ratings)
-  local out = {}
+  local out = take("sayingRows")
   for _, r in ipairs(ratings) do
-    local parts = {}
+    local parts = take("sayingParts")
     for _, part in ipairs(r.parts) do
       if not changesNothing(part) then parts[#parts + 1] = part end
     end
-    if #parts > 0 then out[#out + 1] = { spec = r.spec, parts = parts } end
+    if #parts > 0 then
+      local row = take("sayingRow")
+      row.spec, row.parts = r.spec, parts
+      out[#out + 1] = row
+    end
   end
   return out
 end
 
+local function clear(t)
+  for i = #t, 1, -1 do t[i] = nil end
+end
+
 -- The divider and the specs' ratings, if any of them changes. A spec that changes nothing has no line,
 -- and a healer is among the specs since druid Restoration was rated (its line is marked "(approx.)").
-local function specLines(lines, ratings)
+-- The working buffers are hoisted out of the per-spec loops and cleared, not rebuilt (one
+-- measures/words/row array per call instead of one per spec per hover).
+local function specLines(lines, ratings, alloc)
   ratings = worthSaying(ratings)
   if #ratings == 0 then return end
-  lines[#lines + 1] = { DIVIDER, 1, 1, 1 } -- the specs' ratings apart from the stats
+  local divider = alloc("line")
+  divider[1], divider[2], divider[3], divider[4] = DIVIDER, 1, 1, 1
+  lines[#lines + 1] = divider -- the specs' ratings apart from the stats
   if settings and settings.icons then
-    local parts = {}
+    local parts = take("specTextParts")
+    local measures = take("specMeasures")
     for _, r in ipairs(ratings) do
       -- one icon per spec (two icons side by side were drawn over each other in game)
-      local measures = {}
+      clear(measures)
       for _, part in ipairs(r.parts) do
         measures[#measures + 1] = ratingText(part)
       end
-      parts[#parts + 1] = { text = icon(r.spec.icon) .. " " .. r.spec.name .. ": " .. table.concat(measures, ", "),
-        long = #r.parts > 1 }
+      local piece = take("specTextPart")
+      piece.text = icon(r.spec.icon) .. " " .. r.spec.name .. ": " .. table.concat(measures, ", ")
+      piece.long = #r.parts > 1
+      parts[#parts + 1] = piece
     end
     -- a long rating on a line of its own (a tank's two numbers, "better (like +8 Agility)"), the other
     -- specs two to a line
-    local row = {}
+    local row = take("specRowBuf")
     for _, part in ipairs(parts) do
       if part.long then
         -- a short one waiting for its pair goes first, so the specs keep the class's order
-        if #row > 0 then lines[#lines + 1] = { row[1], 1, 1, 1 }; row = {} end
-        lines[#lines + 1] = { part.text, 1, 1, 1 }
+        if #row > 0 then
+          local l = alloc("line")
+          l[1], l[2], l[3], l[4] = row[1], 1, 1, 1
+          lines[#lines + 1] = l
+          clear(row)
+        end
+        local l = alloc("line")
+        l[1], l[2], l[3], l[4] = part.text, 1, 1, 1
+        lines[#lines + 1] = l
       else
         row[#row + 1] = part.text
-        if #row == 2 then lines[#lines + 1] = { table.concat(row, "     "), 1, 1, 1 }; row = {} end
+        if #row == 2 then
+          local l = alloc("line")
+          l[1], l[2], l[3], l[4] = table.concat(row, "     "), 1, 1, 1
+          lines[#lines + 1] = l
+          clear(row)
+        end
       end
     end
-    if #row > 0 then lines[#lines + 1] = { row[1], 1, 1, 1 } end
+    if #row > 0 then
+      local l = alloc("line")
+      l[1], l[2], l[3], l[4] = row[1], 1, 1, 1
+      lines[#lines + 1] = l
+    end
   else
+    local words = take("specWords")
     for _, r in ipairs(ratings) do
-      local words = {}
+      clear(words)
       for _, part in ipairs(r.parts) do words[#words + 1] = ratingText(part) end
-      lines[#lines + 1] = { "  " .. r.spec.name .. ": " .. table.concat(words, ", "), 0.8, 0.8, 0.8 }
+      local l = alloc("line")
+      l[1], l[2], l[3], l[4] = "  " .. r.spec.name .. ": " .. table.concat(words, ", "), 0.8, 0.8, 0.8
+      lines[#lines + 1] = l
     end
   end
 end
 
+-- The item's name out of its link; memoized (the same links are named on every hover of
+-- the same item), bounded like the other memos.
+local itemNameMemo, itemNameCount = {}, 0
 local function itemName(link)
-  return (type(link) == "string" and link:match("%[(.-)%]")) or "?"
+  if type(link) ~= "string" then return "?" end
+  local hit = itemNameMemo[link]
+  if hit then return hit end
+  local name = (link:match("%[(.-)%]")) or "?"
+  if itemNameCount >= TEXT_MEMO_MAX then
+    for k in pairs(itemNameMemo) do itemNameMemo[k] = nil end
+    itemNameCount = 0
+  end
+  itemNameMemo[link] = name
+  itemNameCount = itemNameCount + 1
+  return name
 end
 
 -- The slot words a comparison block names ("Finger slot 1"): a ring or a trinket compares
@@ -1070,12 +1387,14 @@ local function frameShown(frame)
   return type(frame) == "table" and type(frame.IsShown) == "function" and ask(frame.IsShown, frame) == true
 end
 
+local function inspectShown()
+  if frameShown(InspectFrame) or frameShown(InspectPaperDollFrame) then return true end
+  local cui = C_InspectUI
+  return type(cui) == "table" and frameShown(cui.InspectFrame)
+end
+
 local function inspecting()
-  local ok, shown = pcall(function()
-    if frameShown(InspectFrame) or frameShown(InspectPaperDollFrame) then return true end
-    local cui = C_InspectUI
-    return type(cui) == "table" and frameShown(cui.InspectFrame)
-  end)
+  local ok, shown = pcall(inspectShown)
   return ok and shown == true
 end
 
@@ -1147,8 +1466,8 @@ local function hasTankSpec()
   return false
 end
 
-local function itemHasTankStats(link)
-  local stats = itemStats(link)
+local function itemHasTankStats(link, alloc)
+  local stats = itemStats(link, alloc)
   if type(stats) ~= "table" then return false end
   for k, v in pairs(stats) do
     if TANK_STATS[k] and type(v) == "number" and not isSecret(v) and v ~= 0 then return true end
@@ -1161,14 +1480,16 @@ end
 -- modifier); each tried behind ask/pcall with an isSecret guard. GetDefense()
 -- does not exist as a callable API and is never invented here.
 local UnitDefenseFn = UnitDefenseSkill or UnitDefense
+local function readDefenseSkill()
+  local a, b = ask(UnitDefenseFn, "player")
+  if isSecret(a) or isSecret(b) then return nil end
+  if type(a) == "number" and type(b) == "number" then return a + b end
+  if type(a) == "number" then return a end
+  return nil
+end
+
 local function tankDefenseSkill()
-  return tankRead("def", function()
-    local a, b = ask(UnitDefenseFn, "player")
-    if isSecret(a) or isSecret(b) then return nil end
-    if type(a) == "number" and type(b) == "number" then return a + b end
-    if type(a) == "number" then return a end
-    return nil
-  end)
+  return tankRead("def", readDefenseSkill)
 end
 
 -- Miss chance vs a boss +3 from defense skill and level: 5% base plus 0.04% per point of
@@ -1184,19 +1505,19 @@ local function tankMissChance(defense)
   return miss
 end
 
-local function wholeText(v)
+local wholeText = memo1(function(v)
   if v == math.floor(v) then return string.format("%d", v) end
   return string.format("%.1f", v)
-end
+end)
 
 -- The tank lines for link: {} when nothing can be said honestly. Gate: a tank-spec player
 -- sees them on any item; anyone else only on a defensive item. Each line needs its own API:
 -- Uncrittable needs defense skill; Avoidance needs dodge+parry+block (all three, live
 -- GetDodgeChance/GetParryChance/GetBlockChance) plus optionally miss (defense+level).
-local function tankExtraLines(link)
-  if type(link) ~= "string" or isSecret(link) then return {} end
-  if not hasTankSpec() and not itemHasTankStats(link) then return {} end
-  local out = {}
+local function tankExtraLines(link, alloc)
+  if type(link) ~= "string" or isSecret(link) then return alloc("tankLines") end
+  if not hasTankSpec() and not itemHasTankStats(link, alloc) then return alloc("tankLines") end
+  local out = alloc("tankLines")
   local def = tankDefenseSkill()
   if type(def) == "number" and def == def and def ~= math.huge and def ~= -math.huge then
     -- Uncrittable target scales with level (boss +3: level*5 + 140, i.e. 440 at 60);
@@ -1206,11 +1527,13 @@ local function tankExtraLines(link)
     local need = target - def
     if need < 0 then need = 0 end
     local text = "Uncrittable: " .. wholeText(def) .. "/" .. wholeText(target) .. " (need " .. wholeText(need) .. ")"
-    out[#out + 1] = { ((def >= target) and UP or DOWN) .. text .. "|r", 1, 1, 1 }
+    local l = alloc("line")
+    l[1], l[2], l[3], l[4] = ((def >= target) and UP or DOWN) .. text .. "|r", 1, 1, 1
+    out[#out + 1] = l
   end
-  local dodge = tankRead("dodge", function() return num(ask(GetDodgeChance)) end)
-  local parry = tankRead("parry", function() return num(ask(GetParryChance)) end)
-  local block = tankRead("block", function() return num(ask(GetBlockChance)) end)
+  local dodge = tankRead("dodge", readDodge)
+  local parry = tankRead("parry", readParry)
+  local block = tankRead("block", readBlock)
   if dodge and parry and block then
     local miss = (def ~= nil) and tankMissChance(def) or nil
     local total, text
@@ -1221,7 +1544,9 @@ local function tankExtraLines(link)
       total = dodge + parry + block
       text = string.format("Avoidance: %.2f%% / 102.4%% (dodge+parry+block, no miss)", total)
     end
-    out[#out + 1] = { ((total + 1e-9 >= AVOIDANCE_CAP) and UP or DOWN) .. text .. "|r", 1, 1, 1 }
+    local l = alloc("line")
+    l[1], l[2], l[3], l[4] = ((total + 1e-9 >= AVOIDANCE_CAP) and UP or DOWN) .. text .. "|r", 1, 1, 1
+    out[#out + 1] = l
   end
   return out
 end
@@ -1229,7 +1554,7 @@ end
 -- The names of the items a comparison is against, joined as the heading names them
 -- ("Worn Band + Old Loop"): one helper, no closure per comparison block.
 local function namesJoined(links)
-  local t = {}
+  local t = take("namesJoined")
   for i, l in ipairs(links) do t[i] = itemName(l) end
   return table.concat(t, " + ")
 end
@@ -1240,10 +1565,60 @@ end
 -- a ring or trinket gets one block per slot and the same worn item can stand in both. When the
 -- tooltip carries someone else's item (the inspect window open) the heading says the comparison is
 -- with YOUR gear and the block ends with the up/down arrow and the best spec's number.
-function M.TooltipLines(link, gameCompares)
-  local lines = {}
+-- alloc: fresh for the public entry (its rows outlive the build), take for the hover path
+-- (add() copies every row into the tooltip before the next build may reuse it).
+local worthSegMemo, worthSegCount = {}, 0
+local function worthSegBuild(kind, value)
+  -- the icons line's own short words (WORTH_SHORT: "AP"), not the words-mode ones
+  return icon(ICONS[kind], 12) .. " " .. bySign(value, worthValue(kind, value) .. " " .. WORTH_SHORT[kind])
+end
+
+local function worthSeg(kind, value)
+  if value ~= value then return worthSegBuild(kind, value) end -- NaN is never a table key
+  local byValue = worthSegMemo[kind]
+  if not byValue then
+    byValue = {}
+    worthSegMemo[kind] = byValue
+  end
+  local hit = byValue[value]
+  if hit then return hit end
+  local text = worthSegBuild(kind, value)
+  if worthSegCount >= TEXT_MEMO_MAX then
+    for k in pairs(worthSegMemo) do worthSegMemo[k] = nil end
+    worthSegCount = 0
+  end
+  byValue[value] = text
+  worthSegCount = worthSegCount + 1
+  return text
+end
+
+-- The stat's own line text ("+4 Strength"), memoized per (name, change): the same item's
+-- hover writes the same few stat lines every time it is hovered.
+local statTextMemo, statTextCount = {}, 0
+local function statText(diff, key)
+  local name = statName(key) or key
+  if diff ~= diff then return signed(diff) .. " " .. name end -- NaN is never a table key
+  local byDiff = statTextMemo[name]
+  if not byDiff then
+    byDiff = {}
+    statTextMemo[name] = byDiff
+  end
+  local hit = byDiff[diff]
+  if hit then return hit end
+  local text = signed(diff) .. " " .. name
+  if statTextCount >= TEXT_MEMO_MAX then
+    for k in pairs(statTextMemo) do statTextMemo[k] = nil end
+    statTextCount = 0
+  end
+  byDiff[diff] = text
+  statTextCount = statTextCount + 1
+  return text
+end
+
+local function tooltipLinesBody(link, gameCompares, alloc)
+  local lines = alloc("lines")
   if not (settings and settings.compare) then return lines end
-  local comps = M.Compare(link) or {}
+  local comps = compareBody(link, alloc) or EMPTY
   -- Nothing of ours in any slot: the empty blocks then name their slots as well.
   local allEmpty = true
   for _, c in ipairs(comps) do
@@ -1258,90 +1633,166 @@ function M.TooltipLines(link, gameCompares)
     -- where they are the item's own stats.
     local showDiffs = #c.against > 0 and not gameCompares
     if settings.icons then
-      lines[#lines + 1] = { head, 0.4, 0.73, 1 }
-      if showDiffs and #c.diffs == 0 then lines[#lines + 1] = { "the same stats", 0.7, 0.7, 0.7 } end
+      local l = alloc("line")
+      l[1], l[2], l[3], l[4] = head, 0.4, 0.73, 1
+      lines[#lines + 1] = l
+      if showDiffs and #c.diffs == 0 then
+        l = alloc("line")
+        l[1], l[2], l[3], l[4] = "the same stats", 0.7, 0.7, 0.7
+        lines[#lines + 1] = l
+      end
       -- the differences, three to a line, and below them what they give, summed, with icons
-      local row, sums, order = {}, {}, {}
+      -- (the buffers are scratch and cleared in place; re-allocating one mid-loop was garbage)
+      local row, sums, order = take("diffRow"), take("diffSums"), take("diffOrder")
       for i, d in ipairs(c.diffs) do
-        row[#row + 1] = coloured(d.diff, signed(d.diff) .. " " .. (statName(d.key) or d.key))
+        row[#row + 1] = coloured(d.diff, statText(d.diff, d.key))
         if #row == 3 or i == #c.diffs then
-          if showDiffs then lines[#lines + 1] = { table.concat(row, "   "), 1, 1, 1 } end
-          row = {}
+          if showDiffs then
+            local l2 = alloc("line")
+            l2[1], l2[2], l2[3], l2[4] = table.concat(row, "   "), 1, 1, 1
+            lines[#lines + 1] = l2
+          end
+          clear(row)
         end
         if settings.worth then
           local parts = M.WorthParts(d.key, d.diff)
           -- the item's own armor too, so the armor icon's total agrees with the Armor line (+50 Armor and
           -- +4 Agility's +8 armor are +58, not +8)
-          if d.key == "RESISTANCE0_NAME" then parts = { { kind = "armor", value = d.diff } } end
-          for _, p in ipairs(parts) do
-            if not sums[p.kind] then order[#order + 1] = p.kind end
-            sums[p.kind] = (sums[p.kind] or 0) + p.value
+          if d.key == "RESISTANCE0_NAME" then
+            clear(parts)
+            addPart(parts, "armor", d.diff)
+          end
+          for j = 1, #parts, 2 do
+            local kind, value = parts[j], parts[j + 1]
+            if not sums[kind] then order[#order + 1] = kind end
+            sums[kind] = (sums[kind] or 0) + value
           end
         end
       end
-      local worth = {}
+      local worth = take("worthRow")
       for _, kind in ipairs(order) do
         if sums[kind] ~= 0 and (not PERCENT_KINDS[kind] or worthShowing(sums[kind])) then
-          worth[#worth + 1] = icon(ICONS[kind], 12) .. " " .. bySign(sums[kind], worthValue(kind, sums[kind]) .. " " .. WORTH_SHORT[kind])
+          worth[#worth + 1] = worthSeg(kind, sums[kind])
         end
         if #worth == 3 then -- three to a line
-          lines[#lines + 1] = { table.concat(worth, "   "), 0.7, 0.7, 0.7 }
-          worth = {}
+          local l2 = alloc("line")
+          l2[1], l2[2], l2[3], l2[4] = table.concat(worth, "   "), 0.7, 0.7, 0.7
+          lines[#lines + 1] = l2
+          clear(worth)
         end
       end
-      if #worth > 0 then lines[#lines + 1] = { table.concat(worth, "   "), 0.7, 0.7, 0.7 } end
+      if #worth > 0 then
+        local l2 = alloc("line")
+        l2[1], l2[2], l2[3], l2[4] = table.concat(worth, "   "), 0.7, 0.7, 0.7
+        lines[#lines + 1] = l2
+      end
     else
-      lines[#lines + 1] = { foreign and head or (head .. ":"), 0.4, 0.73, 1 }
+      local l = alloc("line")
+      l[1], l[2], l[3], l[4] = foreign and head or (head .. ":"), 0.4, 0.73, 1
+      lines[#lines + 1] = l
       if showDiffs and #c.diffs == 0 then
-        lines[#lines + 1] = { "  the same stats", 0.7, 0.7, 0.7 }
+        l = alloc("line")
+        l[1], l[2], l[3], l[4] = "  the same stats", 0.7, 0.7, 0.7
+        lines[#lines + 1] = l
       end
       for _, d in ipairs(c.diffs) do
         local up = d.diff > 0
         local worth = settings.worth and M.Worth(d.key, d.diff, true)
-        local stat = signed(d.diff) .. " " .. (statName(d.key) or d.key)
+        local stat = statText(d.diff, d.key)
         if showDiffs then
-          lines[#lines + 1] = { "  " .. stat, up and 0.3 or 1, up and 1 or 0.35, up and 0.3 or 0.35 }
-          if worth then lines[#lines + 1] = { "      " .. worth, 0.7, 0.7, 0.7 } end
+          local l2 = alloc("line")
+          l2[1], l2[2], l2[3], l2[4] = "  " .. stat, up and 0.3 or 1, up and 1 or 0.35, up and 0.3 or 0.35
+          lines[#lines + 1] = l2
+          if worth then
+            l2 = alloc("line")
+            l2[1], l2[2], l2[3], l2[4] = "      " .. worth, 0.7, 0.7, 0.7
+            lines[#lines + 1] = l2
+          end
         elseif worth then -- the stat only to say what its worth is of
-          lines[#lines + 1] = { "  " .. bySign(d.diff, stat) .. ": " .. worth, 0.7, 0.7, 0.7 }
+          local l2 = alloc("line")
+          l2[1], l2[2], l2[3], l2[4] = "  " .. bySign(d.diff, stat) .. ": " .. worth, 0.7, 0.7, 0.7
+          lines[#lines + 1] = l2
         end
       end
     end
     -- The specs' ratings, and for someone else's item the up/down line in front of them:
     -- the arrow and the best spec's number. The ratings are measured for the arrow even
     -- when the specs' own lines are switched off.
-    local ratings = (settings.specs or foreign) and M.SpecRatings(link, c.against, c.slots, c.offHand)
+    local ratings = (settings.specs or foreign)
+      and specRatingsBody(link, c.against, c.slots, c.offHand, alloc)
     if ratings then
       if foreign then
         local best = bestPart(ratings)
-        if best then lines[#lines + 1] = { gearLine(best), 1, 1, 1 } end
+        if best then
+          local l = alloc("line")
+          l[1], l[2], l[3], l[4] = gearLine(best), 1, 1, 1
+          lines[#lines + 1] = l
+        end
       end
-      if settings.specs then specLines(lines, ratings) end
+      if settings.specs then specLines(lines, ratings, alloc) end
     end
   end
   -- Tank caps: one independent section after the comparisons (once per tooltip, not per
   -- worn slot), only when the gate holds and an API answers. A pcall keeps a throwing
   -- client from costing the tooltip; on error nothing is added.
   do
-    local ok, extra = pcall(tankExtraLines, link)
+    local ok, extra = pcall(tankExtraLines, link, alloc)
     if ok and type(extra) == "table" and #extra > 0 then
       -- No stacked dividers: specLines may have closed with its own.
-      if #lines > 0 and lines[#lines][1] ~= DIVIDER then lines[#lines + 1] = { DIVIDER, 1, 1, 1 } end
+      if #lines > 0 and lines[#lines][1] ~= DIVIDER then
+        local l = alloc("line")
+        l[1], l[2], l[3], l[4] = DIVIDER, 1, 1, 1
+        lines[#lines + 1] = l
+      end
       for _, l in ipairs(extra) do lines[#lines + 1] = l end
     end
   end
   return lines
 end
+
+function M.TooltipLines(link, gameCompares)
+  return tooltipLinesBody(link, gameCompares, fresh)
+end
 M.TooltipLines = memoized(M.TooltipLines)
+
+-- The hover path: the same lines, byte for byte, but built out of the build-scoped scratch
+-- (take), so a warm hover allocates no rows or records at all. add() copies every row into
+-- the tooltip before the next hover's build may reuse the scratch.
+local function tooltipLinesHover(link, gameCompares)
+  return tooltipLinesBody(link, gameCompares, take)
+end
+local hoverTooltipLines = memoized(tooltipLinesHover)
 
 -- What add() last put on a tooltip (weak-keyed: pooled tooltips die with their frame): the
 -- client can fire the hook twice for the same tooltip without clearing it (a comparison
 -- refresh), which would add the whole block a second time and compute it a second time.
+-- The record is reused per tooltip (filled in place), so a hover storm allocates none.
 local addedTo = setmetatable({}, { __mode = "k" })
 
+-- The only tooltips this module writes on: the game's own hover tooltip and the one a
+-- clicked link opens. Everything else the post-call fires for is left alone -- above all
+-- the Blizzard comparison tooltips (ShoppingTooltip1/2/3), which carry an item of their
+-- own and fire the very same Enum.TooltipDataType.Item post-call while the player holds
+-- Shift or the compare setting is on. Without this guard each of them would cost a whole
+-- TooltipLines build per hover (three builds where one is enough); with it they cost the
+-- one comparison below and nothing else. BagMarkers/QuestMarkers never hook tooltips, so
+-- this is the only such filter in the module.
+local function trackedTooltip(tooltip)
+  return tooltip == GameTooltip or tooltip == ItemRefTooltip
+end
+
+local hooked -- hookTooltips registers once: PLAYER_LOGIN runs it once, and a second
+             -- registration would only make add() run twice per tooltip (the guard above
+             -- would swallow the duplicate lines, but not the double bookkeeping).
+local inAdd -- a build in flight owns the scratch arenas: never start a second one inside
+            -- it (a client callback from AddLine re-entering here would corrupt the rows
+            -- being copied out)
+
 local function hookTooltips()
+  if hooked then return end
+  hooked = true
   local function add(tooltip)
-    if not (tooltip == GameTooltip or tooltip == ItemRefTooltip) then return end
+    if inAdd or not trackedTooltip(tooltip) then return end
     local _, link = ask(tooltip.GetItem, tooltip)
     if type(link) ~= "string" or isSecret(link) then return end
     -- One build per tooltip and link within a frame: skipped when the tooltip still holds
@@ -1357,11 +1808,18 @@ local function hookTooltips()
     -- the game compares by itself when the setting says so, or while Shift is held
     local gameCompares = TooltipUtil and ask(TooltipUtil.ShouldDoItemComparison, tooltip) == true
     -- A throwing client anywhere in the comparison must not cost the tooltip.
-    local ok, out = pcall(M.TooltipLines, link, gameCompares)
+    inAdd = true
+    local ok, out = pcall(hoverTooltipLines, link, gameCompares)
+    inAdd = false
     if not ok or type(out) ~= "table" then return end
     for _, line in ipairs(out) do tooltip:AddLine(line[1], line[2], line[3], line[4]) end
     if type(t) == "number" then
-      addedTo[tooltip] = { link = link, t = t, lines = ask(tooltip.NumLines, tooltip) }
+      if not rec then
+        rec = {}
+        addedTo[tooltip] = rec
+      end
+      rec.link, rec.t = link, t
+      rec.lines = ask(tooltip.NumLines, tooltip)
     end
   end
   if type(TooltipDataProcessor) == "table" and type(TooltipDataProcessor.AddTooltipPostCall) == "function"
@@ -1456,7 +1914,7 @@ function M.Probe()
     local link = equipped(slot)
     if link then
       local item = { link = link, stats = {} }
-      for k, n in pairs(itemStats(link)) do item.stats[k] = n end
+      for k, n in pairs(itemStatsFresh(link)) do item.stats[k] = n end
       local data = ask(C_TooltipInfo and C_TooltipInfo.GetInventoryItem, "player", slot)
       if type(data) == "table" and type(data.lines) == "table" then
         item.lines = {}
