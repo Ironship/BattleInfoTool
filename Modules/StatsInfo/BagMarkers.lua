@@ -25,13 +25,17 @@
 --     spec icon with a tiny "~" (never a claim of measured healing), the exact meaning
 --     stays in the settings legend and the tooltip marks "(approx.)".
 --
--- The green UP arrow is the button's OWN native UpgradeIcon (Blizzard ships one on
--- every native container button; Pawn-style, clean-room -- Pawn is CC BY-NC-ND,
--- its code is not copied): no custom green pixels, no invented atlas. The red
--- DOWN arrow stays custom (the native icon is green-only), drawn from the native
--- WHITE8X8 primitive, vertex-coloured like the tooltip's red. Never the native
--- JunkIcon/new-item textures or their positions. The badge fits the top-right
--- corner, small and noninteractive. The beneficiary icon is the spec's own
+-- On a native bag button the green UP arrow is the button's OWN native UpgradeIcon (Blizzard
+-- ships one on every native container button; Pawn-style, clean-room -- Pawn is CC BY-NC-ND,
+-- its code is not copied). Every other green UP (the Baganator corner widget, buttons without
+-- the native icon) and every red DOWN (the native icon is green-only) is ONE texture of the
+-- game's own: Interface\Buttons\UI-MicroStream-Green, mirrored vertically so its tip points up,
+-- and Interface\Buttons\UI-MicroStream-Red as shipped -- the small stream arrows Blizzard draws
+-- with itself (the micro button's download status, FrameXML/MainMenuBarMicroButtons.lua), in
+-- the very green/red the badge's meaning needs: no custom pixels and no vertex tinting. A
+-- client that cannot take the file on a texture keeps the old WHITE8X8 four-piece arrow as a
+-- fallback. Never the native JunkIcon/new-item textures or their positions. The badge fits the
+-- top-right corner, small and noninteractive. The beneficiary icon is the spec's own
 -- row.spec.icon.
 --
 -- Native integration (primaries: forever-mainline-container.lua/XML, pinned Gethe
@@ -519,17 +523,28 @@ if BIT.RegisterCommand then BIT.RegisterCommand("bagprobe", function(rest) M.Bag
 -- The overlay over a bag button
 -------------------------------------------------------------------------------------------------
 
--- The arrow is a shaft and three head steps, each a piece of the game's own WHITE8X8
--- texture (no new bitmap), vertex-coloured like the tooltip's green/red. The whole
--- arrow lives in the button's TOPRIGHT corner, inside the button face; the beneficiary
--- icon sits in the corner next to it and the arrow shifts left of the icon when both
--- are shown. Native WoW coordinates: positive y is UP (pinned Blizzard
+-- The arrow is ONE texture of the game's own, filling the 24x24 marker box in the button's
+-- TOPRIGHT corner: Interface\Buttons\UI-MicroStream-Green for an upgrade and Interface\Buttons\
+-- UI-MicroStream-Red for a downgrade -- the small stream arrows Blizzard draws with itself (the
+-- micro button's download status: FrameXML/MainMenuBarMicroButtons.lua sets MainMenuBarDownload
+-- to exactly these files), a shaft and a chevron head already in the green/red the badge's
+-- meaning needs. UI-MicroStream-Green ships pointing DOWN (a download chevron), so the UP arrow
+-- mirrors the texture vertically with SetTexCoord (top and bottom swapped); UI-MicroStream-Red
+-- keeps the file's own coordinates. The glyph's own margins inside its square do the insetting
+-- from the corner. Never tinted on this path: the Blizzard colours are the point. The
+-- beneficiary icon sits in the corner next to the arrow and the arrow shifts left of the icon
+-- when both are shown. A client that cannot take the file on a texture at all (arrowMode below)
+-- keeps the old arrow as a FALLBACK: a shaft and three head steps, each a piece of the game's
+-- own WHITE8X8 texture, vertex-coloured like the tooltip's green/red, with the old geometry.
+-- Native WoW coordinates: positive y is UP (pinned Blizzard
 -- AnchorUtil.lua: a lower row stacks with a NEGATIVE y offset, line 188; labels above
 -- a frame use positive offsets, as do BIT ShieldsInfo.lua:428 and DoTInfo
 -- Nameplates.lua:228), so a TOPRIGHT-anchored piece paints the native rectangle
--- (x-width, y-height, x, y). The green UP arrow's 2x2 tip is the piece with the
+-- (x-width, y-height, x, y). The fallback's green UP arrow's 2x2 tip is the piece with the
 -- LARGEST y (tip above the shaft); the red DOWN arrow's tip has the SMALLEST y.
-local WHITE = "Interface\\Buttons\\WHITE8X8"
+local UP_TEXTURE = "Interface\\Buttons\\UI-MicroStream-Green" -- mirrored vertically: tip up
+local DOWN_TEXTURE = "Interface\\Buttons\\UI-MicroStream-Red" -- as shipped: tip down
+local WHITE = "Interface\\Buttons\\WHITE8X8" -- the fallback pieces' primitive
 local UP_R, UP_G, UP_B = 0.302, 1, 0.302
 local DOWN_R, DOWN_G, DOWN_B = 1, 0.349, 0.349
 local MARKER_W, MARKER_H = 24, 24          -- accurate size for the anchor and Baganator's layout
@@ -538,8 +553,8 @@ local ICON_SIZE = 12
 local ICON_DX, ICON_DY = -2, -12           -- the icon: 12x12 fully inside the corner (native rect (x-12, y-12, x, y))
 local PLUSN_DX, PLUSN_DY = -2, -16         -- the +N / ~ cues: a second row below the icon
 local ARROW_SHIFT = -14                    -- arrow moves left of the icon when the icon is shown
--- Up arrow (tip at the TOP, largest y): { width, height, TOPRIGHT-x, TOPRIGHT-y } of the marker.
--- Native rectangles touch edge-to-edge: tip (-6,-6,-4,-4), step (-8,-9,-2,-6),
+-- The FALLBACK's up arrow (tip at the TOP, largest y): { width, height, TOPRIGHT-x, TOPRIGHT-y }
+-- of the marker. Native rectangles touch edge-to-edge: tip (-6,-6,-4,-4), step (-8,-9,-2,-6),
 -- flare (-10,-12,0,-9), shaft (-6,-20,-4,-12).
 local UP_PIECES = { { 2, 2, -4, -4 }, { 6, 3, -2, -6 }, { 10, 3, 0, -9 }, { 2, 8, -4, -12 } }
 -- Down arrow: the mirror image (tip at the BOTTOM, smallest y): shaft (-6,-14,-4,-6),
@@ -561,23 +576,54 @@ local ensureFrameHook, eachContainerFrame
 local driveNativeUpgradeIcon
 
 -- The badge content is SHARED verbatim between a native bag button's marker frame and
--- the Baganator832 corner widget: the same pieces, the same anchors (children of the
--- CONTAINER, TOPRIGHT, inside the 24x24 face), the same sizes and colours.
+-- the Baganator832 corner widget: the same arrow texture, the same anchors (children of the
+-- CONTAINER, TOPRIGHT, inside the 24x24 face), the same sizes and colours. The arrow is ONE
+-- texture, created here and reused for the container's whole life; the white-primitive
+-- fallback's four pieces are created once, only on a client that needs them (arrowMode below).
 local function initContents(container)
-  container.arrowPieces = {}
-  for _ = 1, 4 do
-    container.arrowPieces[#container.arrowPieces + 1] = container:CreateTexture(nil, "OVERLAY")
-  end
+  container.arrow = container:CreateTexture(nil, "OVERLAY")
+  container.arrow:SetSize(MARKER_W, MARKER_H)
   container.icon = container:CreateTexture(nil, "OVERLAY")
   container.icon:SetSize(ICON_SIZE, ICON_SIZE)
   container.plusN = container:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   container.tilde = container:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 end
 
+-- The fallback's four primitive pieces: created once per container and only when this client
+-- cannot draw the Blizzard arrow, then pooled like every texture here (never created twice).
+local function fallbackPieces(container)
+  if container.arrowPieces then return container.arrowPieces end
+  container.arrowPieces = {}
+  for _ = 1, 4 do
+    container.arrowPieces[#container.arrowPieces + 1] = container:CreateTexture(nil, "OVERLAY")
+  end
+  return container.arrowPieces
+end
+
+-- Which look this client can draw: the Blizzard file on one texture, or the white-primitive
+-- pieces. Decided once, lazily, from the first texture that is handed the file: a client that
+-- takes it and reports it back draws the Blizzard arrow, one where SetTexture raises or
+-- GetTexture answers nothing keeps the primitive pieces. A MISSING file is not detectable from
+-- Lua (the engine draws its own invalid-resource marker and still reports the path), so the
+-- choice of file itself rests on the client's own code drawing exactly these files
+-- (FrameXML/MainMenuBarMicroButtons.lua) -- this probe covers the API shape only. Both files
+-- are asked for: the pair ships together and one draw must never half-succeed.
+local arrowMode -- nil = undecided, else "blizzard" or "primitive"
+local function decideArrowMode(t)
+  if arrowMode then return end
+  ask(t.SetTexture, t, UP_TEXTURE)
+  local up = ask(t.GetTexture, t)
+  ask(t.SetTexture, t, DOWN_TEXTURE)
+  local down = ask(t.GetTexture, t)
+  local ok = up ~= nil and up ~= "" and down ~= nil and down ~= ""
+  arrowMode = ok and "blizzard" or "primitive"
+end
+
 -- Always clear stale pixels/text BEFORE a false/nil answer: a hidden widget must never
 -- leave an old arrow behind for the next true.
 local function clearContents(container)
   if not container then return end
+  if container.arrow then container.arrow:Hide() end
   for _, t in ipairs(container.arrowPieces or {}) do t:Hide() end
   if container.icon then container.icon:Hide() end
   if container.plusN then container.plusN:SetText("") end
@@ -586,20 +632,38 @@ end
 
 local function paintContents(container, verdict, nativeUp)
   local up = verdict.verdict == "up"
-  local r, g, b = up and UP_R or DOWN_R, up and UP_G or DOWN_G, up and UP_B or DOWN_B
-  local pieces = up and UP_PIECES or DOWN_PIECES
   local s = M.settings
   local gave = verdict.beneficiaries and verdict.beneficiaries[1]
   -- The arrow and the icon share the corner: when the icon is shown the arrow moves
   -- one icon-width + gap to the left; without the icon the arrow owns the corner.
   -- nativeUp: the button's own UpgradeIcon carries the green UP, so no custom
-  -- arrow pieces are painted (only the icon row below is ours).
+  -- arrow is painted (only the icon row below is ours).
   local shift = (up and not nativeUp and s and s.bagSpecIcons and gave) and ARROW_SHIFT or 0
-  for i, t in ipairs(container.arrowPieces) do
-    if nativeUp then
-      t:Hide()
-    else
-      local p = pieces[i]
+  decideArrowMode(container.arrow)
+  if nativeUp then
+    container.arrow:Hide()
+    for _, t in ipairs(container.arrowPieces or {}) do t:Hide() end
+  elseif arrowMode == "blizzard" then
+    for _, t in ipairs(container.arrowPieces or {}) do t:Hide() end
+    local t = container.arrow
+    t:SetTexture(up and UP_TEXTURE or DOWN_TEXTURE)
+    -- UI-MicroStream-Green ships pointing down (a download chevron): mirrored vertically the
+    -- tip is at the top. UI-MicroStream-Red keeps the file's own coordinates (tip at the
+    -- bottom). Both are set on every paint -- one pooled texture flips for one verdict and
+    -- must unflip for the next. The files carry the Blizzard green/red themselves: the
+    -- vertex colour stays white here, never the tooltip's tint.
+    if up then t:SetTexCoord(0, 1, 1, 0) else t:SetTexCoord(0, 1, 0, 1) end
+    t:SetVertexColor(1, 1, 1, 1)
+    t:ClearAllPoints()
+    t:SetPoint("TOPRIGHT", container, "TOPRIGHT", shift, 0)
+    t:Show()
+  else
+    -- the white-primitive fallback: the old arrow, unchanged geometry and colours
+    container.arrow:Hide()
+    local r, g, b = up and UP_R or DOWN_R, up and UP_G or DOWN_G, up and UP_B or DOWN_B
+    local geom = up and UP_PIECES or DOWN_PIECES
+    for i, t in ipairs(fallbackPieces(container)) do
+      local p = geom[i]
       t:SetTexture(WHITE)
       t:SetVertexColor(r, g, b, 1)
       t:SetSize(p[1], p[2])

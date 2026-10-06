@@ -59,14 +59,20 @@ local active = false -- the badges are wanted (module on, setting on AND the liv
 -- The badge over a reward button
 -------------------------------------------------------------------------------------------------
 
--- The green up arrow is the same white-primitive arrow the bag markers draw (BattleInfoTool's
--- own geometry: a shaft and three head steps of the game's own WHITE8X8 texture, no new
--- bitmap), the coin is the game's own coin icon.
-local WHITE = "Interface\\Buttons\\WHITE8X8"
+-- The green up arrow is the same ONE texture the bag markers draw: Interface\Buttons\
+-- UI-MicroStream-Green, the game's own small stream arrow (the micro button's download status,
+-- FrameXML/MainMenuBarMicroButtons.lua), mirrored vertically so its tip points up -- the file
+-- ships pointing down. The coin is the game's own coin icon. A client that cannot take the file
+-- on a texture keeps the bag markers' white-primitive fallback (a shaft and three head steps of
+-- WHITE8X8, the old geometry).
+local UP_TEXTURE = "Interface\\Buttons\\UI-MicroStream-Green" -- mirrored vertically: tip up
+local WHITE = "Interface\\Buttons\\WHITE8X8" -- the fallback pieces' primitive
 local UP_R, UP_G, UP_B = 0.302, 1, 0.302
 local COIN = "Interface\\Icons\\INV_Misc_Coin_01"
--- Up arrow pieces (tip at the TOP): { width, height, TOPRIGHT-x, TOPRIGHT-y } in the button's
--- corner, edge to edge like the bag badges.
+local ARROW_SIZE = 24                      -- the bag badges' corner box, drawn the same way
+local ARROW_DX, ARROW_DY = -2, -2          -- TOPRIGHT of the button, 2px inside the corner
+-- The FALLBACK's up arrow pieces (tip at the TOP): { width, height, TOPRIGHT-x, TOPRIGHT-y } in
+-- the button's corner, edge to edge like the bag badges' fallback.
 local UP_PIECES = { { 2, 2, -4, -4 }, { 6, 3, -2, -6 }, { 10, 3, 0, -9 }, { 2, 8, -4, -12 } }
 local COIN_SIZE, COIN_DX, COIN_DY = 12, -2, -2
 
@@ -74,15 +80,43 @@ local COIN_SIZE, COIN_DX, COIN_DY = 12, -2, -2
 -- between quests, so the textures are pooled by index (and moved along when another button
 -- stands at that index) exactly like the bag markers pool per button. Hide first, show at
 -- most one: a hidden badge never leaves stale pixels behind for the next quest.
-local overlays = {} -- reward index -> { button, pieces = { texture x4 }, coin = texture, mode }
+local overlays = {} -- reward index -> { button, arrow = texture, pieces = {texture x4} on the
+                    -- primitive fallback only, coin = texture, mode }
 M._questOverlays = overlays -- the tests read these; not part of the addon's interface
+
+-- Which look this client can draw (the bag markers' own rule): the Blizzard file on one
+-- texture, or the white-primitive pieces. Decided once, lazily, from the first texture handed
+-- the file; a MISSING file is not detectable from Lua (see BagMarkers.lua's decideArrowMode).
+local arrowMode -- nil = undecided, else "blizzard" or "primitive"
+local function decideArrowMode(t)
+  if arrowMode then return end
+  ask(t.SetTexture, t, UP_TEXTURE)
+  local got = ask(t.GetTexture, t)
+  arrowMode = (got ~= nil and got ~= "") and "blizzard" or "primitive"
+end
 
 local function hideOverlays()
   for _, o in pairs(overlays) do
-    for _, t in ipairs(o.pieces) do t:Hide() end
+    if o.arrow then o.arrow:Hide() end
+    for _, t in ipairs(o.pieces or {}) do t:Hide() end
     if o.coin then o.coin:Hide() end
     o.mode = nil
   end
+end
+
+-- The fallback's four primitive pieces: created once per overlay and only when this client
+-- cannot draw the Blizzard arrow, then pooled like every texture here (never created twice).
+local function fallbackPieces(o, button)
+  if o.pieces then return o.pieces end
+  o.pieces = {}
+  for i = 1, #UP_PIECES do
+    local t = button:CreateTexture(nil, "OVERLAY")
+    -- ElvUI-style skins repaint a button's own OVERLAY layers; draw sublayer 7 keeps the
+    -- badge above whatever the skin puts there (the pattern Pawn's overlay uses too).
+    if type(t.SetDrawLayer) == "function" then t:SetDrawLayer("OVERLAY", 7) end
+    o.pieces[i] = t
+  end
+  return o.pieces
 end
 
 local function overlayFor(index, button)
@@ -91,42 +125,60 @@ local function overlayFor(index, button)
   if o then
     -- the reward button pool moved this index to another button: the same textures move too
     o.button = button
-    for _, t in ipairs(o.pieces) do
-      if type(t.SetParent) == "function" then t:SetParent(button) end
+    local kids = { o.arrow, o.coin }
+    for _, t in ipairs(o.pieces or {}) do kids[#kids + 1] = t end
+    for _, t in ipairs(kids) do
+      if type(t) == "table" and type(t.SetParent) == "function" then t:SetParent(button) end
     end
-    if type(o.coin) == "table" and type(o.coin.SetParent) == "function" then o.coin:SetParent(button) end
     return o
   end
-  o = { button = button, pieces = {} }
-  for i = 1, #UP_PIECES do
-    local t = button:CreateTexture(nil, "OVERLAY")
+  o = { button = button }
+  o.arrow = button:CreateTexture(nil, "OVERLAY")
+  o.coin = button:CreateTexture(nil, "OVERLAY")
+  for _, t in ipairs({ o.arrow, o.coin }) do
     -- ElvUI-style skins repaint a button's own OVERLAY layers; draw sublayer 7 keeps the
     -- badge above whatever the skin puts there (the pattern Pawn's overlay uses too).
     if type(t.SetDrawLayer) == "function" then t:SetDrawLayer("OVERLAY", 7) end
-    o.pieces[i] = t
   end
-  o.coin = button:CreateTexture(nil, "OVERLAY")
-  if type(o.coin.SetDrawLayer) == "function" then o.coin:SetDrawLayer("OVERLAY", 7) end
   overlays[index] = o
   return o
 end
 
 local function drawUpgrade(o, button)
-  for i, p in ipairs(UP_PIECES) do
-    local t = o.pieces[i]
-    t:SetTexture(WHITE)
-    t:SetVertexColor(UP_R, UP_G, UP_B, 1)
-    t:SetSize(p[1], p[2])
+  decideArrowMode(o.arrow)
+  if arrowMode == "blizzard" then
+    for _, t in ipairs(o.pieces or {}) do t:Hide() end
+    local t = o.arrow
+    t:SetTexture(UP_TEXTURE)
+    -- the file ships pointing down (a download chevron): mirrored vertically the tip is at
+    -- the top. Set on every draw -- the pooled texture is shared with whatever drew before.
+    t:SetTexCoord(0, 1, 1, 0)
+    t:SetVertexColor(1, 1, 1, 1) -- the file's own Blizzard green, never tinted here
+    t:SetSize(ARROW_SIZE, ARROW_SIZE)
     t:ClearAllPoints()
-    t:SetPoint("TOPRIGHT", button, "TOPRIGHT", p[3], p[4])
+    t:SetPoint("TOPRIGHT", button, "TOPRIGHT", ARROW_DX, ARROW_DY)
     t:Show()
+  else
+    -- the white-primitive fallback: the old arrow, unchanged geometry and colours
+    o.arrow:Hide()
+    local ts = fallbackPieces(o, button)
+    for i, p in ipairs(UP_PIECES) do
+      local t = ts[i]
+      t:SetTexture(WHITE)
+      t:SetVertexColor(UP_R, UP_G, UP_B, 1)
+      t:SetSize(p[1], p[2])
+      t:ClearAllPoints()
+      t:SetPoint("TOPRIGHT", button, "TOPRIGHT", p[3], p[4])
+      t:Show()
+    end
   end
   if o.coin then o.coin:Hide() end
   o.mode = "upgrade"
 end
 
 local function drawCoin(o, button)
-  for _, t in ipairs(o.pieces) do t:Hide() end
+  if o.arrow then o.arrow:Hide() end
+  for _, t in ipairs(o.pieces or {}) do t:Hide() end
   o.coin:SetTexture(COIN)
   o.coin:SetSize(COIN_SIZE, COIN_SIZE)
   o.coin:ClearAllPoints()
