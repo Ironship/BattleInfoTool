@@ -196,8 +196,11 @@ function M.Compare(link)
       if ra ~= rb then return ra < rb end
       return (statName(a.key) or a.key) < (statName(b.key) or b.key)
     end)
-    comparisons[#comparisons + 1] = { against = names, slots = wornSlots, diffs = diffs,
-      offHand = (target or (#slots == 1 and slots[1])) == 17 }
+    -- againstSlots: the slots compared with, an empty one included; wornSlots lists only the
+    -- ones carrying an item (it indexes against, SpecRatings needs it so). The tooltip names
+    -- the block's slot from againstSlots: a ring's two blocks otherwise read as one repeated.
+    comparisons[#comparisons + 1] = { against = names, slots = wornSlots, againstSlots = slots,
+      diffs = diffs, offHand = (target or (#slots == 1 and slots[1])) == 17 }
   end
   local mainHand = equipped(16)
   if BOTH_HANDS[loc] then
@@ -309,7 +312,9 @@ local RATINGS = {
 -- ItemEnchantmentPermanent) when the client has one; the ordinary stat, equip and proc lines are
 -- never read. Only the stats this module knows are taken, and an enchant the words do not give
 -- cleanly (a proc phrase, a percent, a duration, a name with no number, any prose around the
--- stat) adds nothing: a missing enchant beats a wrong stat. A tooltip that was not there (no
+-- stat) adds nothing: a missing enchant beats a wrong stat. A phrase naming a bundle of stats
+-- at once ("+4 All Stats", "Alle Werte +4") is taken as the keys it is made of (ENCHANT_BUNDLES
+-- below). A tooltip that was not there (no
 -- data, no lines, or only the bare title) is never cached as "no enchant", and neither is a
 -- tooltip with a secret line: the scan is re-run when the lines may have arrived.
 ---------------------------------------------------------------------------------------------
@@ -328,15 +333,66 @@ local ENCHANT_KEYS = {
   "ITEM_MOD_STRENGTH_SHORT", "ITEM_MOD_AGILITY_SHORT", "ITEM_MOD_STAMINA_SHORT",
   "ITEM_MOD_INTELLECT_SHORT", "ITEM_MOD_SPIRIT_SHORT", "RESISTANCE0_NAME",
   "ITEM_MOD_DAMAGE_PER_SECOND_SHORT", "ITEM_MOD_ATTACK_POWER_SHORT",
-  "ITEM_MOD_SPELL_HEALING_DONE_SHORT", "ITEM_MOD_SHADOW_DAMAGE_DONE_SHORT",
+  "ITEM_MOD_SPELL_HEALING_DONE_SHORT", "ITEM_MOD_SPELL_POWER_SHORT",
+  "ITEM_MOD_SPELL_DAMAGE_DONE_SHORT", "ITEM_MOD_SHADOW_DAMAGE_DONE_SHORT",
   "ITEM_MOD_PHYSICAL_DAMAGE_DONE_SHORT", "ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT",
+  "ITEM_MOD_DEFENSE_SKILL_SHORT", "ITEM_MOD_BLOCK_VALUE_SHORT",
+  "ITEM_MOD_HEALTH_SHORT", "ITEM_MOD_MANA_SHORT",
+  "ITEM_MOD_MANA_REGENERATION_SHORT", "ITEM_MOD_POWER_REGEN0_SHORT",
+  "ITEM_MOD_FERAL_ATTACK_POWER_SHORT",
+  "RESISTANCE1_NAME", "RESISTANCE2_NAME", "RESISTANCE3_NAME",
+  "RESISTANCE4_NAME", "RESISTANCE5_NAME", "RESISTANCE6_NAME",
+  "ITEM_MOD_HOLY_RESISTANCE_SHORT", "ITEM_MOD_FIRE_RESISTANCE_SHORT",
+  "ITEM_MOD_NATURE_RESISTANCE_SHORT", "ITEM_MOD_FROST_RESISTANCE_SHORT",
+  "ITEM_MOD_SHADOW_RESISTANCE_SHORT", "ITEM_MOD_ARCANE_RESISTANCE_SHORT",
 }
 for key in pairs(RATINGS) do ENCHANT_KEYS[#ENCHANT_KEYS + 1] = key end
+
+-- A bundle of stats an enchant names as one phrase ("+4 All Stats", "Alle Werte +4"): no key
+-- and no client name of its own names the bundle (no GlobalString holds it), so the enchant's
+-- own words are read in the locales it is written in and expanded into the keys it is made
+-- of; a phrase behind one connector ("+4 to All Stats", "+4 auf alle Werte") is the same
+-- component. The marker keys never reach the stats: parseEnchantText expands them and a
+-- leaked one names no stat. Anything else stays prose and adds nothing.
+local ENCHANT_BUNDLES = {
+  { marker = "\1all", -- the five primary stats
+    keys = { "ITEM_MOD_STRENGTH_SHORT", "ITEM_MOD_AGILITY_SHORT", "ITEM_MOD_STAMINA_SHORT",
+      "ITEM_MOD_INTELLECT_SHORT", "ITEM_MOD_SPIRIT_SHORT" },
+    phrases = { "All Stats", "Alle Werte", "Wszystkie statystyki", "Все характеристики",
+      "Toutes les caractéristiques", "Todas las estadísticas", "Tutte le statistiche" } },
+  { marker = "\1res", -- every school of resistance, but never Armor
+    keys = { "RESISTANCE1_NAME", "RESISTANCE2_NAME", "RESISTANCE3_NAME",
+      "RESISTANCE4_NAME", "RESISTANCE5_NAME", "RESISTANCE6_NAME" },
+    phrases = { "All Resistances", "Alle Widerstandsarten", "Wszystkie odporności",
+      "Все сопротивления", "Toutes les résistances", "Todas las resistencias",
+      "Tutte le resistenze" } },
+}
+-- The words a phrase may stand behind ("to All Stats", "auf alle Werte"), and the phrase
+-- itself: one connector between the number and the phrase, in the languages above.
+local BUNDLE_BRIDGES = { "", "to ", "to the ", "auf ", "zu ", "um ", "de ", "para ", "per " }
+local bundleKeys = {}
+for _, b in ipairs(ENCHANT_BUNDLES) do
+  bundleKeys[b.marker] = b.keys
+  b.names = {}
+  for _, phrase in ipairs(b.phrases) do
+    for _, form in ipairs({ phrase, (phrase:gsub("^%a", string.lower)), (phrase:lower()) }) do
+      for _, bridge in ipairs(BUNDLE_BRIDGES) do
+        b.names[#b.names + 1] = bridge .. form
+      end
+    end
+  end
+end
+
 local function enchantNames()
   local byName = {}
   for _, key in ipairs(ENCHANT_KEYS) do
     local name = statName(key)
     if name and not byName[name] then byName[name] = { name = name, key = key } end
+  end
+  for _, b in ipairs(ENCHANT_BUNDLES) do
+    for _, name in ipairs(b.names) do
+      if not byName[name] then byName[name] = { name = name, key = b.marker } end
+    end
   end
   local names = {}
   for _, n in pairs(byName) do names[#names + 1] = n end
@@ -456,7 +512,12 @@ local function parseEnchantText(text)
     end
     local key, n, nextPos = componentAt(text, names, pos)
     if not key then return {} end
-    out[key] = (out[key] or 0) + n
+    local bundle = bundleKeys[key]
+    if bundle then
+      for _, real in ipairs(bundle) do out[real] = (out[real] or 0) + n end
+    else
+      out[key] = (out[key] or 0) + n
+    end
     pos = nextPos
     first = false
   end
@@ -481,10 +542,10 @@ tooltipEnchant = function(link)
   -- whose data has not arrived), and no secret line. A title-only tooltip and a tooltip
   -- with a secret line are scanned again, and an enchant they do not show is not invented.
   if type(data) == "table" and type(data.lines) == "table" and #data.lines > 0 then
-    local cacheable, titleType = false, nameLineType()
+    local cacheable, hidden, titleType = false, false, nameLineType()
     for _, line in ipairs(data.lines) do
       if type(line) == "table" and isSecret(line.leftText) then
-        cacheable = false -- the hidden line may be the enchant: not a final answer
+        hidden = true -- the hidden line may be the enchant: not a final answer
       elseif not (titleType and line.type == titleType) then
         cacheable = true -- a line beyond the title: the tooltip was built
         local text = enchantTextOf(line)
@@ -493,7 +554,8 @@ tooltipEnchant = function(link)
         end
       end
     end
-    if cacheable then enchantMemo[link] = out end
+    -- a hidden line anywhere sticks: the scan is re-run when nothing is hidden any more
+    if cacheable and not hidden then enchantMemo[link] = out end
   end
   return out
 end
@@ -557,6 +619,13 @@ function M.WorthParts(key, n)
   elseif key == "ITEM_MOD_SPIRIT_SHORT" then
     local per = usesMana() and regenPerSpirit()
     if per and per > 0 then add("regen", math.floor(per * n * 50 + 0.5) / 10) end
+  elseif key == "ITEM_MOD_HEALTH_SHORT" then
+    -- flat health on the item (an enchant or a gem gives it), not through Stamina
+    add("health", n)
+  elseif key == "ITEM_MOD_MANA_SHORT" then
+    add("mana", n)
+  elseif key == "ITEM_MOD_BLOCK_VALUE_SHORT" then
+    add("blockvalue", n)
   elseif key == "ITEM_MOD_SPELL_HEALING_DONE_SHORT" then
     add("healing", n)
   elseif key == "ITEM_MOD_SPELL_POWER_SHORT" or key == "ITEM_MOD_SPELL_DAMAGE_DONE_SHORT" then
@@ -806,6 +875,80 @@ local function itemName(link)
   return (type(link) == "string" and link:match("%[(.-)%]")) or "?"
 end
 
+-- The slot words a comparison block names ("Finger slot 1"): a ring or a trinket compares
+-- with each worn slot and gets one block per slot, and without the slot's name the two
+-- blocks read as one repeated ("Against Woven Belt", "Against Woven Belt") and look like a
+-- bug in the tooltip. Only these two locations have two blocks to tell apart.
+local SLOT_WORDS = {
+  [11] = "Finger slot 1", [12] = "Finger slot 2",
+  [13] = "Trinket slot 1", [14] = "Trinket slot 2",
+}
+
+-- The block's slot as it follows the item's name ("Against Woven Belt (Finger slot 1)"),
+-- or "" where the words would say nothing (a chest has one slot; a two-hander's block
+-- already joins the two hands with " + "). An empty block names its slot when the tooltip
+-- is nothing but empty slots -- two bare "an empty slot" blocks read as one repeated again
+-- -- but not beside a named one, where "Against an empty slot" is clear as it stands.
+local function slotLabel(c, allEmpty)
+  local slots = c.againstSlots
+  if type(slots) ~= "table" or #slots ~= 1 then return "" end
+  local word = SLOT_WORDS[slots[1]]
+  if not word then return "" end
+  if #c.against == 0 and not allEmpty then return "" end
+  return " (" .. word .. ")"
+end
+
+-- Whether the game's inspect window is open on someone else's character: the tooltip being
+-- built then carries THEIR item, and every comparison in it is against OUR gear. The
+-- inspect UI is not one shape on every client (Forever's Blizzard_InspectUI raises
+-- InspectFrame, older builds name the doll InspectPaperDollFrame, newer APIs hang the frame
+-- off C_InspectUI), so each shape is asked for its own IsShown; anything absent, or not a
+-- frame that answers, reads false and nothing is assumed to exist.
+local function frameShown(frame)
+  return type(frame) == "table" and type(frame.IsShown) == "function" and ask(frame.IsShown, frame) == true
+end
+
+local function inspecting()
+  local ok, shown = pcall(function()
+    if frameShown(InspectFrame) or frameShown(InspectPaperDollFrame) then return true end
+    local cui = C_InspectUI
+    return type(cui) == "table" and frameShown(cui.InspectFrame)
+  end)
+  return ok and shown == true
+end
+
+-- The spec and measure the item is most worth to: the largest percentage of the ratings'
+-- parts that change anything. nil when it changes nothing for every spec.
+local function bestPart(ratings)
+  local best
+  for _, r in ipairs(ratings) do
+    for _, part in ipairs(r.parts) do
+      if not changesNothing(part) and (not best or (part.percent or 0) > (best.percent or 0)) then
+        best = part
+      end
+    end
+  end
+  return best
+end
+
+-- The small stream arrows BagMarkers paints on a bag button's corner, in a line of text.
+-- UI-MicroStream-Green ships pointing down (a download chevron), so the up arrow's |T
+-- escape mirrors it vertically (the top and bottom texels swapped) and its tip points up;
+-- UI-MicroStream-Red is used as shipped, tip down. The texels are normalized (0..1), so the
+-- whole file draws whatever its size is.
+local ARROW_UP = "|TInterface\\Buttons\\UI-MicroStream-Green:12:12:0:0:1:1:0:1:1:0|t"
+local ARROW_DOWN = "|TInterface\\Buttons\\UI-MicroStream-Red:12:12:0:0:1:1:0:1:0:1|t"
+
+-- The at-a-glance line for a tooltip carrying someone else's item: which way it goes against
+-- our own gear, and the best spec's number behind it ("Better than your gear (best spec:
+-- 25% better dmg spec)").
+local function gearLine(part)
+  local v = part.percent or 0
+  local arrow, word = ARROW_UP, "Better than your gear"
+  if v < 0 then arrow, word = ARROW_DOWN, "Worse than your gear" end
+  return arrow .. " " .. coloured(v, word) .. " (best spec: " .. ratingText(part) .. ")"
+end
+
 ---------------------------------------------------------------------------------------------
 -- Tank caps (independent of WorthParts): whether the character is uncrittable (440 defense
 -- skill vs a boss +3) and how far its avoidance is from 102.4% (miss+dodge+parry+block).
@@ -921,21 +1064,33 @@ end
 
 -- The tooltip lines for link: { text, r, g, b }. gameCompares: the game shows its own comparison beside
 -- this tooltip ("If you replace this item, the following stat changes will occur"), so the differences
--- are not repeated.
+-- are not repeated. Each block names the slot it is against ("Against Woven Belt (Finger slot 1)"):
+-- a ring or trinket gets one block per slot and the same worn item can stand in both. When the
+-- tooltip carries someone else's item (the inspect window open) the heading says the comparison is
+-- with YOUR gear and the block ends with the up/down arrow and the best spec's number.
 function M.TooltipLines(link, gameCompares)
   local lines = {}
   if not (settings and settings.compare) then return lines end
-  for _, c in ipairs(M.Compare(link) or {}) do
+  local comps = M.Compare(link) or {}
+  -- Nothing of ours in any slot: the empty blocks then name their slots as well.
+  local allEmpty = true
+  for _, c in ipairs(comps) do
+    if #c.against > 0 then allEmpty = false end
+  end
+  local foreign = inspecting()
+  for _, c in ipairs(comps) do
     local against = #c.against > 0 and table.concat((function()
       local t = {}
       for i, l in ipairs(c.against) do t[i] = itemName(l) end
       return t
     end)(), " + ") or "an empty slot"
+    against = against .. slotLabel(c, allEmpty)
+    local head = (foreign and "Compared with your gear: " or "Against ") .. against
     -- The differences, unless the tooltip has them already: the game's own comparison, or an empty slot,
     -- where they are the item's own stats.
     local showDiffs = #c.against > 0 and not gameCompares
     if settings.icons then
-      lines[#lines + 1] = { "Against " .. against, 0.4, 0.73, 1 }
+      lines[#lines + 1] = { head, 0.4, 0.73, 1 }
       if showDiffs and #c.diffs == 0 then lines[#lines + 1] = { "the same stats", 0.7, 0.7, 0.7 } end
       -- the differences, three to a line, and below them what they give, summed, with icons
       local row, sums, order = {}, {}, {}
@@ -968,7 +1123,7 @@ function M.TooltipLines(link, gameCompares)
       end
       if #worth > 0 then lines[#lines + 1] = { table.concat(worth, "   "), 0.7, 0.7, 0.7 } end
     else
-      lines[#lines + 1] = { "Against " .. against .. ":", 0.4, 0.73, 1 }
+      lines[#lines + 1] = { foreign and head or (head .. ":"), 0.4, 0.73, 1 }
       if showDiffs and #c.diffs == 0 then
         lines[#lines + 1] = { "  the same stats", 0.7, 0.7, 0.7 }
       end
@@ -984,8 +1139,17 @@ function M.TooltipLines(link, gameCompares)
         end
       end
     end
-    local ratings = settings.specs and M.SpecRatings(link, c.against, c.slots, c.offHand)
-    if ratings then specLines(lines, ratings) end
+    -- The specs' ratings, and for someone else's item the up/down line in front of them:
+    -- the arrow and the best spec's number. The ratings are measured for the arrow even
+    -- when the specs' own lines are switched off.
+    local ratings = (settings.specs or foreign) and M.SpecRatings(link, c.against, c.slots, c.offHand)
+    if ratings then
+      if foreign then
+        local best = bestPart(ratings)
+        if best then lines[#lines + 1] = { gearLine(best), 1, 1, 1 } end
+      end
+      if settings.specs then specLines(lines, ratings) end
+    end
   end
   -- Tank caps: one independent section after the comparisons (once per tooltip, not per
   -- worn slot), only when the gate holds and an API answers. A pcall keeps a throwing
@@ -1222,8 +1386,11 @@ local function sampleLines(iconSize)
 end
 
 -- The mock tooltip inside scene: a dark tooltip card, and under it a bag button mock with
--- the green up arrow (the same WHITE8X8 pieces BagMarkers paints) and the beneficiary
--- spec's icon. scene.tipLines are re-laid-out by renderMockTooltip on every change.
+-- the green up arrow and the beneficiary spec's icon. The arrow is the game's own small
+-- stream arrow -- Interface\Buttons\UI-MicroStream-Green, the same file BagMarkers paints in
+-- a real bag button's corner -- not the old WHITE8X8 pieces (commit 221cdee moved the bag
+-- and quest badges to the Blizzard arrows; the mock follows). scene.tipLines and the bag's
+-- corner badge are re-laid-out by renderMockTooltip on every change.
 local TIP_LINES = 12 -- the sample never needs more; the pool is padded with blanks
 local function buildMockTooltip(scene)
   local tip = CreateFrame("Frame", nil, scene, "BackdropTemplate")
@@ -1242,35 +1409,43 @@ local function buildMockTooltip(scene)
   face:SetAllPoints()
   face:SetTexture("Interface\\Icons\\INV_Chest_Leather_01")
   face:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-  -- the green up arrow in the button's corner, as on a real bag button: the spec icon is
-  -- shown too, so the arrow sits one icon-width left of it (ARROW_SHIFT in BagMarkers)
-  local UP_PIECES = { { 2, 2, -4, -4 }, { 6, 3, -2, -6 }, { 10, 3, 0, -9 }, { 2, 8, -4, -12 } }
-  scene.arrow = {}
-  for i, p in ipairs(UP_PIECES) do
-    local t = bag:CreateTexture(nil, "OVERLAY")
-    t:SetTexture("Interface\\Buttons\\WHITE8X8")
-    t:SetVertexColor(0.302, 1, 0.302, 1)
-    t:SetSize(p[1], p[2])
-    t:SetPoint("TOPRIGHT", bag, "TOPRIGHT", p[3] - 14, p[4])
-    scene.arrow[i] = t
-  end
-  local specIcon = bag:CreateTexture(nil, "OVERLAY")
+  scene.bagFace = face
+  -- The corner badge exactly as BagMarkers' paintContents builds it: one MARKER x MARKER box
+  -- in the button's TOPRIGHT corner with the arrow in it, and the beneficiary icon and the
+  -- +N cue inside the corner below. UI-MicroStream-Green ships pointing DOWN (a download
+  -- chevron), so the UP arrow mirrors the texture vertically with SetTexCoord (top and
+  -- bottom swapped). The file carries the Blizzard green itself: the vertex colour stays
+  -- white, never the tooltip's tint. The spec icon is shown too, so the arrow sits one
+  -- icon-width left of it (ARROW_SHIFT in BagMarkers).
+  local badge = CreateFrame("Frame", nil, bag)
+  badge:EnableMouse(false)
+  badge:SetSize(24, 24)
+  scene.bagBadge = badge
+  local arrow = badge:CreateTexture(nil, "OVERLAY")
+  arrow:SetTexture("Interface\\Buttons\\UI-MicroStream-Green")
+  arrow:SetTexCoord(0, 1, 1, 0) -- mirrored vertically: tip up
+  arrow:SetVertexColor(1, 1, 1, 1)
+  arrow:SetSize(24, 24)
+  scene.arrow = arrow
+  local specIcon = badge:CreateTexture(nil, "OVERLAY")
   specIcon:SetSize(12, 12)
-  specIcon:SetPoint("TOPRIGHT", bag, "TOPRIGHT", -2, -12)
   specIcon:SetTexture(SAMPLE.specs[1].icon)
   scene.bagSpecIcon = specIcon
-  local plusN = bag:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  plusN:SetPoint("TOPRIGHT", bag, "TOPRIGHT", -2, -16)
+  local plusN = badge:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   plusN:SetText("+1")
   scene.bagPlusN = plusN
   scene.caption = scene:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   scene.caption:SetJustifyH("LEFT")
-  scene.caption:SetText("on a bag button: green up for Affliction and one more spec")
+  scene.caption:SetText("on a bag button: green up for Affliction and one more spec -- "
+    .. "the game's own stream arrow")
 end
 
 -- The mock tooltip redrawn at a style: font size, scale and opacity all show here, whether
 -- they come from the shared appearance editor (UI.Appearance) or from the TRY IT sliders.
 -- Pure layout over the hardcoded sample: no live API, no settings writes.
+--   font size  every font in the mock, and the heights the rows and the title are measured at
+--   scale      the card's width, the rows' line boxes, the bag button mock and its badge
+--   opacity    the rows, the caption, the title and the whole bag button mock
 --
 -- The card keeps one fixed height at every font and scale: the rows wrap inside it and the
 -- ones that do not fit are dropped, so the scene can never stretch over the pane and push the
@@ -1280,6 +1455,16 @@ end
 local SCENE_HEIGHT = 280
 local MIN_FONT, MAX_FONT = 6, 24
 local MIN_SCALE, MAX_SCALE = 0.5, 2
+-- The bag button mock's corner badge, the geometry BagMarkers paints in a real button's
+-- corner: a MARKER x MARKER box at the button's TOPRIGHT holding the arrow, with the
+-- ICON x ICON beneficiary icon inside the corner and the +N cue under it. All of it is
+-- scaled with the button mock, so the Scale slider zooms the badge as it zooms the button.
+local MARKER = 24
+local ICON = 12
+local MARKER_DX, MARKER_DY = -2, -2
+local ICON_DX, ICON_DY = -2, -12
+local PLUSN_DX, PLUSN_DY = -2, -16
+local ARROW_SHIFT = -14 -- the arrow moves left of the icon when the icon is shown
 
 local function clamp(v, lo, hi)
   if type(v) ~= "number" then return lo end
@@ -1303,6 +1488,10 @@ local function renderMockTooltip(scene, style)
     if h and h > 0 then return h end
     return fallback
   end
+  -- Every font in the mock is drawn at the clamped font size; every painted part of it is
+  -- drawn at the clamped opacity, so the three TRY IT fields are all visible here:
+  -- font size moves the text and the heights measured for it, scale moves the card's width,
+  -- the rows' line boxes, the button mock and its badge, opacity fades the whole scene.
   if scene.title then
     if BIT.Style and BIT.Style.ApplyText then
       pcall(BIT.Style.ApplyText, scene.title, style, "text")
@@ -1315,8 +1504,11 @@ local function renderMockTooltip(scene, style)
   end
   local titleDepth = scene.title and (measure(scene.title, fs + 8) + 8) or (fs + 16)
   -- The foot of the card first -- the bag button mock and the caption -- so the rows above
-  -- can never run into them or past the card. Both wrap at the card's own width.
+  -- can never run into them or past the card.
   local bagSize = clamp(math.floor(32 * scale + 0.5), 16, 48)
+  local k = bagSize / 32 -- the button mock's zoom: the corner badge follows the scale
+  local badgeSize = math.max(10, math.floor(MARKER * k + 0.5))
+  local badgeIcon = math.max(6, math.floor(ICON * k + 0.5))
   local captionFont = clamp(fs - 2, 9, 14)
   local caption = scene.caption
   caption:ClearAllPoints()
@@ -1329,12 +1521,33 @@ local function renderMockTooltip(scene, style)
   scene.bag:ClearAllPoints()
   scene.bag:SetPoint("TOPLEFT", 12, -bagTop)
   scene.bag:SetSize(bagSize, bagSize)
+  scene.bag:SetAlpha(opacity) -- the badge fades with the lines above it
+  -- The corner badge, at the button's own zoom: the arrow one icon-width left of the icon,
+  -- exactly where BagMarkers puts it on a real button.
+  scene.bagBadge:ClearAllPoints()
+  scene.bagBadge:SetPoint("TOPRIGHT", scene.bag, "TOPRIGHT", MARKER_DX * k, MARKER_DY * k)
+  scene.bagBadge:SetSize(badgeSize, badgeSize)
+  scene.arrow:ClearAllPoints()
+  scene.arrow:SetPoint("TOPRIGHT", scene.bagBadge, "TOPRIGHT", ARROW_SHIFT * k, 0)
+  scene.arrow:SetSize(badgeSize, badgeSize)
+  scene.bagSpecIcon:ClearAllPoints()
+  scene.bagSpecIcon:SetPoint("TOPRIGHT", scene.bagBadge, "TOPRIGHT", ICON_DX * k, ICON_DY * k)
+  scene.bagSpecIcon:SetSize(badgeIcon, badgeIcon)
+  scene.bagPlusN:ClearAllPoints()
+  scene.bagPlusN:SetPoint("TOPRIGHT", scene.bagBadge, "TOPRIGHT", PLUSN_DX * k, PLUSN_DY * k)
+  scene.bagPlusN:SetFont(font, math.max(7, math.floor(10 * k + 0.5)), outline)
   local iconSize = clamp(math.floor(12 * scale + 0.5), 8, 24)
   local lines = sampleLines(iconSize)
   local tip = scene.tip
   tip:ClearAllPoints()
   tip:SetPoint("TOPLEFT", 12, -titleDepth)
-  tip:SetWidth(math.min(300, width - 24))
+  -- The card's width follows the scale (a narrower card at 0.5x wraps the rows into more
+  -- lines, a wider one at 2x spreads them out again).
+  local cardW = clamp(math.floor(300 * scale + 0.5), 120, math.max(120, width - 24))
+  tip:SetWidth(cardW)
+  -- The line box a row is laid out in: the row's own wrapped height, never shorter than the
+  -- scaled one, so the rows spread apart when the scale grows.
+  local rowBox = (fs + 4) * scale
   -- The rows fill the tip from its top and stop above the bag button mock; what does not
   -- fit is dropped instead of spilling over the card and the controls below it.
   local room = bagTop - 2 - titleDepth
@@ -1342,13 +1555,13 @@ local function renderMockTooltip(scene, style)
   for i, slot in ipairs(scene.tipLines) do
     local entry = lines[i]
     slot:ClearAllPoints()
-    if entry and y + fs + 2 <= room then
+    if entry then
       slot:SetText(entry.text)
       slot:SetFont(font, fs, outline)
       slot:SetTextColor(entry.r, entry.g, entry.b, opacity)
       slot:SetPoint("TOPLEFT", tip, "TOPLEFT", 8, -y)
       slot:SetPoint("RIGHT", tip, "RIGHT", -8, 0)
-      local h = measure(slot, fs + 4)
+      local h = math.max(measure(slot, fs + 4), rowBox)
       if y + h <= room then
         slot:Show()
         y = y + h
@@ -1389,8 +1602,16 @@ local function resolvedStyle()
 end
 
 local previewScene -- the built mock tooltip; redrawn on every settings or style change
+local tryItSliders = {} -- the TRY IT slider rows, re-seated on the stored style after a render
 local function renderPreview()
-  if previewScene then renderMockTooltip(previewScene, resolvedStyle()) end
+  if not previewScene then return end
+  renderMockTooltip(previewScene, resolvedStyle())
+  -- The thumbs and their value labels always show what the style holds -- including a write
+  -- this file never made (the shared appearance editor, a preset, a reset), so a slider can
+  -- never look as if it were still on the value it was built at.
+  for _, holder in ipairs(tryItSliders) do
+    if type(holder.Refresh) == "function" then pcall(holder.Refresh, holder) end
+  end
 end
 
 local function styleGet(key, fallback)
@@ -1405,6 +1626,13 @@ local function styleSet(key)
     if BIT.Style and BIT.Style.Set then pcall(BIT.Style.Set, "StatsInfo", key, v) end
     renderPreview()
   end
+end
+
+-- Every style write re-renders the preview, whoever made it: these sliders above, or the
+-- shared appearance editor, a preset or a reset elsewhere. The same contract the other
+-- modules' previews follow (HunterRangeFinder, ShieldsInfo and ResourceDing subscribe too).
+if BIT.Style and BIT.Style.Subscribe then
+  pcall(BIT.Style.Subscribe, "StatsInfo", function() renderPreview() end)
 end
 
 BIT.RegisterTab("StatsInfo", {
@@ -1431,7 +1659,8 @@ BIT.RegisterTab("StatsInfo", {
     buildMockTooltip(pane)
 
     -- TRY IT: the appearance the preview is drawn in -- the same three fields the shared
-    -- appearance editor writes, so either one moves the preview.
+    -- appearance editor writes, so either one moves the preview. Each row is registered in
+    -- tryItSliders so renderPreview re-seats its thumb on the stored value after any write.
     local tryIt = pane:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     tryIt:SetText("TRY IT: font, scale, opacity")
     tryIt:SetTextColor(0.85, 0.7, 0.3)
@@ -1440,10 +1669,11 @@ BIT.RegisterTab("StatsInfo", {
       "The size the preview's text is drawn in. The same field the shared appearance editor changes.")
     local scaleSlider = UI.Slider(pane, "Scale", 0.5, 2, 0.05,
       styleGet("scale", 1), styleSet("scale"), function(v) return string.format("%.2fx", v) end,
-      "Scales the preview's rows, icons and bag button. The same field the shared appearance editor changes.")
+      "Scales the preview's card, rows, icons and bag button. The same field the shared appearance editor changes.")
     local opacitySlider = UI.Slider(pane, "Opacity", 0, 1, 0.05,
       styleGet("opacity", 1), styleSet("opacity"), "%d%%",
-      "How see-through the preview's lines are. The same field the shared appearance editor changes.")
+      "How see-through the preview's lines and bag button are. The same field the shared appearance editor changes.")
+    tryItSliders = { fontSlider, scaleSlider, opacitySlider }
     tryIt:SetPoint("TOPLEFT", pane, "BOTTOMLEFT", 0, -10)
     fontSlider:SetPoint("TOPLEFT", tryIt, "BOTTOMLEFT", -4, -4)
     scaleSlider:SetPoint("TOPLEFT", fontSlider, "BOTTOMLEFT", 0, -2)
