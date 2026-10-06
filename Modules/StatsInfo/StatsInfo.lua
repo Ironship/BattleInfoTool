@@ -55,6 +55,75 @@ local function ask(fn, ...)
   return a, b, c, d, e, f, g
 end
 
+-- One tooltip build asks itemStats for the same link many times (Compare once, SpecRatings
+-- once per spec's measure, the tank gate again) and the character's own answers once per
+-- stat line. The memo below holds those answers from the outermost call of one build to its
+-- end (memoized wraps the public entries), so a build pays for each link once: no stats are
+-- kept between builds, so nothing goes stale when the client's data arrives, and outside a
+-- build (a direct call, /bit probe) nothing is cached at all -- exactly the old behavior.
+-- The tables handed out are shared within the build and read-only to their takers.
+local statsMemo, charMemo = {}, {}
+local memoDepth = 0
+local NO_VALUE = {}
+
+local function memoOpen()
+  if memoDepth == 0 then
+    for k in pairs(statsMemo) do statsMemo[k] = nil end
+    for k in pairs(charMemo) do charMemo[k] = nil end
+  end
+  memoDepth = memoDepth + 1
+end
+
+local function memoClose()
+  memoDepth = memoDepth - 1
+  if memoDepth <= 0 then
+    memoDepth = 0
+    for k in pairs(statsMemo) do statsMemo[k] = nil end
+    for k in pairs(charMemo) do charMemo[k] = nil end
+  end
+end
+
+-- The entries that are one build: TooltipLines is the hover itself; Compare and SpecRatings
+-- are its parts (BagMarkers and QuestMarkers call them directly too, where each call is one
+-- build of its own). Each of them returns exactly one value, and it comes back unchanged:
+-- pcall keeps an error from leaking the open build (it is always closed again on the way
+-- out) and the error goes up unchanged.
+local function memoized(fn)
+  return function(...)
+    memoOpen()
+    local ok, a = pcall(fn, ...)
+    memoClose()
+    if not ok then error(a, 0) end
+    return a
+  end
+end
+
+-- What the character is, asked at most once per build: its class behind the specs, and the
+-- worth lines' per-point answers (they do not depend on n). Fresh again at every build; a
+-- direct M.Worth call outside a build asks live, as it always did.
+local function charFact(key, compute)
+  if memoDepth > 0 then
+    local hit = charMemo[key]
+    if hit ~= nil then
+      if hit == NO_VALUE then return nil end
+      return hit
+    end
+  end
+  local v = compute()
+  if memoDepth > 0 then
+    if v == nil then charMemo[key] = NO_VALUE else charMemo[key] = v end
+  end
+  return v
+end
+
+-- The class behind M.SPECS, or nil; one read per build.
+local function charClass()
+  return charFact("class", function()
+    local _, class = ask(UnitClass, "player")
+    return class
+  end)
+end
+
 -- The name the client gives a stat key ("Beweglichkeit"), or nil when it has none.
 local function statName(key)
   local name = _G[key]
@@ -79,6 +148,12 @@ local function itemStats(link)
   -- A nil or secret link (in combat) must never reach the link rewrite or the enchant memo: the
   -- client raises on secret keys, so nothing is asked and nothing is cached.
   if type(link) ~= "string" or isSecret(link) then return {} end
+  -- Within one tooltip build the answer is asked for the same link a dozen times and more: it
+  -- is computed once per build and handed out read-only for the rest of it (see memoOpen).
+  if memoDepth > 0 then
+    local hit = statsMemo[link]
+    if hit then return hit end
+  end
   -- Baseline: the client's own GetItemStats answer for the whole link. Some clients count an
   -- enchant in it, some leave it out, and that answer is never dropped or added to blindly.
   -- Where both a trusted parse of the enchant and a stats answer for the link without its
@@ -113,9 +188,10 @@ local function itemStats(link)
       end
     end
   end
+  if memoDepth > 0 then statsMemo[link] = out end
   return out
 end
-M.ItemStats = itemStats
+M.ItemStats = memoized(itemStats)
 
 local function equipLoc(link)
   local _, _, _, loc = ask(C_Item and C_Item.GetItemInfoInstant, link)
@@ -214,6 +290,7 @@ function M.Compare(link)
   end
   return #comparisons > 0 and comparisons or nil
 end
+M.Compare = memoized(M.Compare)
 
 -- A stat's change as text: whole numbers as they are, others to one decimal (1.9 damage per second).
 local function signed(v)
@@ -237,20 +314,54 @@ end
 
 local function num(v) return type(v) == "number" and not isSecret(v) and v or nil end
 
+-- The character's live numbers behind the tank caps and the worth lines' shield check
+-- (defense skill, level, dodge, parry, block chance): they move only with gear, buffs, form
+-- or level, yet every hover read them all again. They are kept for a short TTL and dropped
+-- on the events that can change them (the loader below listens), so a hover storm reads each
+-- of them at most once per change. An answer that is secret or missing is never kept (it may
+-- become visible later): it is asked again the next time.
+local TANK_TTL = 1.0
+local tankMemo = {}
+local function tankForget()
+  for k in pairs(tankMemo) do tankMemo[k] = nil end
+end
+
+local function tankRead(key, compute)
+  local t = ask(GetTime)
+  local hit = tankMemo[key]
+  if hit and type(t) == "number" and t >= hit.t and (t - hit.t) <= TANK_TTL then return hit.v end
+  local v = compute()
+  if type(v) == "number" and not isSecret(v) and v == v and v ~= math.huge and v ~= -math.huge then
+    if type(t) == "number" then tankMemo[key] = { t = t, v = v } end
+  else
+    tankMemo[key] = nil
+  end
+  return v
+end
+
+-- The character's level, as tankMissChance and the uncrittable target read it.
+local function tankLevel()
+  return tankRead("lvl", function() return num(ask(UnitLevel, "player")) end)
+end
+
 local function usesMana()
-  local max = num(ask(UnitPowerMax, "player", 0))
-  return max ~= nil and max > 0
+  return charFact("mana", function()
+    local max = num(ask(UnitPowerMax, "player", 0))
+    return max ~= nil and max > 0
+  end)
 end
 
 -- Mana a second, out of casting, per point of Spirit, to the thousandth the game gives it in
 -- (7.751 and 0.001 for 31 Spirit: 0.25, not the 0.2499... the subtraction leaves).
 local function regenPerSpirit()
-  local _, spirit = ask(UnitStat, "player", 5)
-  spirit = num(spirit)
-  local base, casting = ask(GetManaRegen)
-  base, casting = num(base), num(casting) or 0
-  if not (spirit and base and spirit > 0) then return nil end
-  return math.floor((base - casting) / spirit * 1000 + 0.5) / 1000
+  return charFact("regen", function()
+    local _, spirit = ask(UnitStat, "player", 5)
+    spirit = num(spirit)
+    local base, casting = ask(GetManaRegen)
+    base, casting = num(base), num(casting) or 0
+    if not (spirit and base and spirit > 0) then return nil end
+    return math.floor((base - casting) / spirit * 1000 + 0.5) / 1000
+  end)
 end
 
 local function attackPower(stat, n)
@@ -269,11 +380,13 @@ end
 
 -- Dodge a point of Agility gives: the dodge the character's Agility brings, over that Agility.
 local function dodgePerAgility()
-  local total = num(ask(GetDodgeChanceFromAttribute))
-  local _, agi = ask(UnitStat, "player", 2)
-  agi = num(agi)
-  if not (total and agi and agi > 0) then return nil end
-  return total * 100 / agi
+  return charFact("dodgePerAgi", function()
+    local total = num(ask(GetDodgeChanceFromAttribute))
+    local _, agi = ask(UnitStat, "player", 2)
+    agi = num(agi)
+    if not (total and agi and agi > 0) then return nil end
+    return total * 100 / agi
+  end)
 end
 
 local function constant(name, fallback)
@@ -383,7 +496,26 @@ for _, b in ipairs(ENCHANT_BUNDLES) do
   end
 end
 
+-- The names an enchant can be written with, longest first. They are the client's own global
+-- strings (fixed per locale) with the bundles' static phrases on top: the ~400-entry list is
+-- built and sorted once and then reused -- it was rebuilt and re-sorted on every parse, which
+-- on an uncacheable tooltip meant every hover. The snapshot is thrown away and rebuilt only
+-- when one of the global strings behind it actually changes (the test suites rebind them to
+-- model another locale).
+local enchantNamesCache, enchantNamesSig = nil, nil
+
 local function enchantNames()
+  if enchantNamesCache then
+    local same = true
+    for i = 1, #ENCHANT_KEYS do
+      local key = ENCHANT_KEYS[i]
+      if enchantNamesSig[key] ~= _G[key] then
+        same = false
+        break
+      end
+    end
+    if same then return enchantNamesCache end
+  end
   local byName = {}
   for _, key in ipairs(ENCHANT_KEYS) do
     local name = statName(key)
@@ -397,6 +529,12 @@ local function enchantNames()
   local names = {}
   for _, n in pairs(byName) do names[#names + 1] = n end
   table.sort(names, function(a, b) return #a.name > #b.name end)
+  enchantNamesCache = names
+  enchantNamesSig = {}
+  for i = 1, #ENCHANT_KEYS do
+    local key = ENCHANT_KEYS[i]
+    enchantNamesSig[key] = _G[key]
+  end
   return names
 end
 
@@ -528,8 +666,11 @@ end
 -- the link, so a read tooltip's answer stands. A tooltip that has not built its lines (the item's
 -- data has not arrived: no data, no lines at all, or only the bare title) is scanned again when it
 -- may have arrived -- never kept as "no enchant". Neither is a tooltip holding a secret line (a
--- value the client hides may be the enchant line): the scan is re-run then too.
-local enchantMemo = {}
+-- value the client hides may be the enchant line): the scan is re-run then too. The memo holds at
+-- most ENCHANT_MEMO_MAX links (a session hovering the whole bank would otherwise grow it without
+-- limit): when it is full the next new link wipes it and the reads start over.
+local ENCHANT_MEMO_MAX = 256
+local enchantMemo, enchantMemoCount = {}, 0
 tooltipEnchant = function(link)
   -- A nil or secret link must never index the memo: the client raises on secret keys.
   if type(link) ~= "string" or isSecret(link) then return {} end
@@ -555,7 +696,14 @@ tooltipEnchant = function(link)
       end
     end
     -- a hidden line anywhere sticks: the scan is re-run when nothing is hidden any more
-    if cacheable and not hidden then enchantMemo[link] = out end
+    if cacheable and not hidden then
+      if enchantMemoCount >= ENCHANT_MEMO_MAX then
+        for k in pairs(enchantMemo) do enchantMemo[k] = nil end
+        enchantMemoCount = 0
+      end
+      enchantMemo[link] = out
+      enchantMemoCount = enchantMemoCount + 1
+    end
   end
   return out
 end
@@ -566,11 +714,13 @@ end
 -- blocks nothing, so the line stays out. Class and chance both guarded (ask + pcall);
 -- a secret class (in combat) fails silent: no line.
 local function usesShield()
-  local _, class = ask(UnitClass, "player")
-  if not class or isSecret(class) then return false end
-  if class ~= "WARRIOR" and class ~= "PALADIN" and class ~= "SHAMAN" then return false end
-  local bv = num(ask(GetBlockChance))
-  return (bv or 0) > 0
+  return charFact("shield", function()
+    local class = charClass()
+    if not class or isSecret(class) then return false end
+    if class ~= "WARRIOR" and class ~= "PALADIN" and class ~= "SHAMAN" then return false end
+    local bv = tankRead("block", function() return num(ask(GetBlockChance)) end)
+    return (bv or 0) > 0
+  end)
 end
 
 -- Feral Attack Power is attack power 1:1 (RatingBuster Classic / StatLogic VanillaLogic
@@ -579,27 +729,32 @@ end
 -- it (GetShapeshiftFormID: Cat 1, Bear 5, Dire Bear 8, see Range.lua DRUID_FORM_SPELLS and
 -- SpellDamageInfo CAT_FORM); a secret or unknown form fails silent: no line.
 local function inFeralForm()
-  local form = ask(GetShapeshiftFormID)
-  if form == nil or isSecret(form) then return false end
-  return form == 1 or form == 5 or form == 8
+  return charFact("form", function()
+    local form = ask(GetShapeshiftFormID)
+    if form == nil or isSecret(form) then return false end
+    return form == 1 or form == 5 or form == 8
+  end)
 end
+
+-- One part of a worth line, appended where it belongs (no closure per call: WorthParts runs
+-- per stat of every hover).
+local function addPart(parts, kind, value) parts[#parts + 1] = { kind = kind, value = value } end
 
 -- What n points of the stat under key give this character: { { kind, value } }, in the order shown.
 function M.WorthParts(key, n)
   local parts = {}
-  local function add(kind, value) parts[#parts + 1] = { kind = kind, value = value } end
   if key == "ITEM_MOD_STRENGTH_SHORT" then
     local ap = attackPower(1, n)
-    if ap then add("ap", ap) end
-    if usesShield() then add("blockvalue", n * 0.05) end
+    if ap then addPart(parts, "ap", ap) end
+    if usesShield() then addPart(parts, "blockvalue", n * 0.05) end
   elseif key == "ITEM_MOD_AGILITY_SHORT" then
-    add("armor", constant("ARMOR_PER_AGILITY", 2) * n)
+    addPart(parts, "armor", constant("ARMOR_PER_AGILITY", 2) * n)
     local ap = attackPower(2, n)
-    if ap then add("ap", ap) end
+    if ap then addPart(parts, "ap", ap) end
     local crit = chanceFromStat(GetCritChanceFromStat, 2, n)
-    if worthShowing(crit) then add("crit", crit) end
+    if worthShowing(crit) then addPart(parts, "crit", crit) end
     local dodge = dodgePerAgility()
-    if dodge and worthShowing(dodge * n) then add("dodge", dodge * n) end
+    if dodge and worthShowing(dodge * n) then addPart(parts, "dodge", dodge * n) end
   elseif key == "ITEM_MOD_STAMINA_SHORT" then
     -- SI-249: in combat the answers can be secret; then the line is left out.
     -- A fallback 10*modifier would invent health (e.g. +20) the game hid.
@@ -609,42 +764,42 @@ function M.WorthParts(key, n)
     if not per then per = 10 * (num(rawMod) or 1) end
     -- SI-250: round half away from zero, so -10.5 is -11, not -10.
     local v = per * n
-    add("health", v >= 0 and math.floor(v + 0.5) or math.ceil(v - 0.5))
+    addPart(parts, "health", v >= 0 and math.floor(v + 0.5) or math.ceil(v - 0.5))
   elseif key == "ITEM_MOD_INTELLECT_SHORT" then
     if usesMana() then
-      add("mana", constant("MANA_PER_INTELLECT", 15) * n)
+      addPart(parts, "mana", constant("MANA_PER_INTELLECT", 15) * n)
       local spellCrit = chanceFromStat(GetSpellCritChanceFromStat, 4, n)
-      if worthShowing(spellCrit) then add("spellcrit", spellCrit) end
+      if worthShowing(spellCrit) then addPart(parts, "spellcrit", spellCrit) end
     end
   elseif key == "ITEM_MOD_SPIRIT_SHORT" then
     local per = usesMana() and regenPerSpirit()
-    if per and per > 0 then add("regen", math.floor(per * n * 50 + 0.5) / 10) end
+    if per and per > 0 then addPart(parts, "regen", math.floor(per * n * 50 + 0.5) / 10) end
   elseif key == "ITEM_MOD_HEALTH_SHORT" then
     -- flat health on the item (an enchant or a gem gives it), not through Stamina
-    add("health", n)
+    addPart(parts, "health", n)
   elseif key == "ITEM_MOD_MANA_SHORT" then
-    add("mana", n)
+    addPart(parts, "mana", n)
   elseif key == "ITEM_MOD_BLOCK_VALUE_SHORT" then
-    add("blockvalue", n)
+    addPart(parts, "blockvalue", n)
   elseif key == "ITEM_MOD_SPELL_HEALING_DONE_SHORT" then
-    add("healing", n)
+    addPart(parts, "healing", n)
   elseif key == "ITEM_MOD_SPELL_POWER_SHORT" or key == "ITEM_MOD_SPELL_DAMAGE_DONE_SHORT" then
-    add("spellpower", n)
+    addPart(parts, "spellpower", n)
   elseif key == "ITEM_MOD_DEFENSE_SKILL_SHORT" then
     -- Flat +Defense skill: no such key in the client's GlobalStrings (only
     -- ITEM_MOD_DEFENSE_SKILL_RATING_SHORT exists) and none seen in GetItemStats data;
     -- kept defensively. Honest raw skill ("+X defense", kind "defense" with its existing
     -- word and ShieldWall icon), not the 0.04% avoidance RatingBuster converts it to.
-    add("defense", n)
+    addPart(parts, "defense", n)
   elseif key == "ITEM_MOD_FERAL_ATTACK_POWER_SHORT" then
     -- 1:1 attack power, but only in Cat/Bear form (see inFeralForm above).
-    if inFeralForm() then add("ap", n) end
+    if inFeralForm() then addPart(parts, "ap", n) end
   elseif RATINGS[key] then
     -- the game's own conversion at this level, as its character sheet does it
     local kind, name, number = RATINGS[key][1], RATINGS[key][2], RATINGS[key][3]
     local index = type(_G[name]) == "number" and _G[name] or number
     local v = num(ask(GetCombatRatingBonusForCombatRatingValue, index, math.abs(n)))
-    if v and v ~= 0 then add(kind, n < 0 and -v or v) end
+    if v and v ~= 0 then addPart(parts, kind, n < 0 and -v or v) end
   end
   return parts
 end
@@ -722,17 +877,23 @@ end
 -- against nothing reads ">300%", not "+29817%". An empty slot (old 0, new something) is the same
 -- cap, not infinity; nothing against nothing is 0 and stays hidden via changesNothing.
 -- slots: the slot of each item in against; offHand: the item would go into the off hand.
+-- The measures a spec is rated on; constant lists (they used to be built per spec on every
+-- hover): a tank's two, a healer's one, a damage spec's one.
+local TANK_MEASURES = { "survival", "threat" }
+local HEAL_MEASURES = { "healing" }
+local DAMAGE_MEASURES = { "damage" }
+
 function M.SpecRatings(link, against, slots, offHand)
-  local _, class = ask(UnitClass, "player")
+  local class = charClass()
   local specs = type(class) == "string" and M.SPECS and M.SPECS[class]
   if not specs then return nil end
   local out = {}
   for _, spec in ipairs(specs) do
     local row = { spec = spec, parts = {} }
     local measures
-    if spec.role == "tank" then measures = { "survival", "threat" }
-    elseif spec.role == "healing" then measures = { "healing" }
-    else measures = { "damage" } end
+    if spec.role == "tank" then measures = TANK_MEASURES
+    elseif spec.role == "healing" then measures = HEAL_MEASURES
+    else measures = DAMAGE_MEASURES end
     for _, kind in ipairs(measures) do
       local measure = spec[kind]
       local new, old = worthTo(measure, link, offHand), 0
@@ -757,6 +918,7 @@ function M.SpecRatings(link, against, slots, offHand)
   end
   return out
 end
+M.SpecRatings = memoized(M.SpecRatings)
 
 local function coloured(v, text)
   local colour = v > 0.05 and "|cff4dff4d" or v < -0.05 and "|cffff5959" or "|cffb3b3b3"
@@ -975,7 +1137,7 @@ local TANK_STATS = {
 -- Whether the player's class has a tank spec in M.SPECS (Druid Bear, Paladin Protection,
 -- Warrior Protection). Guarded like SpecRatings (ask + pcall); a secret class fails silent.
 local function hasTankSpec()
-  local _, class = ask(UnitClass, "player")
+  local class = charClass()
   if type(class) ~= "string" or isSecret(class) then return false end
   local specs = M.SPECS and M.SPECS[class]
   if type(specs) ~= "table" then return false end
@@ -1000,11 +1162,13 @@ end
 -- does not exist as a callable API and is never invented here.
 local UnitDefenseFn = UnitDefenseSkill or UnitDefense
 local function tankDefenseSkill()
-  local a, b = ask(UnitDefenseFn, "player")
-  if isSecret(a) or isSecret(b) then return nil end
-  if type(a) == "number" and type(b) == "number" then return a + b end
-  if type(a) == "number" then return a end
-  return nil
+  return tankRead("def", function()
+    local a, b = ask(UnitDefenseFn, "player")
+    if isSecret(a) or isSecret(b) then return nil end
+    if type(a) == "number" and type(b) == "number" then return a + b end
+    if type(a) == "number" then return a end
+    return nil
+  end)
 end
 
 -- Miss chance vs a boss +3 from defense skill and level: 5% base plus 0.04% per point of
@@ -1012,7 +1176,7 @@ end
 -- UnitLevel("player"); otherwise nil (the caller then shows dodge+parry+block only).
 local function tankMissChance(defense)
   if type(defense) ~= "number" or defense ~= defense then return nil end
-  local lvl = num(ask(UnitLevel, "player"))
+  local lvl = tankLevel()
   if not lvl or lvl <= 0 then return nil end
   local miss = 5 + (defense - (lvl + 3) * 5) * 0.04
   if miss ~= miss or miss == math.huge or miss == -math.huge then return nil end
@@ -1037,16 +1201,16 @@ local function tankExtraLines(link)
   if type(def) == "number" and def == def and def ~= math.huge and def ~= -math.huge then
     -- Uncrittable target scales with level (boss +3: level*5 + 140, i.e. 440 at 60);
     -- without a sane level the fixed 440 stands in as the level-60 reference.
-    local lvl = num(ask(UnitLevel, "player"))
+    local lvl = tankLevel()
     local target = (lvl and lvl > 0) and (lvl * 5 + 140) or UNCRITTABLE_DEFENSE
     local need = target - def
     if need < 0 then need = 0 end
     local text = "Uncrittable: " .. wholeText(def) .. "/" .. wholeText(target) .. " (need " .. wholeText(need) .. ")"
     out[#out + 1] = { ((def >= target) and UP or DOWN) .. text .. "|r", 1, 1, 1 }
   end
-  local dodge = num(ask(GetDodgeChance))
-  local parry = num(ask(GetParryChance))
-  local block = num(ask(GetBlockChance))
+  local dodge = tankRead("dodge", function() return num(ask(GetDodgeChance)) end)
+  local parry = tankRead("parry", function() return num(ask(GetParryChance)) end)
+  local block = tankRead("block", function() return num(ask(GetBlockChance)) end)
   if dodge and parry and block then
     local miss = (def ~= nil) and tankMissChance(def) or nil
     local total, text
@@ -1060,6 +1224,14 @@ local function tankExtraLines(link)
     out[#out + 1] = { ((total + 1e-9 >= AVOIDANCE_CAP) and UP or DOWN) .. text .. "|r", 1, 1, 1 }
   end
   return out
+end
+
+-- The names of the items a comparison is against, joined as the heading names them
+-- ("Worn Band + Old Loop"): one helper, no closure per comparison block.
+local function namesJoined(links)
+  local t = {}
+  for i, l in ipairs(links) do t[i] = itemName(l) end
+  return table.concat(t, " + ")
 end
 
 -- The tooltip lines for link: { text, r, g, b }. gameCompares: the game shows its own comparison beside
@@ -1079,11 +1251,7 @@ function M.TooltipLines(link, gameCompares)
   end
   local foreign = inspecting()
   for _, c in ipairs(comps) do
-    local against = #c.against > 0 and table.concat((function()
-      local t = {}
-      for i, l in ipairs(c.against) do t[i] = itemName(l) end
-      return t
-    end)(), " + ") or "an empty slot"
+    local against = #c.against > 0 and namesJoined(c.against) or "an empty slot"
     against = against .. slotLabel(c, allEmpty)
     local head = (foreign and "Compared with your gear: " or "Against ") .. against
     -- The differences, unless the tooltip has them already: the game's own comparison, or an empty slot,
@@ -1164,18 +1332,37 @@ function M.TooltipLines(link, gameCompares)
   end
   return lines
 end
+M.TooltipLines = memoized(M.TooltipLines)
+
+-- What add() last put on a tooltip (weak-keyed: pooled tooltips die with their frame): the
+-- client can fire the hook twice for the same tooltip without clearing it (a comparison
+-- refresh), which would add the whole block a second time and compute it a second time.
+local addedTo = setmetatable({}, { __mode = "k" })
 
 local function hookTooltips()
   local function add(tooltip)
     if not (tooltip == GameTooltip or tooltip == ItemRefTooltip) then return end
     local _, link = ask(tooltip.GetItem, tooltip)
     if type(link) ~= "string" or isSecret(link) then return end
+    -- One build per tooltip and link within a frame: skipped when the tooltip still holds
+    -- the lines just added (NumLines has not gone back down), taken again after a clear --
+    -- a tooltip rebuilt in the same frame is a new build and gets its lines again. Without
+    -- GetTime or NumLines (a minimal client) nothing is skipped: the old behavior.
+    local t = ask(GetTime)
+    local rec = addedTo[tooltip]
+    if type(t) == "number" and rec and rec.link == link and rec.t == t then
+      local n = ask(tooltip.NumLines, tooltip)
+      if n == nil or (rec.lines and n >= rec.lines) then return end
+    end
     -- the game compares by itself when the setting says so, or while Shift is held
     local gameCompares = TooltipUtil and ask(TooltipUtil.ShouldDoItemComparison, tooltip) == true
     -- A throwing client anywhere in the comparison must not cost the tooltip.
     local ok, out = pcall(M.TooltipLines, link, gameCompares)
     if not ok or type(out) ~= "table" then return end
     for _, line in ipairs(out) do tooltip:AddLine(line[1], line[2], line[3], line[4]) end
+    if type(t) == "number" then
+      addedTo[tooltip] = { link = link, t = t, lines = ask(tooltip.NumLines, tooltip) }
+    end
   end
   if type(TooltipDataProcessor) == "table" and type(TooltipDataProcessor.AddTooltipPostCall) == "function"
     and Enum and Enum.TooltipDataType then
@@ -1310,8 +1497,16 @@ loader:SetScript("OnEvent", function(self, event, name)
     M.settings = settings
     BIT.DB().statsLearned = nil -- what 0.4.x measured in play; the game's own numbers replace it
   elseif event == "PLAYER_LOGIN" then
-    self:UnregisterAllEvents()
+    self:UnregisterEvent("PLAYER_LOGIN")
+    -- The tank caps' numbers move with gear, buffs, form and level: on those events the
+    -- short-lived cache (tankRead above) is dropped and the next hover reads them live again.
+    self:RegisterUnitEvent("UNIT_AURA", "player")
+    self:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
+    self:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+    self:RegisterEvent("PLAYER_LEVEL_UP")
     hookTooltips()
+  else
+    tankForget()
   end
 end)
 
