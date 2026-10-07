@@ -575,53 +575,86 @@ function Parser.ParseItemHeal(text, lang)
   t, lang = prepare(text, lang)
   local lo, hi
   local mlo, mhi
-  local dur, minutes
+  local dur, minutes = nil, false
+  -- Over-time amounts always come from ONE pattern that spans both the amount
+  -- and its duration - a stray "over/\195\188ber" belonging to another sentence
+  -- ("Restores 200 to 300 health. Restores 100 mana over 10 sec.") can never
+  -- fabricate a hot. Instant wordings stay instant; unknown shapes stay unread.
   if lang == "de" then
     mlo, mhi = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") mana wieder her")
     if not mlo then mlo = match(t, "stellt (" .. NUM .. ") mana wieder her") end
     if not mlo then mlo, mhi = match(t, "stellt sofort (" .. NUM .. ") bis (" .. NUM .. ") mana wieder her") end
     if not mlo then mlo = match(t, "stellt sofort (" .. NUM .. ") mana wieder her") end
-    lo, hi = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") gesundheit wieder her")
-    if not lo then lo = match(t, "stellt (" .. NUM .. ") gesundheit wieder her") end
-    if not lo then lo, hi = match(t, "stellt sofort (" .. NUM .. ") bis (" .. NUM .. ") gesundheit wieder her") end
-    if not lo then lo = match(t, "stellt sofort (" .. NUM .. ") gesundheit wieder her") end
-    if not lo then lo, hi = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") leben wieder her") end
-    if not lo then lo = match(t, "stellt (" .. NUM .. ") leben wieder her") end
-    if not lo then lo, hi = match(t, "stellt sofort (" .. NUM .. ") bis (" .. NUM .. ") leben wieder her") end
-    if not lo then lo = match(t, "stellt sofort (" .. NUM .. ") leben wieder her") end
-    -- Food: "stellt 243 Gesundheit über 21 Sek. wieder her" (or "Leben"): the
-    -- duration sits between the amount and "wieder her", so the patterns above
-    -- do not see the amount.
-    if not lo then lo, hi = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") gesundheit \195\188ber") end
-    if not lo then lo = match(t, "stellt (" .. NUM .. ") gesundheit \195\188ber") end
-    if not lo then lo, hi = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") leben \195\188ber") end
-    if not lo then lo = match(t, "stellt (" .. NUM .. ") leben \195\188ber") end
-    if not lo then
-      lo, hi = match(t, "heilt (" .. NUM .. ") bis (" .. NUM .. ") schaden")
-      if not lo then lo, hi = match(t, "heilt (" .. NUM .. ") bis (" .. NUM .. ") gesundheit") end
-      if not lo then lo = match(t, "heilt (" .. NUM .. ") schaden") end
-      if not lo then lo = match(t, "heilt (" .. NUM .. ") gesundheit") end
+    -- Over time (amount first): "stellt 243 Gesundheit \195\188ber 21 Sek. wieder her"
+    do
+      local a, b, d = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") gesundheit \195\188ber (" .. NUM .. ") sek")
+      if not a then a, d = match(t, "stellt (" .. NUM .. ") gesundheit \195\188ber (" .. NUM .. ") sek") end
+      if not a then a, b, d = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") leben \195\188ber (" .. NUM .. ") sek") end
+      if not a then a, d = match(t, "stellt (" .. NUM .. ") leben \195\188ber (" .. NUM .. ") sek") end
+      if not a then a, b, d = match(t, "heilt (" .. NUM .. ") bis (" .. NUM .. ") schaden \195\188ber (" .. NUM .. ") sek") end
+      if not a then a, d = match(t, "heilt (" .. NUM .. ") schaden \195\188ber (" .. NUM .. ") sek") end
+      if not a then a, b, m = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") gesundheit \195\188ber (" .. NUM .. ") min") end
+      if not a then a, m = match(t, "stellt (" .. NUM .. ") gesundheit \195\188ber (" .. NUM .. ") min"); if a then d, minutes = m, true end end
+      if a then lo, hi, dur = a, (b or a), d end
     end
-    -- "über 6 Sek." (minutes count as 60 seconds, as in Parse above)
-    dur = match(t, "\195\188ber (" .. NUM .. ") sek")
-    minutes = false
-    if not dur then dur = match(t, "\195\188ber (" .. NUM .. ") min"); minutes = dur ~= nil end
+    -- Over time (duration first): "stellt im Verlauf von 21 Sek. insgesamt 243
+    -- Gesundheit wieder her" - captures are (duration, amount[, amount]).
+    if not dur then
+      local d, a, b = match(t, "im verlauf von (" .. NUM .. ") sek%. insgesamt (" .. NUM .. ") bis (" .. NUM .. ") gesundheit")
+      if not a then d, a = match(t, "im verlauf von (" .. NUM .. ") sek%. insgesamt (" .. NUM .. ") gesundheit") end
+      if not a then d, a = match(t, "im verlauf von (" .. NUM .. ") sek%. insgesamt (" .. NUM .. ").- gesundheit") end
+      if not a then d, a, b = match(t, "im verlauf von (" .. NUM .. ") sek%. (" .. NUM .. ") bis (" .. NUM .. ") gesundheit") end
+      if not a then d, a = match(t, "im verlauf von (" .. NUM .. ") sek%. (" .. NUM .. ").- gesundheit") end
+      if not a then d, a, b = match(t, "im verlauf von (" .. NUM .. ") sek%. (" .. NUM .. ") bis (" .. NUM .. ") leben") end
+      if not a then d, a = match(t, "im verlauf von (" .. NUM .. ") sek%. (" .. NUM .. ").- leben") end
+      if a then lo, hi, dur = a, (b or a), d end
+    end
+    -- Instant: "stellt 70 bis 90 Gesundheit wieder her" (Gesundheit or Leben).
+    if not dur then
+      lo, hi = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") gesundheit wieder her")
+      if not lo then lo = match(t, "stellt (" .. NUM .. ") gesundheit wieder her") end
+      if not lo then lo, hi = match(t, "stellt sofort (" .. NUM .. ") bis (" .. NUM .. ") gesundheit wieder her") end
+      if not lo then lo = match(t, "stellt sofort (" .. NUM .. ") gesundheit wieder her") end
+      if not lo then lo, hi = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") leben wieder her") end
+      if not lo then lo = match(t, "stellt (" .. NUM .. ") leben wieder her") end
+      if not lo then lo, hi = match(t, "stellt sofort (" .. NUM .. ") bis (" .. NUM .. ") leben wieder her") end
+      if not lo then lo = match(t, "stellt sofort (" .. NUM .. ") leben wieder her") end
+      if not lo then
+        lo, hi = match(t, "heilt (" .. NUM .. ") bis (" .. NUM .. ") schaden")
+        if not lo then lo, hi = match(t, "heilt (" .. NUM .. ") bis (" .. NUM .. ") gesundheit") end
+        if not lo then lo = match(t, "heilt (" .. NUM .. ") schaden") end
+        if not lo then lo = match(t, "heilt (" .. NUM .. ") gesundheit") end
+      end
+    end
   else
     mlo, mhi = match(t, "restores (" .. NUM .. ") to (" .. NUM .. ") mana")
     if not mlo then mlo = match(t, "restores (" .. NUM .. ") mana") end
-    lo, hi = match(t, "restores (" .. NUM .. ") to (" .. NUM .. ") health")
-    if not lo then lo = match(t, "restores (" .. NUM .. ") health") end
-    if not lo then lo, hi = match(t, "restores (" .. NUM .. ") to (" .. NUM .. ") life") end
-    if not lo then lo = match(t, "restores (" .. NUM .. ") life") end
-    if not lo then
-      lo, hi = match(t, "heals (" .. NUM .. ") to (" .. NUM .. ") damage")
-      if not lo then lo, hi = match(t, "heals (" .. NUM .. ") to (" .. NUM .. ") health") end
-      if not lo then lo = match(t, "heals (" .. NUM .. ") damage") end
-      if not lo then lo = match(t, "heals (" .. NUM .. ") health") end
+    -- Over time (amount and duration in one pattern).
+    do
+      local a, b, d = match(t, "restores (" .. NUM .. ") to (" .. NUM .. ") health over (" .. NUM .. ") sec")
+      if not a then a, d = match(t, "restores (" .. NUM .. ") health over (" .. NUM .. ") sec") end
+      if not a then a, d = match(t, "restores (" .. NUM .. ") life over (" .. NUM .. ") sec") end
+      if not a then a, b, d = match(t, "heals (" .. NUM .. ") to (" .. NUM .. ") damage over (" .. NUM .. ") sec") end
+      if not a then a, d = match(t, "heals (" .. NUM .. ") damage over (" .. NUM .. ") sec") end
+      if not a then a, b, d = match(t, "heals (" .. NUM .. ") to (" .. NUM .. ") health over (" .. NUM .. ") sec") end
+      if not a then a, d = match(t, "heals (" .. NUM .. ") health over (" .. NUM .. ") sec") end
+      if not a then a, b, m = match(t, "restores (" .. NUM .. ") to (" .. NUM .. ") health over (" .. NUM .. ") min") end
+      if not a then a, m = match(t, "restores (" .. NUM .. ") health over (" .. NUM .. ") min"); if a then d, minutes = m, true end end
+      if a then lo, hi, dur = a, (b or a), d end
     end
-    dur = match(t, "over (" .. NUM .. ") sec")
-    minutes = false
-    if not dur then dur = match(t, "over (" .. NUM .. ") min"); minutes = dur ~= nil end
+    -- Instant: "Restores 70 to 90 health." / "Heals 66 damage."
+    if not dur then
+      lo, hi = match(t, "restores (" .. NUM .. ") to (" .. NUM .. ") health")
+      if not lo then lo = match(t, "restores (" .. NUM .. ") health") end
+      if not lo then lo, hi = match(t, "restores (" .. NUM .. ") to (" .. NUM .. ") life") end
+      if not lo then lo = match(t, "restores (" .. NUM .. ") life") end
+      if not lo then
+        lo, hi = match(t, "heals (" .. NUM .. ") to (" .. NUM .. ") damage")
+        if not lo then lo, hi = match(t, "heals (" .. NUM .. ") to (" .. NUM .. ") health") end
+        if not lo then lo = match(t, "heals (" .. NUM .. ") damage") end
+        if not lo then lo = match(t, "heals (" .. NUM .. ") health") end
+      end
+    end
   end
   dur = tonumber(dur)
   if dur and minutes then dur = dur * 60 end
