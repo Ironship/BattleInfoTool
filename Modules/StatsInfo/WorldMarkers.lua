@@ -53,11 +53,25 @@ local function slotLink(reader, slot)
   return nil
 end
 
+local function shownButton(button)
+  if type(button) ~= "table" then return false end
+  if type(button.IsShown) ~= "function" then return true end
+  local ok, shown = pcall(button.IsShown, button)
+  return ok and shown ~= false
+end
+
 local function paintLoot()
   local n = _G.LOOTFRAME_NUMBUTTONS
   if type(n) ~= "number" or n < 1 or n > 20 then n = 4 end
   for i = 1, n do
-    paintButton(_G["LootButton" .. i], slotLink(GetLootSlotLink, i))
+    local button = _G["LootButton" .. i]
+    if type(button) == "table" then
+      -- LootFrame_Update writes button.slot. On a later page that is not the button index.
+      local slot = button.slot
+      if type(slot) ~= "number" then slot = i end
+      local link = shownButton(button) and slotLink(GetLootSlotLink, slot) or nil
+      paintButton(button, link)
+    end
   end
 end
 
@@ -72,11 +86,29 @@ local function paintRolls()
   end
 end
 
+local function merchantLink(button, index)
+  if type(button) == "table" and type(button.link) == "string" and button.link ~= "" then
+    return button.link
+  end
+  local frame = _G.MerchantFrame
+  local tab = type(frame) == "table" and frame.selectedTab or nil
+  if tab ~= nil and tab ~= 1 then
+    return slotLink(GetBuybackItemLink, index)
+  end
+  local per = _G.MERCHANT_ITEMS_PER_PAGE
+  if type(per) ~= "number" or per < 1 or per > 20 then per = 10 end
+  local page = type(frame) == "table" and tonumber(frame.page) or 1
+  if type(page) ~= "number" or page < 1 then page = 1 end
+  return slotLink(GetMerchantItemLink, (page - 1) * per + index)
+end
+
 local function paintMerchant()
   local n = _G.MERCHANT_ITEMS_PER_PAGE
   if type(n) ~= "number" or n < 1 or n > 20 then n = 10 end
   for i = 1, n do
-    paintButton(_G["MerchantItem" .. i .. "ItemButton"], slotLink(GetMerchantItemLink, i))
+    local button = _G["MerchantItem" .. i .. "ItemButton"]
+    local link = shownButton(button) and merchantLink(button, i) or nil
+    paintButton(button, link)
   end
 end
 

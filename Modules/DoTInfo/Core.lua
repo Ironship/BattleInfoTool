@@ -1926,11 +1926,22 @@ function ns.dotBreakdownForUnit(unit)
     return list, total
 end
 
--- True when this unit has DoT damage on the marker. Shields ask before covering the fill.
+-- True when this unit is actually drawing a DoT fill. Shields ask before covering it.
+-- A tracked DoT with nothing left, a hidden marker, or a player/party frame is not a fill.
 function ns.HasMarker(unit)
-    if not db then return false end
+    if not db or type(unit) ~= "string" or db.showMarkers == false then return false end
+    local onPlate = unit:match("^nameplate%d+$") ~= nil
+    if unit ~= "target" and not onPlate then return false end
+    if onPlate and db.nameplateMode == "off" then return false end
+    if type(UnitIsDeadOrGhost) == "function" then
+        local ok, dead = pcall(UnitIsDeadOrGhost, unit)
+        if ok and not isSecret(dead) and dead == true then return false end
+    end
     local list = dotBreakdown(unitKey(unit))
-    return type(list) == "table" and #list > 0
+    if type(list) ~= "table" then return false end
+    local total = 0
+    for _, entry in ipairs(list) do total = total + (tonumber(entry.damage) or 0) end
+    return total > 0
 end
 ns.print = print
 ns.trace = trace

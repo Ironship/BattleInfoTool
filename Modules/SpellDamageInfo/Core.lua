@@ -1885,7 +1885,12 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
       requestUpdate()
     end
   elseif event == "PET_BAR_UPDATE" then
-    collectPetButtons()
+    -- collectPetButtons only grows. The skip has to drop a bar the event just found.
+    if db and db.skipUtilityBars ~= false then
+      dropListed(petButtons, function() return true end, petSlots)
+    elseif db then
+      collectPetButtons()
+    end
     requestUpdate()
   else
     if isReset[event] then clearCache() end

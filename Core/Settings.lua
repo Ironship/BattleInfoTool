@@ -446,7 +446,20 @@ local function buildTogether(page)
     else
       caption:SetText(table.concat(parts, " · "))
     end
-    local clash = type(plate.ClashText) == "function" and plate.ClashText() or ""
+    -- Only rows this plate is actually drawing. A switched-off module is not a clash.
+    local clashes = {}
+    local function addClash(aOn, aOff, aH, bOn, bOff, bH, text)
+      if aOn and bOn and type(plate.Clash) == "function" and plate.Clash(aOff, aH, bOff, bH) then
+        clashes[#clashes + 1] = text
+      end
+    end
+    local railH = plate.HUNTER_RAIL_HEIGHT or 16
+    local dotH = plate.DOT_ROW_HEIGHT or 14
+    local shardH = plate.SHARD_ROW_HEIGHT or 14
+    addClash(hunterOn, hunter, railH, rdOn, dotOffset, dotH, "Hunter rail overlaps combo dots.")
+    addClash(hunterOn, hunter, railH, rdOn, shardOffset, shardH, "Hunter rail overlaps shard diamonds.")
+    addClash(rdOn, dotOffset, dotH, rdOn, shardOffset, shardH, "Combo dots overlap shard diamonds.")
+    local clash = #clashes == 0 and "Nameplate lanes are clear." or table.concat(clashes, " ")
     warn:SetText(clash)
     if type(clash) == "string" and clash ~= "Nameplate lanes are clear." then
       warn:SetTextColor(1, 0.75, 0.3)

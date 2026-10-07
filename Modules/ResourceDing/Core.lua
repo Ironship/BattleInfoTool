@@ -406,15 +406,22 @@ end
 local HIGHLIGHT_SETTLED = 0.5
 
 local settleScheduled = false
+-- The saved table can exist before the module is running: Enable prepares it
+-- for the settings page, and /reload is what starts the sounds and the dots.
+local function gameplayOn()
+  return not BIT.IsRunning or BIT.IsRunning("ResourceDing")
+end
+
 local function lookAtDisplay()
   Addon.looks = (Addon.looks or 0) + 1
+  if not gameplayOn() then return end
   if Addon.db then Addon.CheckPower(false) end
   -- the display has the count plainly now: the dots show it too
   if Addon.RefreshDots then Addon.RefreshDots() end
 end
 
 local function lookAgainLater()
-  if not Addon.db then return end
+  if not Addon.db or not gameplayOn() then return end
   if settleScheduled then return end
   settleScheduled = true
   if C_Timer and C_Timer.After then

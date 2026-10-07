@@ -2459,5 +2459,86 @@ statsOff.switch.scripts.OnClick(statsOff.switch)
 check("waking StatsInfo still does not hook loot", GW.hooks["LootFrame_Update"], None)
 check("  but its settings are ready", BITW.modules["StatsInfo"].settings is not None, True)
 
+# A paged loot button's slot is not its index, and a merchant button carries its own link.
+rtU.execute("""
+LootButton1 = FakeMock("lootbtn")
+LootButton1.slot = 4
+LootButton1.shown = true
+lootSlots = {}
+function GetLootSlotLink(slot) table.insert(lootSlots, slot) return nil end
+MerchantItem1ItemButton = FakeMock("merchbtn")
+MerchantItem1ItemButton.shown = true
+MerchantItem1ItemButton.link = "item:11"
+MerchantFrame = { page = 2, selectedTab = 1 }
+""")
+GU.hooks["LootFrame_Update"]()
+check("a paged loot button asks for its slot, not its index",
+      [GU.lootSlots[i] for i in range(1, len(GU.lootSlots) + 1)], [4])
+siU.BagVerdict = rtU.eval("function(link) merchantSeen = link return nil end")
+GU.hooks["MerchantFrame_Update"]()
+check("a merchant button uses the link it is showing", GU.merchantSeen, "item:11")
+rtU.execute("""
+MerchantItem1ItemButton.link = nil
+MerchantFrame.selectedTab = 2
+function GetBuybackItemLink(i) return "buyback:" .. i end
+""")
+GU.hooks["MerchantFrame_Update"]()
+check("the buyback tab uses the buyback link", GU.merchantSeen, "buyback:1")
+pet_before = len(sdiU._petButtons)
+rtU.execute("""
+PetActionButton1 = FakeMock("petbtn")
+function PetActionButton1:GetID() return 1 end
+""")
+GU.Fire("PET_BAR_UPDATE")
+check("the pet bar stays clear while stance and pet bars are skipped", len(sdiU._petButtons), pet_before)
+
+# Enable prepares ResourceDing's settings and does not arm the ding.
+rtR, GR, BITR, _ = load(saved="BattleInfoToolDB = { modules = { ResourceDing = { enabled = false } } }")
+GR.Fire("ADDON_LOADED", "BattleInfoTool")
+GR.Fire("PLAYER_LOGIN")
+BITR.OpenSettings("ResourceDing")
+rdPage = BITR._pages["ResourceDing"]
+rdPage.switch.checked = True
+rdPage.switch.scripts.OnClick(rdPage.switch)
+rdW = BITR.modules["ResourceDing"]
+check("ticking Enable prepares the points settings", rdW.db is not None, True)
+check("  the module is still waiting for a reload", BITR.state["ResourceDing"], "off")
+probe = {"n": 0}
+real_check = rdW.CheckPower
+def _count_check(*_args):
+    probe["n"] += 1
+rdW.CheckPower = _count_check
+rdW.LookAtDisplay()
+rdW.CheckPower = real_check
+check("a combo redraw before that reload does not check the bar", probe["n"], 0)
+
+rtOn, GOn, BITOn, _ = load()
+GOn.Fire("ADDON_LOADED", "BattleInfoTool")
+GOn.Fire("PLAYER_LOGIN")
+rdOn = BITOn.modules["ResourceDing"]
+probe_on = {"n": 0}
+real_on = rdOn.CheckPower
+def _count_on(*_args):
+    probe_on["n"] += 1
+rdOn.CheckPower = _count_on
+rdOn.LookAtDisplay()
+rdOn.CheckPower = real_on
+check("a running module still checks the bar on that redraw", probe_on["n"], 1)
+
+# Together does not warn about a module that is not on the plate.
+rtT, GT, BITT, _ = load(saved="BattleInfoToolDB = { modules = { HunterRangeFinder = { enabled = false } } }")
+GT.Fire("ADDON_LOADED", "BattleInfoTool")
+GT.Fire("PLAYER_LOGIN")
+GT.SlashCmdList.BATTLEINFOTOOL("together")
+together_text = []
+for i in range(1, len(GT.AllFrames) + 1):
+    text = getattr(GT.AllFrames[i], "text", None)
+    if isinstance(text, str):
+        together_text.append(text)
+check("a switched-off hunter rail is not an overlap",
+      any("Hunter rail overlaps" in t for t in together_text), False)
+check("combo dots and shard diamonds still share their lane",
+      any("Combo dots overlap shard diamonds." in t for t in together_text), True)
+
 print("failed:", failures)
 sys.exit(1 if failures else 0)
