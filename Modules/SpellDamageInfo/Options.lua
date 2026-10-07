@@ -20,7 +20,7 @@ local ns = BIT.Module and BIT.Module("SpellDamageInfo") or BIT
 local L, Estimate = ns.L, ns.Estimate
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
-local WINDOW_WIDTH, WINDOW_HEIGHT = 660, 384
+local WINDOW_WIDTH, WINDOW_HEIGHT = 660, 460
 local HEADER_HEIGHT = 46
 local PREVIEW_WIDTH = 250
 local ROW_HEIGHT = 28
@@ -37,7 +37,7 @@ local SIZE_STEP = 5
 -- 157) and Forever's Rockbiter Weapon (554 attack power, shown as what it adds to each hit).
 local SAMPLE_POWER = { [2] = 50, [3] = 50, [4] = 50, [5] = 50, [6] = 50, [7] = 50 }
 local SAMPLE_WEAPON = { melee = 120, meleeSpeed = 2.6 }
-local PER_ROW = 3
+local PER_ROW = 4
 local SAMPLES = {
   { name = "OPT_SAMPLE_1", icon = "Interface\\Icons\\Spell_Fire_Immolation", hotkey = "1", castTime = 2,
     spellID = 25309,
@@ -53,6 +53,14 @@ local SAMPLES = {
     weapon = { kind = "ap", amount = 554 } },
   { name = "OPT_SAMPLE_6", icon = "Interface\\Icons\\Spell_Shadow_BurningSpirit", hotkey = "Mou...",
     view = { healthCost = 58, manaGain = 58 } },
+  { name = "OPT_SAMPLE_7", icon = "Interface\\Icons\\Spell_Shadow_LifeDrain", hotkey = "7",
+    view = { transfer = true, direct = { min = 55, max = 55 }, heal = { min = 55, max = 55 } } },
+  { name = "OPT_SAMPLE_8", icon = "Interface\\Icons\\Spell_Shadow_LifeDrain", hotkey = "8",
+    view = { healthCost = 58, petHeal = true } },
+  { name = "OPT_SAMPLE_9", icon = "Interface\\Icons\\INV_Misc_Food_72", hotkey = "9",
+    view = { hot = { total = 552, duration = 24 } } },
+  { name = "OPT_SAMPLE_10", icon = "Interface\\Icons\\INV_Misc_Bandage_20", hotkey = "0",
+    view = { heal = { min = 600, max = 600 } } },
 }
 
 local window
@@ -394,6 +402,13 @@ local function buildSettings(area)
     { id = "center", label = L.OPT_POS_CENTER },
     { id = "top", label = L.OPT_POS_TOP },
   }, { tooltip = L.OPT_POSITION_TIP, enabledIf = numbersShown }))
+  place("sidePosition", choice(area, "sidePosition", L.OPT_SIDE, {
+    { id = "opposite", label = L.OPT_SIDE_OPPOSITE },
+    { id = "bottom", label = L.OPT_SIDE_BOTTOM },
+    { id = "top", label = L.OPT_SIDE_TOP },
+  }, { tooltip = L.OPT_SIDE_TIP, enabledIf = numbersShown }))
+  place("skipUtilityBars", checkbox(area, "skipUtilityBars", L.OPT_SKIP_BARS,
+    { tooltip = L.OPT_SKIP_BARS_TIP, enabledIf = numbersShown }))
   y = y + 8
   -- On Retail the descriptions already hold the player's stats, so both estimates stand down.
   local notRetail = function() return not ns.IsRetail() end

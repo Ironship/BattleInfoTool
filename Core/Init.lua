@@ -99,6 +99,29 @@ function BIT.RegisterTab(name, tab)
   BIT.tabs[name] = tab
 end
 
+-- A waker fills a switched-off module's saved defaults so its settings page can be built
+-- the moment Enable is ticked. It must not register events, collect buttons, or start
+-- gameplay: that still waits for the next /reload. Opening a tab does not call it.
+BIT.wakers = {}
+BIT.woke = {}
+
+function BIT.RegisterWaker(name, fn)
+  BIT.wakers[name] = fn
+end
+
+function BIT.Wake(name)
+  if BIT.woke[name] or BIT.IsRunning(name) then return true end
+  local fn = BIT.wakers[name]
+  if type(fn) ~= "function" then return false end
+  local ok, err = pcall(fn)
+  if not ok then
+    say(name .. " settings could not be prepared: " .. tostring(err))
+    return false
+  end
+  BIT.woke[name] = true
+  return true
+end
+
 ---------------------------------------------------------------------------------------------
 -- The core's own start: the saved settings.
 ---------------------------------------------------------------------------------------------

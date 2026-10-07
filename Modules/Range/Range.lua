@@ -233,7 +233,14 @@ local function update()
   local state = M.Check()
   local want = (state == "in" and settings.showIn) or (state == "out" and settings.showOut)
   if not want then icon:Hide() return end
-  if not place(targetPlate()) then icon:Hide() return end
+  local plate = targetPlate()
+  -- The hunter rail owns this plate, so the check would sit on top of it.
+  if plate and BIT.Plate and type(BIT.Plate.HunterOwnsNameplate) == "function"
+    and BIT.Plate.HunterOwnsNameplate() then
+    icon:Hide()
+    return
+  end
+  if not place(plate) then icon:Hide() return end
   icon:SetSize(settings.size, settings.size)
   icon.texture:SetTexture(ICON[state])
   icon:Show()
@@ -349,20 +356,24 @@ end
 -- Start, and the settings tab
 ---------------------------------------------------------------------------------------------
 
-local loader = CreateFrame("Frame")
-loader:RegisterEvent("ADDON_LOADED")
-loader:SetScript("OnEvent", function(self, _, name)
-  if name ~= BIT.name then return end
-  self:UnregisterAllEvents()
-  if not BIT.ShouldRun("Range") then return end
-  -- 0.1.0 saved its default height, 2 above the bar, among the target's debuff icons: that one
-  -- moves up; a height the player chose is kept. Looked at before the defaults fill the table.
+-- Settings only: the 0.1.0 height migration and the defaults. No icon and no dimming.
+local function prepareRangeSettings()
   local saved = BIT.DB().modules.Range
   local oldDefault = type(saved) == "table" and saved.version == nil and saved.offset == 2
   settings = BIT.Settings("Range", DEFAULTS)
   if oldDefault then settings.offset = DEFAULTS.offset end
   settings.version = 2
   M.settings = settings
+end
+if BIT.RegisterWaker then BIT.RegisterWaker("Range", prepareRangeSettings) end
+
+local loader = CreateFrame("Frame")
+loader:RegisterEvent("ADDON_LOADED")
+loader:SetScript("OnEvent", function(self, _, name)
+  if name ~= BIT.name then return end
+  self:UnregisterAllEvents()
+  if not BIT.ShouldRun("Range") then return end
+  prepareRangeSettings()
   start()
   startDimming()
 end)

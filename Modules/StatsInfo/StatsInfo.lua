@@ -21,6 +21,8 @@ local DEFAULTS = {
   bagMarkers = true,   -- the small green/red arrows over the game's own bag buttons
   questMarkers = true, -- the one badge over a quest's reward buttons (an upgrade, or the coin)
   bagSpecIcons = true, -- on an up arrow, the beneficiary spec's icon (+N for the rest)
+  worldMarkers = true, -- the same arrows on loot, need/greed rolls and merchant buttons
+  detail = "compact",  -- tooltip density: "compact" (one line; Shift or "full" expands it)
 }
 
 -- Inventory slots an item of an equip location goes into. Two slots: compared with each.
@@ -1615,7 +1617,35 @@ local function statText(diff, key)
   return text
 end
 
+local function tooltipWantsFull()
+  if settings and settings.detail == "full" then return true end
+  if type(IsShiftKeyDown) == "function" and IsShiftKeyDown() then return true end
+  return false
+end
+
+-- One line: the best spec and its arrow. Worth, the spec wall and the tank block stay in the full body.
+local function tooltipLinesCompact(link, alloc)
+  local lines = alloc("lines")
+  if not (settings and settings.compare) then return lines end
+  local comps = compareBody(link, alloc) or EMPTY
+  local best
+  for _, c in ipairs(comps) do
+    local ratings = specRatingsBody(link, c.against, c.slots, c.offHand, alloc)
+    if ratings then
+      local part = bestPart(ratings)
+      if part and (not best or (part.percent or 0) > (best.percent or 0)) then best = part end
+    end
+  end
+  if best then
+    local line = alloc("line")
+    line[1], line[2], line[3], line[4] = gearLine(best), 1, 1, 1
+    lines[#lines + 1] = line
+  end
+  return lines
+end
+
 local function tooltipLinesBody(link, gameCompares, alloc)
+  if not tooltipWantsFull() then return tooltipLinesCompact(link, alloc) end
   local lines = alloc("lines")
   if not (settings and settings.compare) then return lines end
   local comps = compareBody(link, alloc) or EMPTY
@@ -1800,8 +1830,9 @@ local function hookTooltips()
     -- a tooltip rebuilt in the same frame is a new build and gets its lines again. Without
     -- GetTime or NumLines (a minimal client) nothing is skipped: the old behavior.
     local t = ask(GetTime)
+    local density = tooltipWantsFull() and "full" or "compact"
     local rec = addedTo[tooltip]
-    if type(t) == "number" and rec and rec.link == link and rec.t == t then
+    if type(t) == "number" and rec and rec.link == link and rec.t == t and rec.density == density then
       local n = ask(tooltip.NumLines, tooltip)
       if n == nil or (rec.lines and n >= rec.lines) then return end
     end
@@ -1818,7 +1849,7 @@ local function hookTooltips()
         rec = {}
         addedTo[tooltip] = rec
       end
-      rec.link, rec.t = link, t
+      rec.link, rec.t, rec.density = link, t, density
       rec.lines = ask(tooltip.NumLines, tooltip)
     end
   end
@@ -1943,6 +1974,12 @@ BIT.RegisterCommand("probe", function() M.Probe() end)
 -- Start, and the settings tab
 ---------------------------------------------------------------------------------------------
 
+local function prepareStatsSettings()
+  settings = BIT.Settings("StatsInfo", DEFAULTS)
+  M.settings = settings
+end
+if BIT.RegisterWaker then BIT.RegisterWaker("StatsInfo", prepareStatsSettings) end
+
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("ADDON_LOADED")
 loader:RegisterEvent("PLAYER_LOGIN")
@@ -1951,8 +1988,7 @@ loader:SetScript("OnEvent", function(self, event, name)
     if name ~= BIT.name then return end
     self:UnregisterEvent("ADDON_LOADED")
     if not BIT.ShouldRun("StatsInfo") then self:UnregisterAllEvents() return end
-    settings = BIT.Settings("StatsInfo", DEFAULTS)
-    M.settings = settings
+    prepareStatsSettings()
     BIT.DB().statsLearned = nil -- what 0.4.x measured in play; the game's own numbers replace it
   elseif event == "PLAYER_LOGIN" then
     self:UnregisterEvent("PLAYER_LOGIN")
@@ -2433,6 +2469,9 @@ BIT.RegisterTab("StatsInfo", {
         if updateBagIconState then updateBagIconState() end
       elseif key == "questMarkers" then
         if v then M.EnableQuestMarkers() else M.DisableQuestMarkers() end
+      elseif key == "worldMarkers" then
+        if v and M.EnableWorldMarkers then M.EnableWorldMarkers()
+        elseif M.DisableWorldMarkers then M.DisableWorldMarkers() end
       elseif key == "bagSpecIcons" then
         M.RefreshBags(true)
       end
@@ -2463,6 +2502,8 @@ BIT.RegisterTab("StatsInfo", {
     box("questMarkers", "Quest reward arrows",
       "One badge over a quest's rewards: a green up arrow on the first upgrade, or a coin on "
         .. "the choice that sells for the most when nothing is an upgrade.")
+    box("worldMarkers", "Arrows on loot, rolls and merchants",
+      "The same bag verdict on loot slots, need/greed rolls and merchant buttons.")
     updateBagIconState = function()
       local on = (settings or DEFAULTS).bagMarkers
       bagSpecIcons:SetAlpha(on and 1 or 0.35)
@@ -2474,6 +2515,8 @@ BIT.RegisterTab("StatsInfo", {
       for k, v in pairs(DEFAULTS) do settings[k] = v end
       if settings.bagMarkers then M.EnableBagMarkers() else M.DisableBagMarkers() end
       if settings.questMarkers then M.EnableQuestMarkers() else M.DisableQuestMarkers() end
+      if settings.worldMarkers ~= false and M.EnableWorldMarkers then M.EnableWorldMarkers()
+      elseif M.DisableWorldMarkers then M.DisableWorldMarkers() end
       M.RefreshBags(true)
       for _, c in ipairs(checkRows) do c:Refresh() end
       updateBagIconState()
@@ -2514,6 +2557,16 @@ BIT.RegisterTab("StatsInfo", {
       .. "off hand and ranged slot apart.", true)
     ratings:body("Not counted: what a hunter's pet gets from your stats, weapon skill, and Spirit for the "
       .. "specs the simulator does not weigh it for.", true)
+    local detailBox = UI.Check(ratings.content, "Always show the full tooltip",
+      function() return (settings or DEFAULTS).detail == "full" end,
+      function(v)
+        settings.detail = v and "full" or "compact"
+        renderPreview()
+      end,
+      "Off: one line, the best spec and its arrow. Hold Shift for the full breakdown.")
+    ratings:place(detailBox)
+    checkRows[#checkRows + 1] = detailBox
+    ratings:body("Hold Shift for the full breakdown.")
 
     -- Bag arrows: the two arrows, and when neither shows.
     local bags = addTab("Bag arrows")

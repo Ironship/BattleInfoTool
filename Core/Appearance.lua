@@ -891,34 +891,50 @@ function BIT.UI.Appearance(parent, moduleName, capabilities, refresh, legacy)
   title:SetText("Appearance")
   y = y - 30
 
+  -- Scope, raw role names and the font path live in this frame. It stays hidden
+  -- until Advanced is opened, so the first screen is the everyday controls.
+  local advanced = CreateFrame("Frame", nil, panel)
+  advanced:Hide()
+  panel.advanced = advanced
+  local ax, ay = 12, -8
+  local advancedButton
+  advancedButton = BIT.UI.Button(panel, "Advanced", 160, function()
+    panel:SetAdvanced(not panel.advancedOpen)
+  end)
+  advancedButton:SetPoint("TOPLEFT", x, y)
+  y = y - 30
+  controls.advancedButton = advancedButton
+
   local scopeButton
-  scopeButton = BIT.UI.Button(panel, "Editing: this module", 300, function()
+  scopeButton = BIT.UI.Button(advanced, "Editing: this module", 300, function()
     scopeIsGlobal = not scopeIsGlobal
     scopeButton:SetText(scopeIsGlobal and "Editing: all modules" or "Editing: this module")
-    controls.reset:SetText(scopeIsGlobal and "Reset shared appearance (all modules)"
-      or "Reset this module's appearance")
+    if controls.reset then
+      controls.reset:SetText(scopeIsGlobal and "Reset shared appearance (all modules)"
+        or "Reset this module's appearance")
+    end
     refreshPanel()
   end)
-  scopeButton:SetPoint("TOPLEFT", x, y)
-  y = y - 32
+  scopeButton:SetPoint("TOPLEFT", ax, ay)
+  ay = ay - 32
   controls.scope = scopeButton
 
-  local paletteNote = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  paletteNote:SetPoint("TOPLEFT", x, y)
+  local paletteNote = advanced:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  paletteNote:SetPoint("TOPLEFT", ax, ay)
   paletteNote:SetText("Palette (arbitrary RGB)")
-  y = y - 24
+  ay = ay - 24
 
   local showRgbFields
 
   -- Palette: a swatch per role; two columns.
   for i = 1, #roles do
     local role = roles[i]
-    local swatch = CreateFrame("Button", nil, panel)
+    local swatch = CreateFrame("Button", nil, advanced)
     swatch:SetSize(18, 18)
-    swatch:SetPoint("TOPLEFT", x, y)
+    swatch:SetPoint("TOPLEFT", ax, ay)
     swatch.tex = swatch:CreateTexture(nil, "ARTWORK")
     swatch.tex:SetAllPoints()
-    local label = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local label = advanced:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     label:SetPoint("LEFT", swatch, "RIGHT", 4, 0)
     label:SetText(role)
     local function open()
@@ -950,21 +966,21 @@ function BIT.UI.Appearance(parent, moduleName, capabilities, refresh, legacy)
     swatch:SetScript("OnClick", open)
     controls.swatches[role] = swatch
     if i % 2 == 0 then
-      y = y - 24
-      x = 12
+      ay = ay - 24
+      ax = 12
     else
-      x = 170
+      ax = 170
     end
   end
-  if #roles % 2 == 1 then y = y - 24 end
-  x = 12
+  if #roles % 2 == 1 then ay = ay - 24 end
+  ax = 12
 
   -- Validated RGB edit fields, used only when the native picker is unavailable.
   local rgbRole
-  local rgbFrame = CreateFrame("Frame", nil, panel)
+  local rgbFrame = CreateFrame("Frame", nil, advanced)
   rgbFrame:Hide()
   rgbFrame:SetSize(width - 24, 26)
-  rgbFrame:SetPoint("TOPLEFT", x, y)
+  rgbFrame:SetPoint("TOPLEFT", ax, ay)
   local rgbTitle = rgbFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   rgbTitle:SetPoint("LEFT", 0, 0)
   local rgbBoxes = {}
@@ -1001,8 +1017,27 @@ function BIT.UI.Appearance(parent, moduleName, capabilities, refresh, legacy)
     rgbBoxes.B:SetText(string.format("%d", math.floor(c[3] * 255 + 0.5)))
     rgbBoxes.A:SetText(string.format("%d", math.floor(c[4] * 255 + 0.5)))
     rgbFrame:Show()
+    if panel.layout then panel.layout() end
   end
-  y = y - 28
+  ay = ay - 36
+  if capabilities.font then
+    local fontLabel = advanced:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    fontLabel:SetPoint("TOPLEFT", ax, ay)
+    fontLabel:SetText("Font path:")
+    local fontBox = CreateFrame("EditBox", nil, advanced, "InputBoxTemplate")
+    fontBox:SetSize(math.max(80, width - 180), 20)
+    fontBox:SetFont(DEFAULTS.font, 12, "")
+    fontBox:SetTextColor(1, 1, 1, 1)
+    fontBox:SetAutoFocus(false)
+    fontBox:SetPoint("LEFT", fontLabel, "RIGHT", 6, 0)
+    fontBox:SetScript("OnEnterPressed", function()
+      local text = fontBox:GetText() or ""
+      if text ~= "" then commit("font", text) end
+    end)
+    ay = ay - 28
+    controls.fontBox = fontBox
+  end
+  advanced:SetSize(width, -ay + 8)
 
   local function slider(label, minv, maxv, step, key, fmt)
     local holder = BIT.UI.Slider(panel, label, minv, maxv, step,
@@ -1057,21 +1092,6 @@ function BIT.UI.Appearance(parent, moduleName, capabilities, refresh, legacy)
     outlineButton:SetPoint("TOPLEFT", x, y)
     y = y - 30
     controls.outline = outlineButton
-    local fontLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    fontLabel:SetPoint("TOPLEFT", x, y)
-    fontLabel:SetText("Font path:")
-    local fontBox = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
-    fontBox:SetSize(width - 180, 20)
-    fontBox:SetFont(DEFAULTS.font, 12, "")
-    fontBox:SetTextColor(1, 1, 1, 1)
-    fontBox:SetAutoFocus(false)
-    fontBox:SetPoint("LEFT", fontLabel, "RIGHT", 6, 0)
-    fontBox:SetScript("OnEnterPressed", function()
-      local text = fontBox:GetText() or ""
-      if text ~= "" then commit("font", text) end
-    end)
-    y = y - 26
-    controls.fontBox = fontBox
   end
 
   -- the opacity slider is built above only when the capability allows it
@@ -1168,6 +1188,26 @@ function BIT.UI.Appearance(parent, moduleName, capabilities, refresh, legacy)
   panel.Release = unsubscribe
 
   refreshPanel()
-  panel:SetSize(width, -y + 38)
+  -- The sample hangs below the last control; keep it inside the panel, and grow
+  -- further only while Advanced is open. onLayout lets the /bit scroll follow.
+  y = y - 96
+  local function layoutPanel()
+    advanced:ClearAllPoints()
+    advanced:SetPoint("TOPLEFT", 0, y)
+    local h = -y + 16
+    if panel.advancedOpen then h = h + advanced:GetHeight() end
+    panel:SetSize(width, h)
+    if controls.advancedButton then
+      controls.advancedButton:SetText(panel.advancedOpen and "Hide advanced" or "Advanced")
+    end
+    if type(panel.onLayout) == "function" then panel.onLayout() end
+  end
+  function panel:SetAdvanced(open)
+    self.advancedOpen = open and true or false
+    if self.advancedOpen then advanced:Show() else advanced:Hide() end
+    layoutPanel()
+  end
+  panel.layout = layoutPanel
+  layoutPanel()
   return panel
 end

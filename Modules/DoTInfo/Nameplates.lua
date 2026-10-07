@@ -120,8 +120,20 @@ local function createWidgets(plate, healthBar)
         divider:SetPoint("TOP", fillEnd, "TOPRIGHT")
         divider:SetPoint("BOTTOM", fillEnd, "BOTTOMRIGHT")
         divider:Hide()
-        w.segments[i] = { bar = bar, fillEnd = fillEnd, texture = texture, divider = divider }
+        local refresh = w.marker:CreateTexture(nil, "OVERLAY", nil, 3)
+        refresh:SetColorTexture(1, 0.82, 0.2, 1)
+        refresh:SetWidth(3)
+        refresh:SetPoint("TOP", fillEnd, "TOPRIGHT")
+        refresh:SetPoint("BOTTOM", fillEnd, "BOTTOMRIGHT")
+        refresh:Hide()
+        w.segments[i] = { bar = bar, fillEnd = fillEnd, texture = texture, divider = divider, refresh = refresh }
     end
+    w.refresh = w.marker:CreateTexture(nil, "OVERLAY", nil, 3)
+    w.refresh:SetColorTexture(1, 0.82, 0.2, 1)
+    w.refresh:SetWidth(3)
+    w.refresh:SetPoint("TOP", w.span, "TOPRIGHT")
+    w.refresh:SetPoint("BOTTOM", w.span, "BOTTOMRIGHT")
+    w.refresh:Hide()
 
     w.edges = {}
     for _, points in ipairs({ { true, "TOPLEFT", "TOPRIGHT" }, { true, "BOTTOMLEFT", "BOTTOMRIGHT" },
@@ -266,7 +278,17 @@ local function drawPlate(w, entries, total, maxHealth, health, db)
             segment.bar:SetValue(i <= count and running or total)
             segment.texture:SetShown(i <= count)
             segment.divider:SetShown(db.segmentDividers and i < count or false)
+            if segment.refresh then
+                segment.refresh:SetShown(i <= count and entry and entry.refreshDue and db.refreshCue ~= false or false)
+            end
         end
+        local anyDue = false
+        if db.refreshCue ~= false then
+            for _, entry in ipairs(entries) do
+                if entry.refreshDue then anyDue = true break end
+            end
+        end
+        if w.refresh then w.refresh:SetShown(anyDue and not perDot) end
         w.iconBar:SetMinMaxValues(0, health)
         w.iconBar:SetValue(total)
     end)

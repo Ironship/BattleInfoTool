@@ -717,6 +717,19 @@ local function createMarker(button)
   return marker
 end
 
+-- The same arrow WorldMarkers paints on loot, roll and merchant buttons. No second verdict.
+function M.PaintVerdictMarker(container, verdict)
+  if type(container) ~= "table" then return end
+  if not container.arrow then initContents(container) end
+  if not verdict or (verdict.verdict ~= "up" and verdict.verdict ~= "down") then
+    clearContents(container)
+    if type(container.Hide) == "function" then container:Hide() end
+    return
+  end
+  paintContents(container, verdict, false)
+  if type(container.Show) == "function" then container:Show() end
+end
+
 -- Pawn-style, clean-room (Pawn is CC BY-NC-ND: technique only, no code copied):
 -- an UP verdict lights the button's OWN native UpgradeIcon instead of the custom
 -- green arrow. DOWN/none/unknown always hide it (the native icon is green-only).

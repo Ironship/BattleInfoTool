@@ -1,5 +1,7 @@
 # BattleInfoTool
 
+`/bit` opens one window: short tabs (the full name is on the tooltip), a scrollbar, and the window stays where you left it. **Together** shows every enabled mark on one nameplate and warns when the hunter rail and the combo dots occupy the same lane. A module's own settings open as soon as you tick Enable; the module itself starts at the next `/reload`. Item tooltips are one line (best spec and an arrow) unless you hold Shift or turn on the full tooltip. Agony, Corruption and Shadow Word: Pain grow a gold edge in their refresh window. Spell numbers keep the second line off the first, and skip the stance bar and the pet bar. Loot, need/greed and merchant buttons use the same upgrade arrows as bags.
+
 **SpellDamageInfo**: Numbers of the damage and healing from each spell on action bar
 
 ![damage prediction](https://i.imgur.com/ySumj4S.png) ![healing prediction](https://i.imgur.com/xvGpoTg.png)

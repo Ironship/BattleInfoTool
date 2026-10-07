@@ -141,6 +141,7 @@ local function initializeDatabase()
   Addon.db.manaPercent = Addon.db.manaLevels[Addon.manaClass]
   if not Addon.SOUNDS[Addon.db.manaSound] then Addon.db.manaSound = Addon.SOUND_ORDER[1] end
 end
+if BIT.RegisterWaker then BIT.RegisterWaker("ResourceDing", initializeDatabase) end
 
 function Addon.GetResource()
   local _, class = UnitClass("player")

@@ -71,6 +71,15 @@ local IGNORED_SPELLS = {
 
 -- The name-keyed tables also answer to the German names, and on ADDON_LOADED to the names this client reports
 -- for them (Locale.lua).
+-- A gold edge on the segment when the refresh window is open. German names are listed
+-- here on purpose: the cue must not depend on alias tables being applied first.
+ns.refreshNames = {
+    ["Curse of Agony"] = true, ["Bane of Agony"] = true,
+    ["Corruption"] = true, ["Shadow Word: Pain"] = true,
+    ["Fluch der Pein"] = true, ["Omen der Pein"] = true,
+    ["Verderbnis"] = true, ["Schattenwort: Schmerz"] = true,
+}
+
 local NAME_TABLES = { KNOWN_TICK_INTERVALS, TICK_SHAPES, SCHOOL_BY_NAME, IGNORED_SPELLS }
 ns.locale.addGermanNames(NAME_TABLES)
 
@@ -113,6 +122,7 @@ local DEFAULTS = {
     scrollStripes = true,
     -- Damage text
     showLabel = false,
+    refreshCue = true, -- gold edge on Agony, Corruption and Shadow Word: Pain inside the refresh window
     labelPosition = "center",
     labelSize = 10,
     labelColor = "white",
@@ -942,6 +952,17 @@ end
 -- Remaining damage per DoT on a mob (by unitKey), oldest application first. DoTs still waiting for their first
 -- tick are left out. A DoT being cast on the mob replaces the one of the same name it would refresh.
 local function dotBreakdown(key)
+    local function refreshDueFor(name, dot)
+        if not db or db.refreshCue == false or not ns.refreshNames[name] or type(dot) ~= "table" then return false end
+        local remaining = (tonumber(dot.expiresAt) or 0) - (GetTime() or 0)
+        local duration = dot.duration
+        if type(duration) ~= "number" and type(dot.expiresAt) == "number" and type(dot.appliedAt) == "number" then
+            duration = dot.expiresAt - dot.appliedAt
+        end
+        local plate = BIT.Plate
+        if type(plate) ~= "table" or type(plate.RefreshDue) ~= "function" then return false end
+        return plate.RefreshDue(remaining, duration, dot.interval) and true or false
+    end
     local dots = key and dotsByTarget[key]
     local cast = key and castInProgress and castInProgress.key == key and castInProgress or nil
     local list = {}
@@ -949,12 +970,12 @@ local function dotBreakdown(key)
     for name, dot in pairs(dots or {}) do
         if not isWaiting(dot) and not (cast and name == cast.name) then
             table.insert(list, { name = name, school = dot.school, appliedAt = dot.appliedAt,
-                damage = remainingDamage(dot) })
+                damage = remainingDamage(dot), refreshDue = refreshDueFor(name, dot) })
         end
     end
     if cast and not isWaiting(cast.dot) then
         table.insert(list, { name = cast.name, school = cast.dot.school, appliedAt = cast.dot.appliedAt,
-            damage = remainingDamage(cast.dot), provisional = true })
+            damage = remainingDamage(cast.dot), provisional = true, refreshDue = refreshDueFor(cast.name, cast.dot) })
     end
     table.sort(list, function(a, b) return a.appliedAt < b.appliedAt end)
     return list
@@ -1158,8 +1179,24 @@ for i = 1, MAX_SEGMENTS do
     divider:SetPoint("BOTTOM", fillEnd, "BOTTOMRIGHT")
     divider:Hide()
 
-    segments[i] = { bar = bar, fillEnd = fillEnd, texture = texture, divider = divider, target = 0, shown = 0 }
+    local refresh = fillLayer:CreateTexture(nil, "OVERLAY", nil, 3)
+    refresh:SetColorTexture(1, 0.82, 0.2, 1)
+    refresh:SetWidth(3)
+    refresh:SetPoint("TOP", fillEnd, "TOPRIGHT")
+    refresh:SetPoint("BOTTOM", fillEnd, "BOTTOMRIGHT")
+    refresh:Hide()
+
+    segments[i] = { bar = bar, fillEnd = fillEnd, texture = texture, divider = divider,
+        refresh = refresh, target = 0, shown = 0 }
 end
+
+-- Single-color fill: one mark on the whole bar's leading edge when any refresh DoT is due.
+fillLayer.refreshMark = fillLayer:CreateTexture(nil, "OVERLAY", nil, 3)
+fillLayer.refreshMark:SetColorTexture(1, 0.82, 0.2, 1)
+fillLayer.refreshMark:SetWidth(3)
+fillLayer.refreshMark:SetPoint("TOP", remainingBar:GetStatusBarTexture(), "TOPRIGHT")
+fillLayer.refreshMark:SetPoint("BOTTOM", remainingBar:GetStatusBarTexture(), "BOTTOMRIGHT")
+fillLayer.refreshMark:Hide()
 
 local flashTex = fillLayer:CreateTexture(nil, "OVERLAY")
 coverSpan(flashTex)
@@ -1553,6 +1590,9 @@ local function updateSegments(entries)
         end
         segment.texture:SetShown(entry and true or false)
         segment.divider:SetShown(entry and db.segmentDividers and i < count or false)
+        if segment.refresh then
+            segment.refresh:SetShown(entry and entry.refreshDue and db.refreshCue ~= false or false)
+        end
     end
     -- More DoTs than segments: the last segment also covers the rest.
     if entries and #entries > MAX_SEGMENTS then
@@ -1690,6 +1730,7 @@ end
 
 local function hideMarkers()
     remainingBar:Hide()
+    fillLayer.refreshMark:Hide()
     markerScale = nil -- grow in again next time it appears
 end
 
@@ -1742,6 +1783,13 @@ end
 local updateErrorShown = false
 local lastTracedDamage
 local function refresh()
+    local function anyRefreshDue(entries)
+        if not entries or not db or db.refreshCue == false then return false end
+        for _, entry in ipairs(entries) do
+            if entry.refreshDue then return true end
+        end
+        return false
+    end
     local now = GetTime()
     housekeep(now)
     updateLayering(now)
@@ -1774,6 +1822,7 @@ local function refresh()
         setMarkerScale(100)
         local perDot = db.dotColors ~= "single"
         setMarkerValue(total, "preview", updateSegments(perDot and entries or nil))
+        fillLayer.refreshMark:SetShown((not perDot) and anyRefreshDue(entries))
         label:SetText(perDot and breakdownText(entries) or string.format("DoTs: %d", math.floor(total + 0.5)))
         showMarkers()
         return
@@ -1794,6 +1843,7 @@ local function refresh()
         if healthBar then
             setMarkerScale(UnitHealthMax("target"))
             setMarkerValue(damage, unitKey("target"), updateSegments(perDot and breakdown or nil))
+            fillLayer.refreshMark:SetShown((not perDot) and anyRefreshDue(breakdown))
         end
     end)
     if not ok then
@@ -1840,6 +1890,21 @@ local function applyDefaults()
     end
 end
 
+-- Saved defaults only. Enable on a switched-off module calls this so the settings page
+-- can build; events, the target attach and the options registration stay on ADDON_LOADED.
+function ns.ensureDB()
+    BattleInfoTool_DoTInfoDB = BattleInfoTool_DoTInfoDB or {}
+    db = BattleInfoTool_DoTInfoDB
+    if db.version ~= DB_VERSION then
+        db.ticks, db.intervals, db.version = nil, nil, DB_VERSION
+    end
+    db.ticks = db.ticks or {}
+    db.log = db.log or {}
+    applyDefaults()
+    ns.db = db
+end
+if BIT.RegisterWaker then BIT.RegisterWaker("DoTInfo", ns.ensureDB) end
+
 -- ns.db is set on ADDON_LOADED.
 ns.DEFAULTS = DEFAULTS
 ns.lists = {
@@ -1859,6 +1924,13 @@ function ns.dotBreakdownForUnit(unit)
     local total = 0
     for _, entry in ipairs(list) do total = total + entry.damage end
     return list, total
+end
+
+-- True when this unit has DoT damage on the marker. Shields ask before covering the fill.
+function ns.HasMarker(unit)
+    if not db then return false end
+    local list = dotBreakdown(unitKey(unit))
+    return type(list) == "table" and #list > 0
 end
 ns.print = print
 ns.trace = trace
@@ -1919,15 +1991,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
             self:SetScript("OnUpdate", nil)
             return
         end
-        BattleInfoTool_DoTInfoDB = BattleInfoTool_DoTInfoDB or {}
-        db = BattleInfoTool_DoTInfoDB
-        if db.version ~= DB_VERSION then
-            db.ticks, db.intervals, db.version = nil, nil, DB_VERSION
-        end
-        db.ticks = db.ticks or {}
-        db.log = db.log or {}
-        applyDefaults()
-        ns.db = db
+        ns.ensureDB()
         trace("===== session start =====")
         local added = ns.locale.addClientNames(NAME_TABLES, function(spellID)
             local name = C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(spellID)

@@ -18,11 +18,14 @@ local DEFAULTS = {
   reduction = true,     -- show by how much a debuff lowers the enemy's damage, in red
   size = 100,           -- button number size in percent of the default (SIZE_MIN..SIZE_MAX)
   position = "bottom",  -- where the number sits on the button: bottom, center or top
+  sidePosition = "opposite", -- second line: opposite the number, or forced bottom / top
+  skipUtilityBars = true,   -- no numbers on the stance bar or the pet bar
   interfaceLang = "auto",  -- interface language: "auto", "en", "de"
   weapon = true,        -- potential damage of weapon abilities and attack power spells, in blue
 }
 local BUTTON_MODES = { total = true, direct = true, off = true }
 local POSITIONS = { bottom = true, center = true, top = true }
+local SIDE_POSITIONS = { opposite = true, bottom = true, top = true }
 local SIZE_MIN, SIZE_MAX = 50, 200
 
 local db = {}
@@ -764,6 +767,9 @@ local function collectButtons()
   local seen = {}
   for _, b in ipairs(buttons) do seen[b] = true end
   for _, prefix in ipairs(prefixes) do
+    if prefix == "BonusActionButton" and db.skipUtilityBars ~= false then
+      -- stance / bonus bar stays free of numbers
+    else
     for i = 1, 12 do
       local b = _G[prefix .. i]
       if type(b) == "table" and not seen[b] and type(b.CreateFontString) == "function" then
@@ -771,7 +777,20 @@ local function collectButtons()
         buttons[#buttons + 1] = b
       end
     end
+    end
   end
+end
+
+local function buttonName(button)
+  if type(button) ~= "table" or type(button.GetName) ~= "function" then return nil end
+  local ok, name = pcall(button.GetName, button)
+  if ok and type(name) == "string" then return name end
+  return nil
+end
+
+local function isBonusButton(button)
+  local name = buttonName(button)
+  return type(name) == "string" and name:find("^BonusActionButton") ~= nil
 end
 
 -- The pet bar: PetActionButton1..10 on Classic Era and Forever (Forever's bar frame is
@@ -898,9 +917,27 @@ local function placeMain(fs, button, countShown)
   end
 end
 
+-- The second line's corner. "opposite" keeps today's place: top when the number is not
+-- already there. A choice that lands on the number's own end is nudged to the other end,
+-- so Drain Life, Life Tap and a reduction never share the hotkey or the item count.
+local function sideAnchor()
+  local side = db.sidePosition
+  if not SIDE_POSITIONS[side] then side = "opposite" end
+  local anchor
+  if side == "opposite" then
+    anchor = (db.position == "top") and "bottom" or "top"
+  else
+    anchor = side
+  end
+  if anchor == db.position then
+    anchor = (db.position == "top") and "bottom" or "top"
+  end
+  return anchor
+end
+
 local function placeSide(fs, button)
   fs:ClearAllPoints()
-  if db.position == "top" then
+  if sideAnchor() == "bottom" then
     fs:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
   else
     fs:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
@@ -934,6 +971,34 @@ end
 local function hide(fs)
   if fs then fs:SetText(""); fs:Hide() end
 end
+
+-- Collect grows. Turning the stance/pet skip on has to drop buttons it already took,
+-- and turning it off has to pick them up. Labels on a dropped button are hidden.
+local function dropListed(list, pred, slots)
+  local i = 1
+  while list[i] do
+    local button = list[i]
+    if pred(button) then
+      hide(labels[button])
+      hide(sideLabels[button])
+      if slots then slots[button] = nil end
+      table.remove(list, i)
+    else
+      i = i + 1
+    end
+  end
+end
+
+local function recollectButtons()
+  if db.skipUtilityBars ~= false then
+    dropListed(buttons, isBonusButton)
+    dropListed(petButtons, function() return true end, petSlots)
+  else
+    collectButtons()
+    collectPetButtons()
+  end
+end
+ns.RecollectButtons = recollectButtons
 
 local function spellOnSlot(slot)
   if isSecret(slot) or type(slot) ~= "number" or type(GetActionInfo) ~= "function" then return nil end
@@ -1059,32 +1124,26 @@ ns.ButtonText = buttonText
 
 -- Life Tap has two full labels, not a small reduction in the opposite corner. Keep both
 -- below the hotkey even at 200% size; the health cost is always above the mana gained.
-local function drawStacked(button, fs, side, mainText, mainColor, sideText, sideColor)
+local function drawStacked(button, fs, side, mainText, mainColor, sideText, sideColor, countShown)
   local h = readNumber(button, "GetHeight") or 36
   local size = math.min(fontSize(button, SIDE_SHARE), math.max(MIN_FONT, math.floor((h - 18) / 2)))
-  local mainY = 2
+  placeMain(fs, button, countShown)
+  setFont(fs, size)
+  fs:SetTextColor(mainColor[1], mainColor[2], mainColor[3])
+  fs:SetText(mainText)
+  fitWidth(fs, button)
+  fs:Show()
   if side and sideText then
-    side:ClearAllPoints()
-    side:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
-    side:SetJustifyH("LEFT")
+    placeSide(side, button)
     setFont(side, size)
     local c = sideColor or Format.WEAPON_COLOR
     side:SetTextColor(c[1], c[2], c[3])
     side:SetText(sideText)
     fitWidth(side, button)
     side:Show()
-    mainY = fontSizes[side] + 3
   else
     hide(side)
   end
-  fs:ClearAllPoints()
-  fs:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, mainY)
-  fs:SetJustifyH("LEFT")
-  setFont(fs, size)
-  fs:SetTextColor(mainColor[1], mainColor[2], mainColor[3])
-  fs:SetText(mainText)
-  fitWidth(fs, button)
-  fs:Show()
 end
 
 -- Draws the text from buttonText on a button: fs is the main FontString, side the reduction's
@@ -1096,7 +1155,7 @@ local function drawNumber(button, fs, side, mainText, mainColor, sideText, count
     return
   end
   if layout == "stacked" then
-    drawStacked(button, fs, side, mainText, mainColor, sideText, sideColor)
+    drawStacked(button, fs, side, mainText, mainColor, sideText, sideColor, countShown)
     return
   end
   placeMain(fs, button, countShown)
@@ -1560,6 +1619,8 @@ end
 local function validSetting(key, value)
   if key == "button" then return BUTTON_MODES[value] == true end
   if key == "position" then return POSITIONS[value] == true end
+  if key == "sidePosition" then return SIDE_POSITIONS[value] == true end
+  if key == "skipUtilityBars" then return type(value) == "boolean" end
   if key == "size" then return type(value) == "number" and value >= SIZE_MIN and value <= SIZE_MAX end
   if key == "estimate" or key == "tooltip" or key == "reduction" or key == "weapon" then return type(value) == "boolean" end
   if key == "interfaceLang" then return value == "auto" or value == "en" or value == "de" end
@@ -1580,6 +1641,7 @@ function ns.SetSetting(key, value)
   if not validSetting(key, value) then return false end
   if key == "size" then value = math.floor(value + 0.5) end
   db[key] = value
+  if key == "skipUtilityBars" and type(ns.RecollectButtons) == "function" then ns.RecollectButtons() end
   requestUpdate()
   return true
 end
@@ -1705,6 +1767,8 @@ local function loadSettings()
     end
   end
   if not POSITIONS[db.position] then db.position = DEFAULTS.position end
+  if not SIDE_POSITIONS[db.sidePosition] then db.sidePosition = DEFAULTS.sidePosition end
+  if type(db.skipUtilityBars) ~= "boolean" then db.skipUtilityBars = DEFAULTS.skipUtilityBars end
   if db.interfaceLang ~= "auto" and db.interfaceLang ~= "en" and db.interfaceLang ~= "de" then
     db.interfaceLang = DEFAULTS.interfaceLang
   end
@@ -1715,6 +1779,14 @@ local function loadSettings()
   elseif db.size > SIZE_MAX then
     db.size = SIZE_MAX
   end
+end
+
+if BIT.RegisterWaker then
+  BIT.RegisterWaker("SpellDamageInfo", function()
+    if type(ns.DecideLangsAtLoad) == "function" then ns.DecideLangsAtLoad() end
+    loadSettings()
+    if type(ns.InitInterfaceL) == "function" then ns.InitInterfaceL(db.interfaceLang) end
+  end)
 end
 
 ---------------------------------------------------------------------------------------------
@@ -1753,7 +1825,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     end
   elseif event == "PLAYER_LOGIN" then
     collectButtons()
-    collectPetButtons()
+    if db.skipUtilityBars == false then collectPetButtons() end
     hookTooltips()
     for _, e in ipairs(UPDATE_EVENTS) do register(e) end
     for _, e in ipairs(RESET_EVENTS) do register(e) end

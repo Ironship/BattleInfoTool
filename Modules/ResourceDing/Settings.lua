@@ -300,6 +300,8 @@ end
 -- HUD draws (Dots.lua / Shards.lua layout, sizes and clamps), over fixed data.
 ---------------------------------------------------------------------------
 
+local plateClashRow
+
 function updateLivePreview()
   local scene = previewScene
   if not scene or not Addon.db then return end
@@ -308,6 +310,9 @@ function updateLivePreview()
   local size = clampNumber(db.dotSize, 8, 24, 14)
   local dotOffset = clampNumber(db.dotOffset, -80, 30, 2)
   local shardOffset = clampNumber(db.shardOffset, -80, 30, 2)
+  if plateClashRow and plateClashRow.text and BIT.Plate and type(BIT.Plate.ClashText) == "function" then
+    plateClashRow.text:SetText(BIT.Plate.ClashText())
+  end
   local points = math.floor(tonumber(previewState.points) or MAX_POINTS)
   if points < 0 then points = 0 elseif points > MAX_POINTS then points = MAX_POINTS end
 
@@ -562,7 +567,11 @@ local function buildTabs()
   dots:slider("dotSize", "Dot / diamond size", 8, 24, 1,
     { tooltip = "How big the circles and the shard diamonds are." })
   dots:slider("dotOffset", "Dot offset (- = above)", -80, 30, 1,
-    { tooltip = "How far the dots sit from the health bar; negative puts them above it." })
+    { tooltip = "How far the dots sit from the health bar. The same seat as the hunter rail: top of the row, -offset under the bar." })
+  plateClashRow = dots:note("Nameplate lanes")
+  if plateClashRow and plateClashRow.text and BIT.Plate and type(BIT.Plate.ClashText) == "function" then
+    plateClashRow.text:SetText(BIT.Plate.ClashText())
+  end
   dots:gap()
 
   local shards = addTab("Shards")

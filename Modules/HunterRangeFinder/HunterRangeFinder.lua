@@ -942,6 +942,27 @@ local function clamp(value, default, lo, hi)
     return math.max(lo, math.min(hi, value))
 end
 
+local function prepareHunterSettings()
+  local rawMods = type(BattleInfoToolDB) == "table" and BattleInfoToolDB.modules
+  local rawHunter = type(rawMods) == "table" and rawMods["HunterRangeFinder"]
+  local hadOldOffset = type(rawHunter) == "table" and type(rawHunter.plateOffset) == "number"
+    and rawHunter.plateScheme ~= 2
+  settings = BIT.Settings("HunterRangeFinder", DEFAULTS)
+  M.settings = settings
+  if hadOldOffset then settings.plateOffset = -(tonumber(settings.plateOffset) or 0) end
+  settings.plateScheme = 2
+  settings.plateOffset = finiteNum(tonumber(settings.plateOffset), DEFAULTS.plateOffset)
+  if settings.plateOffset < -80 then settings.plateOffset = -80
+  elseif settings.plateOffset > 30 then settings.plateOffset = 30 end
+  settings.scale = clamp(settings.scale, DEFAULTS.scale, 0.5, 3)
+  settings.opacity = clamp(settings.opacity, DEFAULTS.opacity, 0.1, 1)
+  settings.chevronHeight = clamp(settings.chevronHeight, DEFAULTS.chevronHeight, 0.5, 1.5)
+  settings.chevronWidth = clamp(settings.chevronWidth, DEFAULTS.chevronWidth, 0.5, 1.5)
+  settings.x = finiteNum(settings.x, DEFAULTS.x)
+  settings.y = finiteNum(settings.y, DEFAULTS.y)
+end
+if BIT.RegisterWaker then BIT.RegisterWaker("HunterRangeFinder", prepareHunterSettings) end
+
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("ADDON_LOADED")
 loader:RegisterEvent("SPELLS_CHANGED")
@@ -962,28 +983,8 @@ loader:SetScript("OnEvent", function(self, event, name)
         self:UnregisterEvent("SPELLS_CHANGED")
         return
     end
-    -- 0.9.15 scheme migration (once): the 0.9.14 gap meant 0..40 above the bar,
-    -- the rogue scheme means -80..30 with negative above. Negate once, but only a
-    -- value that was actually saved under the old scheme (fresh stores keep -8).
-    local rawMods = type(BattleInfoToolDB) == "table" and BattleInfoToolDB.modules
-    local rawHunter = type(rawMods) == "table" and rawMods["HunterRangeFinder"]
-    local hadOldOffset = type(rawHunter) == "table" and type(rawHunter.plateOffset) == "number"
-        and rawHunter.plateScheme ~= 2
-    settings = BIT.Settings("HunterRangeFinder", DEFAULTS)
-    M.settings = settings
-    if hadOldOffset then settings.plateOffset = -(tonumber(settings.plateOffset) or 0) end
-    settings.plateScheme = 2
-    settings.plateOffset = finiteNum(tonumber(settings.plateOffset), DEFAULTS.plateOffset)
-    if settings.plateOffset < -80 then settings.plateOffset = -80
-    elseif settings.plateOffset > 30 then settings.plateOffset = 30 end
+    prepareHunterSettings()
     detectLongRange()
-    -- Values out of the sliders' bounds (or of the wrong type) fall back to the defaults.
-    settings.scale = clamp(settings.scale, DEFAULTS.scale, 0.5, 3)
-    settings.opacity = clamp(settings.opacity, DEFAULTS.opacity, 0.1, 1)
-    settings.chevronHeight = clamp(settings.chevronHeight, DEFAULTS.chevronHeight, 0.5, 1.5)
-    settings.chevronWidth = clamp(settings.chevronWidth, DEFAULTS.chevronWidth, 0.5, 1.5)
-    settings.x = finiteNum(settings.x, DEFAULTS.x)
-    settings.y = finiteNum(settings.y, DEFAULTS.y)
     local _, class = UnitClass("player")
     if class == "HUNTER" then
         start()
@@ -1076,9 +1077,18 @@ local function refreshAll()
     refreshControls()
 end
 
+local plateClashLine
+
+local function refreshPlateClash()
+    if plateClashLine and BIT.Plate and type(BIT.Plate.ClashText) == "function" then
+        plateClashLine:SetText(BIT.Plate.ClashText())
+    end
+end
+
 local function changed()
     if hud then reanchorHunterHud() end
     refreshAll()
+    refreshPlateClash()
 end
 
 local function bandIndex(name)
@@ -1371,7 +1381,9 @@ local function buildTabs(parent, isHunter)
                 .. "Unchecked keeps the draggable screen position." })
     parent.plateOffset = display:slider("plateOffset", "Offset from the health bar (- = above)", -80, 30, 1,
         { enabledIf = function(s) return isHunter and s.attachToPlate ~= false end,
-            tooltip = "How far the rail sits from the plate's health bar. Moves the mock rail in the preview." })
+            tooltip = "How far the rail sits from the plate's health bar. The same seat as the combo dots: top of the row, -offset under the bar." })
+    plateClashLine = display:note("Nameplate lanes")
+    refreshPlateClash()
     display:gap()
     parent.deadIcon = display:checkbox("showDeadzoneIcon", "Show Dead Zone skull (native)",
         { tooltip = "Native Blizzard raid skull for the 5-8 yd dead zone. Unchecked hides it." })

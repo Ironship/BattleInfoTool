@@ -264,9 +264,28 @@ local function overlayFor(healthBar)
     return b
   end)
   if not ok or type(bar) ~= "table" then return nil end
-  o = { bar = bar, unit = nil, plate = false, party = false, current = false }
+  o = { bar = bar, unit = nil, plate = false, party = false, current = false, edge = false }
   overlays[healthBar] = o
   return o
+end
+
+-- A DoT marker already paints the fill. The shield then keeps a thin edge along the top
+-- so both stay readable. With no DoT marker the overlay covers the bar, as before.
+local function applyOverlayMode(o, edge)
+  edge = edge and true or false
+  if o.edge == edge then return end
+  local bar = o.bar
+  local healthBar = type(bar.GetParent) == "function" and bar:GetParent() or nil
+  if type(healthBar) ~= "table" then return end
+  bar:ClearAllPoints()
+  if edge then
+    bar:SetPoint("TOPLEFT", healthBar, "TOPLEFT", 0, 0)
+    bar:SetPoint("TOPRIGHT", healthBar, "TOPRIGHT", 0, 0)
+    bar:SetHeight(BIT.Plate and BIT.Plate.SHIELD_EDGE or 4)
+  else
+    bar:SetAllPoints(healthBar)
+  end
+  o.edge = edge
 end
 
 -- One unit's remaining absorb on one health bar. Raw values go to the native setters only;
@@ -293,6 +312,8 @@ local function updateBar(unit, healthBar, enabled)
     if not o then return end
   end
   local ok = pcall(function()
+    local dotOn = BIT.Plate and type(BIT.Plate.DotOnUnit) == "function" and BIT.Plate.DotOnUnit(unit)
+    applyOverlayMode(o, dotOn == true)
     o.bar:SetMinMaxValues(0, maxHealth)
     o.bar:SetValue(absorb)
     o.bar:Show()
@@ -628,14 +649,19 @@ local function start()
   driver:Show()
 end
 
+local function prepareShieldSettings()
+  settings = BIT.Settings("ShieldsInfo", DEFAULTS)
+  M.settings = settings
+end
+if BIT.RegisterWaker then BIT.RegisterWaker("ShieldsInfo", prepareShieldSettings) end
+
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("ADDON_LOADED")
 loader:SetScript("OnEvent", function(self, _, name)
   if name ~= BIT.name then return end
   self:UnregisterAllEvents()
   if not BIT.ShouldRun("ShieldsInfo") then return end
-  settings = BIT.Settings("ShieldsInfo", DEFAULTS)
-  M.settings = settings
+  prepareShieldSettings()
   start()
 end)
 

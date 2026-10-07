@@ -67,7 +67,7 @@ local simulation
 local preview = {
     health = 60,
     dots = {
-        { name = "Corruption", school = 32, damage = 27, tick = 4 },
+        { name = "Corruption", school = 32, damage = 27, tick = 4, refreshDue = true },
         { name = "Immolate", school = 4, damage = 18, tick = 5 },
     },
 }
@@ -632,6 +632,10 @@ local function buildTabs()
     behavior:choice("waitFirstTick", "Wait for first tick", lists.waitModes, { tooltip = "Whether a new DoT "
         .. "counts before its first tick lands. \"When unsure\" waits for finishers with unknown combo points "
         .. "and spells the addon hasn't seen tick yet." })
+    behavior:checkbox("refreshCue", "Refresh mark on Agony, Corruption and Shadow Word: Pain",
+        { tooltip = "A gold edge on that DoT's segment while the time left is inside the refresh window: "
+            .. "one tick, three seconds, or a quarter of the duration, whichever is longer. "
+            .. "The damage number stays off unless you turn it on." })
     behavior:checkbox("estimateDuringCast", "Estimate during casting", { tooltip = "Shows a DoT with a cast time "
         .. "while you're still casting it. Once the cast lands the normal estimate takes over; an interrupted or "
         .. "failed cast removes it." })
