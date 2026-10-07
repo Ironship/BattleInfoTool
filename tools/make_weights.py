@@ -92,7 +92,7 @@ HEALER_DATA = os.path.join(ROOT, "tools", "data", "healer_weights.json")
 # class -> specs: (run, name shown, icon, role, reference stat of each measure). The icons are the game's
 # own, from Forever 1.60.1.70009's tables: a talent tree's icon (TalentTab), or for a build named after a
 # spell, that spell's (SpellMisc): Mortal Strike for Arms, Smite, Sinister Strike, Backstab and Demonic
-# Sacrifice. Tanks are weighed by survival (in Armor) and by threat.
+# Sacrifice. Shown names are the specs those builds belong to. Tanks are weighed by survival (in Armor) and by threat.
 DAMAGE = "damage"
 SPECS = {
     "DRUID": [("druid_bear", "Bear", "Ability_Racial_BearForm", "tank", {"survival": "Armor", "threat": "Agility"}),
@@ -113,17 +113,17 @@ SPECS = {
                  {"survival": "Armor", "threat": "Strength"}),
                 ("paladin_retribution", "Retribution", "Spell_Holy_AuraOfLight", DAMAGE, {"damage": "Strength"})],
     "PRIEST": [("priest_shadow", "Shadow", "Spell_Shadow_ShadowWordPain", DAMAGE, {"damage": "Spell Damage"}),
-               ("priest_smite", "Smite", "Spell_Holy_HolySmite", DAMAGE, {"damage": "Spell Damage"})],
-    "ROGUE": [("rogue_ss", "Sinister Strike", "Spell_Shadow_RitualOfSacrifice", DAMAGE, {"damage": "Attack Power"}),
-              ("rogue_backstab", "Backstab", "Ability_BackStab", DAMAGE, {"damage": "Attack Power"}),
-              ("rogue_mutilate", "Mutilate", "Ability_Rogue_Eviscerate", DAMAGE, {"damage": "Attack Power"})],
+               ("priest_smite", "Discipline", "Spell_Holy_HolySmite", DAMAGE, {"damage": "Spell Damage"})],
+    "ROGUE": [("rogue_ss", "Combat", "Spell_Shadow_RitualOfSacrifice", DAMAGE, {"damage": "Attack Power"}),
+              ("rogue_backstab", "Subtlety", "Ability_BackStab", DAMAGE, {"damage": "Attack Power"}),
+              ("rogue_mutilate", "Assassination", "Ability_Rogue_Eviscerate", DAMAGE, {"damage": "Attack Power"})],
     "SHAMAN": [("shaman_elemental", "Elemental", "Spell_Nature_Lightning", DAMAGE, {"damage": "Spell Damage"}),
                ("shaman_enhancement", "Enhancement", "Spell_Nature_LightningShield", DAMAGE,
                 {"damage": "Attack Power"})],
     "WARLOCK": [("warlock_affliction", "Affliction", "Spell_Shadow_DeathCoil", DAMAGE, {"damage": "Spell Damage"}),
                 ("warlock_demonology", "Demonology", "Spell_Shadow_Metamorphosis", DAMAGE, {"damage": "Spell Damage"}),
                 ("warlock_destruction", "Destruction", "Spell_Shadow_RainOfFire", DAMAGE, {"damage": "Spell Damage"}),
-                ("warlock_dsruin", "DS/Ruin", "Spell_Shadow_PsychicScream", DAMAGE, {"damage": "Spell Damage"})],
+                ("warlock_dsruin", "Destruction (DS/Ruin)", "Spell_Shadow_PsychicScream", DAMAGE, {"damage": "Spell Damage"})],
     "WARRIOR": [("warrior_protection", "Protection", "Ability_Warrior_DefensiveStance", "tank",
                  {"survival": "Armor", "threat": "Strength"}),
                 ("warrior_arms", "Arms", "Ability_Warrior_SavageBlow", DAMAGE, {"damage": "Strength"}),

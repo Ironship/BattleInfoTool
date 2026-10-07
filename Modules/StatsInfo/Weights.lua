@@ -303,7 +303,7 @@ M.SPECS = {
       } },
     },
     -- priest/smite: Smite (talents); talents 515330031305001001-30505113002
-    { name = "Smite", icon = "Interface\\Icons\\Spell_Holy_HolySmite", role = "damage",
+    { name = "Discipline", icon = "Interface\\Icons\\Spell_Holy_HolySmite", role = "damage",
       damage = { reference = "Spell Damage", mainHand = 0, offHand = 0, ranged = 0, weights = {
         ITEM_MOD_CRIT_MELEE_RATING_SHORT = 0.3355,
         ITEM_MOD_CRIT_RANGED_RATING_SHORT = 0.3355,
@@ -326,7 +326,7 @@ M.SPECS = {
   },
   ROGUE = {
     -- rogue/dps: gear Sinister Strike Pre-BiS, talents Sinister Strike, rotation Auto; talents 00530310501-32003311201515231
-    { name = "Sinister Strike", icon = "Interface\\Icons\\Spell_Shadow_RitualOfSacrifice", role = "damage",
+    { name = "Combat", icon = "Interface\\Icons\\Spell_Shadow_RitualOfSacrifice", role = "damage",
       damage = { reference = "Attack Power", mainHand = 11.021, offHand = 3.188, ranged = 0, weights = {
         ITEM_MOD_AGILITY_SHORT = 1.9393,
         ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT = 0.3771,
@@ -346,7 +346,7 @@ M.SPECS = {
       } },
     },
     -- rogue/dps: gear Backstab Pre-BiS, talents Backstab, rotation Auto; talents 005302005-30230320201515231-102
-    { name = "Backstab", icon = "Interface\\Icons\\Ability_BackStab", role = "damage",
+    { name = "Subtlety", icon = "Interface\\Icons\\Ability_BackStab", role = "damage",
       damage = { reference = "Attack Power", mainHand = 10.034, offHand = 3.581, ranged = 0, weights = {
         ITEM_MOD_AGILITY_SHORT = 1.9252,
         ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT = 0.4003,
@@ -366,7 +366,7 @@ M.SPECS = {
       } },
     },
     -- rogue/dps: gear Backstab Pre-BiS, talents Mutilate, rotation Auto; talents 00530310551021051-302303202004
-    { name = "Mutilate", icon = "Interface\\Icons\\Ability_Rogue_Eviscerate", role = "damage",
+    { name = "Assassination", icon = "Interface\\Icons\\Ability_Rogue_Eviscerate", role = "damage",
       damage = { reference = "Attack Power", mainHand = 8.047, offHand = 4.488, ranged = 0, weights = {
         ITEM_MOD_AGILITY_SHORT = 2.0947,
         ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT = 0.4207,
@@ -492,7 +492,7 @@ M.SPECS = {
       } },
     },
     -- warlock/dps: default: talents DS/Ruin 24/11/16, rotation Auto, default gear; talents 233500201332-0340003001-0550105
-    { name = "DS/Ruin", icon = "Interface\\Icons\\Spell_Shadow_PsychicScream", role = "damage",
+    { name = "Destruction (DS/Ruin)", icon = "Interface\\Icons\\Spell_Shadow_PsychicScream", role = "damage",
       damage = { reference = "Spell Damage", mainHand = 0, offHand = 0, ranged = 0, weights = {
         ITEM_MOD_CRIT_MELEE_RATING_SHORT = 0.7564,
         ITEM_MOD_CRIT_RANGED_RATING_SHORT = 0.7564,

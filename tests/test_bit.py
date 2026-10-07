@@ -593,13 +593,13 @@ check("every class has its specs, the druid four (Restoration the healer)", (len
       (4, ["Bear", "Cat", "Balance", "Restoration"]))
 check("  no healer anywhere but the druid's: no healer in the specs of the others, and no table of them", (si.UNRATED_SPECS,
       [x.name for c in ("PRIEST", "SHAMAN", "PALADIN") for x in W[c].values()]),
-      (None, ["Shadow", "Smite", "Elemental", "Enhancement", "Protection", "Retribution"]))
+      (None, ["Shadow", "Discipline", "Elemental", "Enhancement", "Protection", "Retribution"]))
 check("  a tank has survival and threat, a damage spec damage",
       (W.DRUID[1].survival is not None, W.DRUID[1].threat is not None, W.DRUID[2].damage is not None), (True, True, True))
 check("  a spec per talent tree or build: warrior, mage, hunter, rogue, warlock",
       [[x.name for x in W[c].values()] for c in ("WARRIOR", "MAGE", "HUNTER", "ROGUE", "WARLOCK")],
       [["Protection", "Arms", "Fury"], ["Arcane", "Fire", "Frost"], ["Beast Mastery", "Marksmanship", "Survival"],
-       ["Sinister Strike", "Backstab", "Mutilate"], ["Affliction", "Demonology", "Destruction", "DS/Ruin"]])
+       ["Combat", "Subtlety", "Assassination"], ["Affliction", "Demonology", "Destruction", "Destruction (DS/Ruin)"]])
 check("  Forever's hit counts in both pools: an enhancement shaman's melee and spell hit together",
       W.SHAMAN[2].damage.weights.ITEM_MOD_HIT_RATING_SHORT, 2.8435)
 G.playerClass = "DRUID"
@@ -668,7 +668,7 @@ G.playerClass = "ROGUE"
 G.itemStats["gun"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 20 }')
 G.itemLoc["gun"] = "INVTYPE_RANGEDRIGHT"
 check("a rogue's gun: its damage per second is worth nothing (the sim gives a rogue no ranged weapon weight)",
-      pts(si.SpecRatings("gun", rt.table_from([])), "Sinister Strike"), 0)
+      pts(si.SpecRatings("gun", rt.table_from([])), "Combat"), 0)
 G.playerClass = "HUNTER"
 G.itemStats["cloak-ap"] = rt.eval('{ ITEM_MOD_ATTACK_POWER_SHORT = 20 }')
 G.itemStats["cloak-agi"] = rt.eval('{ ITEM_MOD_AGILITY_SHORT = 5 }')
@@ -712,7 +712,7 @@ G.playerClass = "ROGUE"
 G.itemStats["weapon-dmg"] = rt.eval('{ ITEM_MOD_PHYSICAL_DAMAGE_DONE_SHORT = 2 }')
 G.itemLoc["weapon-dmg"] = "INVTYPE_HAND"
 check("  and '+N Weapon Damage': empty slot caps",
-      pts(si.SpecRatings("weapon-dmg", rt.table_from([])), "Sinister Strike"), 300)
+      pts(si.SpecRatings("weapon-dmg", rt.table_from([])), "Combat"), 300)
 for slot, link in saved_worn.items():
     G.worn[slot] = link
 
@@ -768,7 +768,7 @@ check("  and no class without a healer spec shows one, nor druid's Restoration f
 G.playerClass = "PRIEST"
 pr = [l[1] for l in si.TooltipLines("shadow-ring-2").values()]
 pr = pr[:pr.index("Against an empty slot")]
-check("  a priest's shadow damage: Shadow and Smite on one line",
+check("  a priest's shadow damage: Shadow and Discipline on one line",
       [l.count("|TInterface\\Icons\\") for l in pr if ": " in l], [2])
 G.worn[11], G.worn[12] = saved_rings
 G.playerClass = "DRUID"
@@ -935,7 +935,7 @@ G.itemStats["oh-dagger"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 20 }')
 G.itemLoc["oh-dagger"] = "INVTYPE_WEAPONOFFHAND"
 c = si.Compare("oh-dagger")
 check("an off-hand weapon: empty slot caps (Sinister Strike off-hand)",
-      pts(si.SpecRatings("oh-dagger", c[1].against, c[1].slots, c[1].offHand), "Sinister Strike"), 300)
+      pts(si.SpecRatings("oh-dagger", c[1].against, c[1].slots, c[1].offHand), "Combat"), 300)
 G.itemStats["dag40-a"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 40 }')
 G.itemStats["dag40-b"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 40 }')
 G.itemLoc["dag40-a"], G.itemLoc["dag40-b"] = "INVTYPE_WEAPON", "INVTYPE_WEAPON"
@@ -944,7 +944,7 @@ c = si.Compare("dag40-b")
 check("a one-hand weapon with the main hand empty and a dagger in the off hand: against the empty main hand",
       (len(c), len(c[1].against), c[1].offHand), (1, 0, False))
 check("  so an identical dagger caps against the empty main hand",
-      pts(si.SpecRatings("dag40-b", c[1].against, c[1].slots, c[1].offHand), "Sinister Strike"), 300)
+      pts(si.SpecRatings("dag40-b", c[1].against, c[1].slots, c[1].offHand), "Combat"), 300)
 G.worn[17] = None
 
 # no healer line in any class, on an item each class's specs rate
