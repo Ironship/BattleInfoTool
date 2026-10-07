@@ -1272,7 +1272,7 @@ local function clear(t)
 end
 
 -- The divider and the specs' ratings, if any of them changes. A spec that changes nothing has no line,
--- and a healer is among the specs since druid Restoration was rated (its line is marked "(approx.)").
+-- and the healers are among the specs (each healer spec is rated, its line marked "(approx.)").
 -- The working buffers are hoisted out of the per-spec loops and cleared, not rebuilt (one
 -- measures/words/row array per call instead of one per spec per hover).
 local function specLines(lines, ratings, alloc)
@@ -2502,8 +2502,9 @@ BIT.RegisterTab("StatsInfo", {
       .. "means its stats are worth a quarter more to that spec.")
     ratings:body("A tank has two numbers: for survival (less damage taken) and for threat gen. (holding aggro).")
     ratings:body("With nothing worth comparing, or a change past the cap: \">300% ...\", at most triple.")
-    ratings:body("A healer spec (druid Restoration) is rated by this addon's own starter heuristic, and its "
-      .. "line is marked \"(approx.)\": an approximate item score, not a measured healing gain.")
+    ratings:body("Each healer spec (druid Restoration, priest Holy, paladin Holy, shaman Restoration) is "
+      .. "rated by this addon's own starter heuristic, and its line is marked \"(approx.)\": "
+      .. "an approximate item score, not a measured healing gain.")
     ratings:body("Its weights are design choices of this addon (tools/data/healer_weights.json): "
       .. "1 x +Healing, 1 x Spell Power, 0.5 x Intellect, 0.5 x Spirit and 2 x MP5. "
       .. "Every other stat counts for nothing to it.")

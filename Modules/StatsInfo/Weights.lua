@@ -12,19 +12,20 @@
 -- the spec does not fight with it: a caster's weapon, an Arms warrior's off hand). Cat and Bear Form
 -- fight with the weapon's DPS (FERAL_RUNS below): their mainHand is game-measured, not simulated.
 --
--- Druid Restoration is rated by BattleInfoTool's own starter heuristic (an approximation, marked
--- '(approx.)' in the tooltip; weighted score = 1 * +Healing + 1 * Spell Power + 0.5 * Intellect + 0.5 * Spirit + 2 * MP5), NOT a simulation: ForeverSim does not simulate
--- healing, so no measured healer weights exist. The other healers are not here.
+-- The healers (druid Restoration, priest Holy, paladin Holy, shaman Restoration) are rated by
+-- BattleInfoTool's own starter heuristic (an approximation, marked '(approx.)' in the tooltip;
+-- weighted score = 1 * +Healing + 1 * Spell Power + 0.5 * Intellect + 0.5 * Spirit + 2 * MP5), NOT a simulation: ForeverSim does not simulate healing, so no measured
+-- healer weights exist.
 
 local _, BIT = ...
 local M = BIT.Module("StatsInfo")
 
-M.WEIGHTS_SOURCE = "ForeverSim stat weights, 2026-09-27, level 60 builds of each spec; druid Restoration: BattleInfoTool starter heuristic, not simulated"
+M.WEIGHTS_SOURCE = "ForeverSim stat weights, 2026-09-27, level 60 builds of each spec; the healers (druid Restoration, priest Holy, paladin Holy, shaman Restoration): BattleInfoTool starter heuristic, not simulated"
 
 M.SPECS = {
   DRUID = {
     -- druid/feralbear: Launch, Bear Tank 0/31/20; talents -5003232120132010501-0550325
-    { name = "Bear", icon = "Interface\\Icons\\Ability_Racial_BearForm", role = "tank",
+    { name = "Feral (Bear)", icon = "Interface\\Icons\\Ability_Racial_BearForm", role = "tank",
       survival = { reference = "Armor", mainHand = 0, offHand = 0, ranged = 0, weights = {
         ITEM_MOD_AGILITY_SHORT = 0.7397,
         ITEM_MOD_CRIT_MELEE_RATING_SHORT = 0.182,
@@ -56,7 +57,7 @@ M.SPECS = {
       } },
     },
     -- druid/feralcat: Feral; talents -5521002023132213051-05503
-    { name = "Cat", icon = "Interface\\Icons\\Ability_Druid_CatForm", role = "damage",
+    { name = "Feral (Cat)", icon = "Interface\\Icons\\Ability_Druid_CatForm", role = "damage",
       damage = { reference = "Agility", mainHand = 6.033, offHand = 0, ranged = 0, weights = {
         ITEM_MOD_AGILITY_SHORT = 1,
         ITEM_MOD_ARMOR_PENETRATION_RATING_SHORT = 0.1394,
@@ -282,6 +283,16 @@ M.SPECS = {
         ITEM_MOD_STRENGTH_SHORT = 1,
       } },
     },
+    -- paladin/holy: weighted score = 1 * +Healing + 1 * Spell Power + 0.5 * Intellect + 0.5 * Spirit + 2 * MP5; BattleInfoTool starter heuristic, not simulated
+    { name = "Holy", icon = "Interface\\Icons\\Spell_Holy_HolyBolt", role = "healing",
+      healing = { reference = "Healing", approximate = true, mainHand = 0, offHand = 0, ranged = 0, weights = {
+        ITEM_MOD_INTELLECT_SHORT = 0.5,
+        ITEM_MOD_MANA_REGENERATION_SHORT = 2,
+        ITEM_MOD_SPELL_HEALING_DONE_SHORT = 1,
+        ITEM_MOD_SPELL_POWER_SHORT = 1,
+        ITEM_MOD_SPIRIT_SHORT = 0.5,
+      } },
+    },
   },
   PRIEST = {
     -- priest/dps: Shadow (talents); talents 005300231303--505120501201300051
@@ -321,6 +332,16 @@ M.SPECS = {
         ITEM_MOD_SPELL_DAMAGE_DONE_SHORT = 1,
         ITEM_MOD_SPELL_POWER_SHORT = 1,
         ITEM_MOD_SPIRIT_SHORT = 0.7127,
+      } },
+    },
+    -- priest/holy: weighted score = 1 * +Healing + 1 * Spell Power + 0.5 * Intellect + 0.5 * Spirit + 2 * MP5; BattleInfoTool starter heuristic, not simulated
+    { name = "Holy", icon = "Interface\\Icons\\Spell_Holy_HolyNova", role = "healing",
+      healing = { reference = "Healing", approximate = true, mainHand = 0, offHand = 0, ranged = 0, weights = {
+        ITEM_MOD_INTELLECT_SHORT = 0.5,
+        ITEM_MOD_MANA_REGENERATION_SHORT = 2,
+        ITEM_MOD_SPELL_HEALING_DONE_SHORT = 1,
+        ITEM_MOD_SPELL_POWER_SHORT = 1,
+        ITEM_MOD_SPIRIT_SHORT = 0.5,
       } },
     },
   },
@@ -427,6 +448,16 @@ M.SPECS = {
         ITEM_MOD_SPELL_DAMAGE_DONE_SHORT = 0.9401,
         ITEM_MOD_SPELL_POWER_SHORT = 0.9401,
         ITEM_MOD_STRENGTH_SHORT = 2,
+      } },
+    },
+    -- shaman/restoration: weighted score = 1 * +Healing + 1 * Spell Power + 0.5 * Intellect + 0.5 * Spirit + 2 * MP5; BattleInfoTool starter heuristic, not simulated
+    { name = "Restoration", icon = "Interface\\Icons\\Spell_Nature_HealingWaveGreater", role = "healing",
+      healing = { reference = "Healing", approximate = true, mainHand = 0, offHand = 0, ranged = 0, weights = {
+        ITEM_MOD_INTELLECT_SHORT = 0.5,
+        ITEM_MOD_MANA_REGENERATION_SHORT = 2,
+        ITEM_MOD_SPELL_HEALING_DONE_SHORT = 1,
+        ITEM_MOD_SPELL_POWER_SHORT = 1,
+        ITEM_MOD_SPIRIT_SHORT = 0.5,
       } },
     },
   },

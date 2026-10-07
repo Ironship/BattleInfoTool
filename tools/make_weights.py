@@ -8,9 +8,10 @@ becomes a weight per point of the item's stat, in points of the spec's reference
 Spell Damage for a mage, Armor for a tank's survival). Forever pays an item's hit and crit into both
 the melee and the spell pool, so an item's hit is worth the melee and the spell weight together, and so is
 its crit (and its haste, which items give as one rating). A weapon's damage per second has the sim's own
-weight, main hand, off hand and ranged apart. Druid Restoration has no sim weights: ForeverSim does not
-simulate healing, so that one spec is rated by BattleInfoTool's own starter heuristic from
-tools/data/healer_weights.json (an approximation, not a measured result).
+weight, main hand, off hand and ranged apart. The healers (druid Restoration, priest Holy, paladin
+Holy, shaman Restoration) have no sim weights: ForeverSim does not simulate healing, so those specs
+are rated by BattleInfoTool's own starter heuristic from tools/data/healer_weights.json (an
+approximation, not a measured result).
 """
 import json
 import os
@@ -73,11 +74,12 @@ SKIPPED = {"Mana", "Bonus Armor", "Spell Piercing"}
 # sim/core/rage.go, so more health is less threat).
 METRICS = {"damage": "DPS", "threat": "TPS", "survival": "TMI"}
 
-# The druid's healer measure is NOT a ForeverSim run: ForeverSim does not simulate healing, so its weights
+# A healer's measure is NOT a ForeverSim run: ForeverSim does not simulate healing, so its weights
 # cannot be measured. It is BattleInfoTool's own starter heuristic, kept in tools/data/healer_weights.json
 # (its coefficients are DESIGN CHOICES, provenance and assumptions documented there), born the same way
-# into Weights.lua with approximate = true so the tooltip marks it "(approx.)". HEALER_RUNS keeps the two
-# sources apart: a spec named here is taken from the healer file, never from a sim run.
+# into Weights.lua with approximate = true so the tooltip marks it "(approx.)". The same model rates
+# every healer spec (one file, several entries in SPECS below). HEALER_RUNS keeps the two sources
+# apart: a spec named here is taken from the healer file, never from a sim run.
 # Feral forms fight with the weapon's DPS (the sim never measures it: its shapeshifted
 # runs carry no "Main Hand DPS" row). Game-measured on Forever: a 16.0 DPS weapon adds
 # ~15.6 melee DPS in Bear Form, i.e. 1 weapon DPS ~= 1 feral DPS ~= 14 Feral Attack Power
@@ -86,7 +88,7 @@ METRICS = {"damage": "DPS", "threat": "TPS", "survival": "TMI"}
 # of the measure's reference stat. Survival keeps mainHand 0 (DPS does not mitigate).
 FERAL_RUNS = {"druid_bear", "druid_cat"}
 FERAL_AP_PER_DPS = 14
-HEALER_RUNS = {"druid_restoration"}
+HEALER_RUNS = {"druid_restoration", "priest_holy", "paladin_holy", "shaman_restoration"}
 HEALER_DATA = os.path.join(ROOT, "tools", "data", "healer_weights.json")
 
 # class -> specs: (run, name shown, icon, role, reference stat of each measure). The icons are the game's
@@ -95,8 +97,8 @@ HEALER_DATA = os.path.join(ROOT, "tools", "data", "healer_weights.json")
 # Sacrifice. Shown names are the specs those builds belong to. Tanks are weighed by survival (in Armor) and by threat.
 DAMAGE = "damage"
 SPECS = {
-    "DRUID": [("druid_bear", "Bear", "Ability_Racial_BearForm", "tank", {"survival": "Armor", "threat": "Agility"}),
-                  ("druid_cat", "Cat", "Ability_Druid_CatForm", DAMAGE, {"damage": "Agility"}),
+    "DRUID": [("druid_bear", "Feral (Bear)", "Ability_Racial_BearForm", "tank", {"survival": "Armor", "threat": "Agility"}),
+                  ("druid_cat", "Feral (Cat)", "Ability_Druid_CatForm", DAMAGE, {"damage": "Agility"}),
                   ("druid_balance", "Balance", "Spell_Nature_StarFall", DAMAGE, {"damage": "Spell Damage"}),
                   # the druid's healer: its measure comes from HEALER_DATA (never a sim run), see HEALER_RUNS.
                   # The icon is the Restoration talent tree's own (Spell_Nature_HealingTouch, the Healing Touch
@@ -111,15 +113,24 @@ SPECS = {
              ("mage_frost", "Frost", "Spell_Frost_FrostBolt02", DAMAGE, {"damage": "Spell Damage"})],
     "PALADIN": [("paladin_protection", "Protection", "Spell_Holy_DevotionAura", "tank",
                  {"survival": "Armor", "threat": "Strength"}),
-                ("paladin_retribution", "Retribution", "Spell_Holy_AuraOfLight", DAMAGE, {"damage": "Strength"})],
+                ("paladin_retribution", "Retribution", "Spell_Holy_AuraOfLight", DAMAGE, {"damage": "Strength"}),
+                # the paladin's healer, from HEALER_DATA like druid Restoration (see HEALER_RUNS); the icon
+                # is the Holy talent tree's own (Spell_Holy_HolyBolt), as the two above are their trees'.
+                ("paladin_holy", "Holy", "Spell_Holy_HolyBolt", "healing", {"healing": HEALER_DATA})],
     "PRIEST": [("priest_shadow", "Shadow", "Spell_Shadow_ShadowWordPain", DAMAGE, {"damage": "Spell Damage"}),
-               ("priest_smite", "Discipline", "Spell_Holy_HolySmite", DAMAGE, {"damage": "Spell Damage"})],
+               ("priest_smite", "Discipline", "Spell_Holy_HolySmite", DAMAGE, {"damage": "Spell Damage"}),
+               # the priest's healer: the Holy talent tree's own icon (Spell_Holy_HolyNova).
+               ("priest_holy", "Holy", "Spell_Holy_HolyNova", "healing", {"healing": HEALER_DATA})],
     "ROGUE": [("rogue_ss", "Combat", "Spell_Shadow_RitualOfSacrifice", DAMAGE, {"damage": "Attack Power"}),
               ("rogue_backstab", "Subtlety", "Ability_BackStab", DAMAGE, {"damage": "Attack Power"}),
               ("rogue_mutilate", "Assassination", "Ability_Rogue_Eviscerate", DAMAGE, {"damage": "Attack Power"})],
     "SHAMAN": [("shaman_elemental", "Elemental", "Spell_Nature_Lightning", DAMAGE, {"damage": "Spell Damage"}),
                ("shaman_enhancement", "Enhancement", "Spell_Nature_LightningShield", DAMAGE,
-                {"damage": "Attack Power"})],
+                {"damage": "Attack Power"}),
+               # the shaman's healer: the Restoration talent tree's own icon (Spell_Nature_HealingWaveGreater,
+               # the Greater Healing Wave spell's), as druid Restoration's is its tree's.
+               ("shaman_restoration", "Restoration", "Spell_Nature_HealingWaveGreater", "healing",
+                {"healing": HEALER_DATA})],
     "WARLOCK": [("warlock_affliction", "Affliction", "Spell_Shadow_DeathCoil", DAMAGE, {"damage": "Spell Damage"}),
                 ("warlock_demonology", "Demonology", "Spell_Shadow_Metamorphosis", DAMAGE, {"damage": "Spell Damage"}),
                 ("warlock_destruction", "Destruction", "Spell_Shadow_RainOfFire", DAMAGE, {"damage": "Spell Damage"}),
@@ -201,7 +212,9 @@ def main():
     data = json.load(open(DATA, encoding="utf-8"))
     src, runs = data["source"], data["runs"]
     healer = json.load(open(HEALER_DATA, encoding="utf-8"))
-    healer_comment = (f"druid/restoration: {healer['model']}; {healer['source']}")
+    # One comment per healer spec: its place ("druid/restoration"), then the shared model's own words.
+    def healer_comment(run_name):
+        return f"{run_name.replace('_', '/', 1)}: {healer['model']}; {healer['source']}"
     lines = [
         "-- BattleInfoTool module StatsInfo: how much each spec wants an item's stats.",
         "-- Generated by tools/make_weights.py from tools/data/foreversim_weights.json and",
@@ -217,15 +230,16 @@ def main():
         "-- the spec does not fight with it: a caster's weapon, an Arms warrior's off hand). Cat and Bear Form",
         "-- fight with the weapon's DPS (FERAL_RUNS below): their mainHand is game-measured, not simulated.",
         "--",
-        "-- Druid Restoration is rated by BattleInfoTool's own starter heuristic (an approximation, marked",
-        f"-- '(approx.)' in the tooltip; {healer['model']}), NOT a simulation: ForeverSim does not simulate",
-        "-- healing, so no measured healer weights exist. The other healers are not here.",
+        "-- The healers (druid Restoration, priest Holy, paladin Holy, shaman Restoration) are rated by",
+        f"-- BattleInfoTool's own starter heuristic (an approximation, marked '(approx.)' in the tooltip;",
+        f"-- {healer['model']}), NOT a simulation: ForeverSim does not simulate healing, so no measured",
+        "-- healer weights exist.",
         "",
         "local _, BIT = ...",
         "local M = BIT.Module(\"StatsInfo\")",
         "",
         "M.WEIGHTS_SOURCE = \"ForeverSim stat weights, 2026-09-27, level 60 builds of each spec; "
-        f"druid Restoration: {healer['source']}\"",
+        f"the healers (druid Restoration, priest Holy, paladin Holy, shaman Restoration): {healer['source']}\"",
         "",
         "M.SPECS = {",
     ]
@@ -237,7 +251,7 @@ def main():
                 if run_name in runs:
                     raise SystemExit(f"{run_name!r} is both a sim run and a healer run: pick one source")
                 used_healers.add(run_name)
-                lines.append(f"    -- {healer_comment}")
+                lines.append(f"    -- {healer_comment(run_name)}")
                 measure_texts = {kind: heuristic_measure(healer) for kind in refs}
             else:
                 run = runs[run_name]

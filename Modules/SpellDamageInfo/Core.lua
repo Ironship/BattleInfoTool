@@ -676,9 +676,11 @@ local function itemUseText(itemID)
 end
 
 -- What to show for a consumable on the bar: its raw instant healing or mana,
--- or a bandage's stated total (no estimate; a consumable's amount is fixed),
--- or nil. Damage wordings are never read here, so the damage numbers cannot
--- move. Anything over time except a Heals/Heilt bandage stays unread. The text
+-- or a stated healing total over time -- a bandage's ("Heals 66 damage over 6
+-- sec.") or food's ("Restores 243 health over 21 sec."), no estimate; a
+-- consumable's amount is fixed -- or nil. Damage wordings are never read here,
+-- so the damage numbers cannot move. Anything over time without a stated
+-- health total stays unread. The text
 -- comes from the use spell's description where that can be read, else from the
 -- item's own "Use:" line; when neither is readable yet nothing is guessed -- the
 -- item's data and the spell's text are asked for and the button is painted again

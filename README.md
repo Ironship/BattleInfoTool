@@ -32,7 +32,7 @@ Current supported DoTs
 
 Rip and Rupture are finishers: the marker uses the combo points you have. DoTs from critical hits (Ignite, Deep Wounds) cannot be tracked - they are procs, not casts, and the addon only follows spells you cast.
 
-**StatsInfo**: in an item's tooltip, how it compares to what you wear — scored per spec (Arms/Fury, Fire/Frost/Arcane…) with ForeverSim weights (built on WoWSims); tanks get survival + threat. Resto druids get a marked `(approx.)` heuristic score; other healers aren't rated yet **\[Work in progress\]**.
+**StatsInfo**: in an item's tooltip, how it compares to what you wear — scored per spec (Arms/Fury, Fire/Frost/Arcane…) with ForeverSim weights (built on WoWSims); tanks get survival + threat. Every healer (Restoration druid/shaman, Holy priest/paladin) gets a marked `(approx.)` heuristic score — ForeverSim does not simulate healing **\[Work in progress\]**.
 
 ![stats comparison](https://i.imgur.com/wXVwDG6.png) ![another look on item](https://i.imgur.com/RIdkm9d.png)
 

@@ -289,7 +289,7 @@ for x in W.DRUID.values():
 check("a druid Restoration spec, after the existing three, with role healing",
       (resto_spec is not None, resto_spec.role if resto_spec else None,
        [x.name for x in W.DRUID.values()]),
-      (True, "healing", ["Bear", "Cat", "Balance", "Restoration"]))
+      (True, "healing", ["Feral (Bear)", "Feral (Cat)", "Balance", "Restoration"]))
 hing = resto_spec.healing if resto_spec else None
 check("its healing measure: the reference stat and the approximate marker",
       (hing.reference if hing else None, hing.approximate if hing else None), ("Healing", True))
@@ -301,11 +301,21 @@ check("the heuristic weights: +Healing, Spell Power, Intellect, Spirit, MP5",
       {"ITEM_MOD_SPELL_HEALING_DONE_SHORT": 1.0, "ITEM_MOD_SPELL_POWER_SHORT": 1.0,
        "ITEM_MOD_INTELLECT_SHORT": 0.5, "ITEM_MOD_SPIRIT_SHORT": 0.5,
        "ITEM_MOD_MANA_REGENERATION_SHORT": 2.0})
-check("only the druid has a healer spec; the other classes keep their specs",
+check("the other healing classes carry a healer spec too, at the end of their list",
       ([x.role for c in ("PRIEST", "SHAMAN", "PALADIN") for x in W[c].values()],
        W.DRUID[1].role, W.DRUID[2].role, W.DRUID[3].role),
-      (["damage", "damage", "damage", "damage", "tank", "damage"],
+      (["damage", "damage", "healing", "damage", "damage", "healing", "tank", "damage", "healing"],
        "tank", "damage", "damage"))
+def healer_measure(spec):
+    m = spec.healing if spec else None
+    return (m and m.reference, m and m.approximate, m and dict(m.weights.items()))
+check("each healer's measure is the same heuristic (reference, approx. marker and weights)",
+      (healer_measure(W.PRIEST[3]), healer_measure(W.PALADIN[3]), healer_measure(W.SHAMAN[3])),
+      (healer_measure(W.DRUID[4]),) * 3)
+check("  with each talent tree's own icon (Holy priest, Holy paladin, Restoration shaman)",
+      (W.PRIEST[3].icon, W.PALADIN[3].icon, W.SHAMAN[3].icon),
+      ("Interface\\Icons\\Spell_Holy_HolyNova", "Interface\\Icons\\Spell_Holy_HolyBolt",
+       "Interface\\Icons\\Spell_Nature_HealingWaveGreater"))
 check("the source distinguishes the simulator's weights from the heuristic",
       (si.WEIGHTS_SOURCE and si.WEIGHTS_SOURCE.find("ForeverSim") >= 0,
        si.WEIGHTS_SOURCE and si.WEIGHTS_SOURCE.find("heuristic") >= 0,
@@ -341,7 +351,7 @@ check("a healing item against a healing item: one healing part, a percent, marke
 check("the other three druid specs keep their own measures (tank two, damage one)",
       (len(healing_row(si.SpecRatings("mend+12", rt.table_from(["mend+10"]))).parts),
        [x.spec.name for x in si.SpecRatings("mend+12", rt.table_from(["mend+10"])).values()]),
-      (1, ["Bear", "Cat", "Balance", "Restoration"]))
+      (1, ["Feral (Bear)", "Feral (Cat)", "Balance", "Restoration"]))
 
 # ---------------------------------------------------------------------------------------------
 print("-- Restoration: each heuristic stat improves the score on its own")
@@ -397,21 +407,21 @@ G.worn[5] = "mend+10"
 lines = [l[1] for l in si.TooltipLines("mend+12").values()]
 check("in words: a line per spec; Restoration reads a better healer score, marked (approx.)",
       (any("  Restoration: |cff4dff4d20% better healer score (approx.)|r" in l for l in lines),
-       any("  Cat:" in l for l in lines)), (True, False))
+       any("  Feral (Cat):" in l for l in lines)), (True, False))
 si.settings.icons = True
 lines = [l[1] for l in si.TooltipLines("mend+12").values()]
 check("with icons: one icon per spec line, Restoration's own (Spell_Nature_HealingTouch) and the marker",
       (any("Spell_Nature_HealingTouch" in l and "Restoration: " in l and "(approx.)" in l for l in lines),
        "20% better healer score" in " ".join(lines)), (True, True))
 
-# negative: a physical swap that loses Spirit is worse for the healer even when Cat improves
+# negative: a physical swap that loses Spirit is worse for the healer even when Feral (Cat) improves
 G.itemStats["str-club"] = rt.eval('{ ITEM_MOD_STRENGTH_SHORT = 30, ITEM_MOD_AGILITY_SHORT = 10 }')
 G.itemLoc["str-club"] = "INVTYPE_CHEST"
 si.settings.icons = False
 lines = [l[1] for l in si.TooltipLines("str-club").values()]
-check("a physical swap losing Spirit: 'worse healer score (approx.)' in red, Cat still improves",
+check("a physical swap losing Spirit: 'worse healer score (approx.)' in red, Feral (Cat) still improves",
       (any("Restoration: |cffff5959100% worse healer score (approx.)|r" in l for l in lines),
-       any("Cat: |cff4dff4d>300% better dmg spec|r" in l for l in lines)), (True, True))
+       any("Feral (Cat): |cff4dff4d>300% better dmg spec|r" in l for l in lines)), (True, True))
 
 # capped: an empty slot of a +Healing item caps like the other specs, with the marker
 G.worn[5] = None
@@ -530,17 +540,19 @@ check("the healer data's provenance: a starter heuristic, not a simulated result
       (hd["source"], hd["approximate"], "weighted score = 1 * +Healing + 1 * Spell Power + 0.5 * Intellect"
        " + 0.5 * Spirit + 2 * MP5" in hd["model"]),
       ("BattleInfoTool starter heuristic, not simulated", True, True))
-check("the generator's source bookkeeping keeps the heuristic spec from any sim run",
-      (mw.HEALER_RUNS, "druid_restoration" in mw.HEALER_RUNS), ({"druid_restoration"}, True))
+check("the generator's source bookkeeping keeps the healer specs from any sim run",
+      (mw.HEALER_RUNS, "druid_restoration" in mw.HEALER_RUNS),
+      ({"druid_restoration", "priest_holy", "paladin_holy", "shaman_restoration"}, True))
 before = (ROOT / "Modules" / "StatsInfo" / "Weights.lua").read_bytes()
 mw.main()
 after = (ROOT / "Modules" / "StatsInfo" / "Weights.lua").read_bytes()
 check("regenerating Weights.lua reproduces the file byte for byte (no drift)",
       after == before, True)
-check("  and the generated file never loses Restoration or relabels it ForeverSim",
-      ("druid/restoration" in after.decode("utf-8"),
-       "BattleInfoTool starter heuristic, not simulated" in after.decode("utf-8"),
-       after.count(b"approximate = true")), (True, True, 1))
+text = after.decode("utf-8")
+check("  and the generated file never loses a healer or relabels it ForeverSim",
+      tuple(x in text for x in ("druid/restoration", "priest/holy", "paladin/holy", "shaman/restoration"))
+      + ("BattleInfoTool starter heuristic, not simulated" in text,
+       after.count(b"approximate = true")), (True, True, True, True, True, 4))
 check("the sim specs' numbers did not move (spot values across classes)",
       (W.DRUID[1].survival.weights.ITEM_MOD_STAMINA_SHORT,
        W.DRUID[2].damage.weights.ITEM_MOD_CRIT_RATING_SHORT,

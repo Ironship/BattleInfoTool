@@ -590,10 +590,10 @@ si.settings.worth = True
 print("-- StatsInfo: how each spec rates an item")
 W = si.SPECS
 check("every class has its specs, the druid four (Restoration the healer)", (len(W.DRUID), [x.name for x in W.DRUID.values()]),
-      (4, ["Bear", "Cat", "Balance", "Restoration"]))
-check("  no healer anywhere but the druid's: no healer in the specs of the others, and no table of them", (si.UNRATED_SPECS,
+      (4, ["Feral (Bear)", "Feral (Cat)", "Balance", "Restoration"]))
+check("  every healer is rated: the other healing classes carry their healer too, and no table of the unrated", (si.UNRATED_SPECS,
       [x.name for c in ("PRIEST", "SHAMAN", "PALADIN") for x in W[c].values()]),
-      (None, ["Shadow", "Discipline", "Elemental", "Enhancement", "Protection", "Retribution"]))
+      (None, ["Shadow", "Discipline", "Holy", "Elemental", "Enhancement", "Restoration", "Protection", "Retribution", "Holy"]))
 check("  a tank has survival and threat, a damage spec damage",
       (W.DRUID[1].survival is not None, W.DRUID[1].threat is not None, W.DRUID[2].damage is not None), (True, True, True))
 check("  a spec per talent tree or build: warrior, mage, hunter, rogue, warlock",
@@ -610,13 +610,13 @@ worn_a = rt.table_from(["hide-a"])
 r = {x.spec.name: [(pt.kind, round(pt.percent, 2) if pt.percent is not None else None,
                     round(pt.points, 2) if pt.points is not None else None) for pt in x.parts.values()]
      for x in si.SpecRatings("hide-b", worn_a).values()}
-check("a cat: 8 Agility against 5 is 60% more (Stamina is worth nothing to its damage)", r["Cat"], [("damage", 60.0, None)])
+check("a cat: 8 Agility against 5 is 60% more (Stamina is worth nothing to its damage)", r["Feral (Cat)"], [("damage", 60.0, None)])
 check("  a bear: survival 8 x 0.7397 + 2 x 2.4022 against 5 x 0.7397; threat 8 + 2 x -0.3952 against 5 (more "
       "health is less rage from each hit: Forever pays rage from a hit as damage x 10 / max health)",
-      r["Bear"], [("survival", 189.9, None), ("threat", 44.19, None)])
+      r["Feral (Bear)"], [("survival", 189.9, None), ("threat", 44.19, None)])
 check("  a balance druid: worth nothing either way, so 0%", r["Balance"], [("damage", 0, None)])
 r = {x.spec.name: [round(pt.percent, 2) for pt in x.parts.values()] for x in si.SpecRatings("hide-b", rt.table_from([])).values()}
-check("an empty slot: past the cap (>300% dmg spec)", r["Cat"], [300.0])
+check("an empty slot: past the cap (>300% dmg spec)", r["Feral (Cat)"], [300.0])
 G.itemStats["club"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 20 }')
 G.itemStats["twig"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 10 }')
 G.itemLoc["club"], G.itemLoc["twig"] = "INVTYPE_2HWEAPON", "INVTYPE_2HWEAPON"
@@ -629,11 +629,11 @@ def mh_triple():
             t = s[m]
             measures[m] = (t.mainHand if t is not None else None)
         got[s.name] = measures
-    return ("Cat", got["Cat"]["damage"], "Bear", got["Bear"]["threat"], got["Bear"]["survival"])
+    return ("Feral (Cat)", got["Feral (Cat)"]["damage"], "Feral (Bear)", got["Feral (Bear)"]["threat"], got["Feral (Bear)"]["survival"])
 check("in Cat and Bear Form the weapon's damage counts (game-measured: 1 DPS ~= 14 FAP), for damage/threat but not "
-      "survival, nor for Balance", (r["Cat"], r["Bear"], r["Balance"]), ([100], [0, 100], [0]))
-check("  feral mainHand is 14 x Feral Attack Power (Cat 6.033, Bear threat 8.972, Bear survival 0)",
-      mh_triple(), ("Cat", 6.033, "Bear", 8.972, 0))
+      "survival, nor for Balance", (r["Feral (Cat)"], r["Feral (Bear)"], r["Balance"]), ([100], [0, 100], [0]))
+check("  feral mainHand is 14 x Feral Attack Power (Feral (Cat) 6.033, Feral (Bear) threat 8.972, Feral (Bear) survival 0)",
+      mh_triple(), ("Feral (Cat)", 6.033, "Feral (Bear)", 8.972, 0))
 G.playerClass = "WARRIOR"
 G.itemStats["axe"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 10, ITEM_MOD_STRENGTH_SHORT = 5 }')
 G.itemStats["blade"] = rt.eval('{ ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 8 }')
@@ -722,17 +722,18 @@ si.settings.specs = True
 lines = [l[1] for l in si.TooltipLines("hide-b").values()]
 check("in words: the divider, a line per spec the item changes something for (not Balance), no line for the healer",
       lines[-3:], ["|TInterface\\Common\\UI-TooltipDivider-Transparent:8:200|t",
-                   "  Bear: |cff4dff4d190% better for survival|r, |cff4dff4d44% better for threat gen.|r",
-                   "  Cat: |cff4dff4d60% better dmg spec|r"])
+                   "  Feral (Bear): |cff4dff4d190% better for survival|r, |cff4dff4d44% better for threat gen.|r",
+                   "  Feral (Cat): |cff4dff4d60% better dmg spec|r"])
 si.settings.icons = True
 lines = [l[1] for l in si.TooltipLines("hide-b").values()]
 check("with icons: 'Against' without its colon, the stats on one line",
       lines[:2], ["Against ?", "|cff4dff4d+3 Beweglichkeit|r   |cff4dff4d+2 Ausdauer|r"])
 check("  what they give on one line, summed, each behind its icon",
       "INV_Chest_Chain_05:12:12" in lines[2] and "Spell_Holy_SealOfSacrifice:12:12" in lines[2], True)
-check("  the divider, a tank on its own line, then Cat, each icon with its name",
+check("  the divider, a tank on its own line, then Feral (Cat), each icon with its name",
       (lines[3], lines[4].count("|TInterface\\Icons\\"), lines[5].count("|TInterface\\Icons\\"),
-       "Bear: |cff4dff4d190% better for survival|r, |cff4dff4d44% better for threat gen.|r" in lines[4], "Cat: " in lines[5],
+       "Feral (Bear): |cff4dff4d190% better for survival|r, |cff4dff4d44% better for threat gen.|r" in lines[4],
+       "Feral (Cat): " in lines[5],
        len(lines)), ("|TInterface\\Common\\UI-TooltipDivider-Transparent:8:200|t", 1, 1, True, True, 6))
 check("  what the stats give: each icon with a word for its stat", ("armor" in lines[2], "health" in lines[2] or "health" in lines[3]),
       (True, True))
@@ -762,7 +763,7 @@ for cls, healer in (("PRIEST", "Holy"), ("SHAMAN", "Restoration"), ("PALADIN", "
         seen = seen or any(healer + ":" in x[1] for x in si.TooltipLines("shadow-ring-2").values())
     healers[cls] = seen
 si.settings.icons = True
-check("  and no class without a healer spec shows one, nor druid's Restoration for a shadow ring "
+check("  and no class shows its healer for a shadow ring "
       "(it has no healing stats), with icons or in words", healers,
       {"PRIEST": False, "SHAMAN": False, "PALADIN": False, "DRUID": False})
 G.playerClass = "PRIEST"
@@ -777,10 +778,10 @@ G.itemLoc["sta-only"] = "INVTYPE_CHEST"
 G.worn[5] = None
 lines = [l[1] for l in si.TooltipLines("sta-only").values()]
 check("a Stamina item for a bear, nothing worn: empty slot caps both ways",
-      any("Bear: |cff4dff4d>300% better for survival|r, |cffff5959<-300% worse for threat gen.|r" in l
+      any("Feral (Bear): |cff4dff4d>300% better for survival|r, |cffff5959<-300% worse for threat gen.|r" in l
           for l in lines), True)
-check("  a spec it changes nothing for is left out (Balance), and so is Cat",
-      (any("Balance" in l for l in lines), any("Cat:" in l for l in lines)), (False, False))
+check("  a spec it changes nothing for is left out (Balance), and so is Feral (Cat)",
+      (any("Balance" in l for l in lines), any("Feral (Cat):" in l for l in lines)), (False, False))
 G.itemStats["str-only"] = rt.eval('{ ITEM_MOD_STRENGTH_SHORT = 3 }')
 G.itemLoc["str-only"] = "INVTYPE_CHEST"
 lines = [l[1] for l in si.TooltipLines("str-only").values()]
@@ -790,13 +791,13 @@ G.itemStats["spirit-only"] = rt.eval('{ ITEM_MOD_SPIRIT_SHORT = 2 }')
 G.itemLoc["spirit-only"] = "INVTYPE_CHEST"
 lines = [l[1] for l in si.TooltipLines("spirit-only").values()]
 check("an item that changes nothing for any spec: no divider, no ratings",
-      any("Divider" in l or "Bear" in l for l in lines), False)
+      any("Divider" in l or "Feral (Bear)" in l for l in lines), False)
 G.worn[5] = "hide-a"
 G.worn[5] = None
 lines = [l[1] for l in si.TooltipLines("hide-b").values()]
 check("  nothing to compare with: empty slot caps",
       any(">300%" in l for l in lines), True)
-check("    each such spec on a line of its own (Bear, Cat)",
+check("    each such spec on a line of its own (Feral (Bear), Feral (Cat))",
       [l.count("Icons") for l in lines if ": " in l and "Icons" in l],
       [1, 1])
 G.worn[5] = "hide-a"
@@ -850,8 +851,8 @@ G.itemStats["agi2"] = rt.eval('{ ITEM_MOD_AGILITY_SHORT = 2 }')
 G.itemStats["agi20"] = rt.eval('{ ITEM_MOD_AGILITY_SHORT = 20 }')
 for k in ("pen5", "pen6", "agi2", "agi20"): G.itemLoc[k] = "INVTYPE_CHEST"
 check("worn worth 0.70 to a cat, +20%: a percentage",
-      pts(si.SpecRatings("pen6", rt.table_from(["pen5"])), "Cat"), 20.0)
-check("worn worth 2, +900%: capped", pts(si.SpecRatings("agi20", rt.table_from(["agi2"])), "Cat"),
+      pts(si.SpecRatings("pen6", rt.table_from(["pen5"])), "Feral (Cat)"), 20.0)
+check("worn worth 2, +900%: capped", pts(si.SpecRatings("agi20", rt.table_from(["agi2"])), "Feral (Cat)"),
       300)
 
 # an item worth nothing or less: capped percent, "195% worse" and "100% worse" are legal
@@ -860,22 +861,22 @@ G.itemStats["sta-ring"] = rt.eval('{ ITEM_MOD_STAMINA_SHORT = 12 }')
 G.itemLoc["agi-ring"], G.itemLoc["sta-ring"] = "INVTYPE_FINGER", "INVTYPE_FINGER"
 G.worn[11] = "agi-ring"
 lines = words("sta-ring")
-check("a Stamina ring against an Agility ring: Bear caps survival, threat and Cat read as percents",
-      ("  Bear: |cff4dff4d>300% better for survival|r, |cffff5959195% worse for threat gen.|r"
-       in lines, "  Cat: |cffff5959100% worse dmg spec|r" in lines), (True, True))
+check("a Stamina ring against an Agility ring: Feral (Bear) caps survival, threat and Feral (Cat) read as percents",
+      ("  Feral (Bear): |cff4dff4d>300% better for survival|r, |cffff5959195% worse for threat gen.|r"
+       in lines, "  Feral (Cat): |cffff5959100% worse dmg spec|r" in lines), (True, True))
 check("  no uncapped percent past the cap", [l for l in lines if "3000%" in l or "29817%" in l], [])
 G.worn[11] = None
 
 # worse as a percentage, the one decimal under 10, and the choice made after rounding
 G.worn[5] = "hide-b"
-check("a worse item as a percentage: 'Cat: 38% worse dmg spec', in red",
-      "  Cat: |cffff595938% worse dmg spec|r" in words("hide-a"), True)
+check("a worse item as a percentage: 'Feral (Cat): 38% worse dmg spec', in red",
+      "  Feral (Cat): |cffff595938% worse dmg spec|r" in words("hide-a"), True)
 G.itemStats["agi251"] = rt.eval('{ ITEM_MOD_AGILITY_SHORT = 251 }')
 G.itemStats["agi276"] = rt.eval('{ ITEM_MOD_AGILITY_SHORT = 276 }')
 G.itemLoc["agi251"], G.itemLoc["agi276"] = "INVTYPE_CHEST", "INVTYPE_CHEST"
 G.worn[5] = "agi251"
 check("  +9.96% reads '10% better dmg spec', not '10.0% better'",
-      "  Cat: |cff4dff4d10% better dmg spec|r" in words("agi276"), True)
+      "  Feral (Cat): |cff4dff4d10% better dmg spec|r" in words("agi276"), True)
 G.worn[5] = None
 G.playerClass = "WARRIOR"
 G.worn[16], G.worn[17] = "mh40", "oh40"
@@ -900,7 +901,7 @@ G.playerClass = "DRUID"
 
 # worn chest empty: cap, no "+8" currency
 check("a cat's 8 Agility against an empty slot: '>300% better dmg spec', not '+8'",
-      ("  Cat: |cff4dff4d>300% better dmg spec|r" in words("hide-b"),
+      ("  Feral (Cat): |cff4dff4d>300% better dmg spec|r" in words("hide-b"),
        any("like +" in l for l in words("hide-b"))), (True, False))
 
 # icon mode: the armor icon's total holds the item's own armor
@@ -923,9 +924,9 @@ G.itemStats["str-int-chest"] = rt.eval('{ ITEM_MOD_STRENGTH_SHORT = 30, ITEM_MOD
 G.itemLoc["agi-chest"], G.itemLoc["str-int-chest"] = "INVTYPE_CHEST", "INVTYPE_CHEST"
 G.worn[5] = "agi-chest"
 lines = words("str-int-chest")
-order = [name for l in lines for name in ("Bear", "Cat", "Balance") if name + ":" in l]
-check("icon mode: the specs in the class's order (Bear, Cat, Balance) though Cat is short and Balance long",
-      order, ["Bear", "Cat", "Balance"])
+order = [name for l in lines for name in ("Feral (Bear)", "Feral (Cat)", "Balance") if name + ":" in l]
+check("icon mode: the specs in the class's order (Feral (Bear), Feral (Cat), Balance) though the names differ in length",
+      order, ["Feral (Bear)", "Feral (Cat)", "Balance"])
 G.worn[5] = None
 si.settings.icons = False
 
@@ -957,7 +958,7 @@ for cls, healer in (("PRIEST", "Holy"), ("SHAMAN", "Restoration"), ("PALADIN", "
         si.settings.icons = mode
         lines = words("mixed")
         seen[(cls, mode)] = (any("Divider" in l for l in lines), any(healer + ":" in l for l in lines))
-check("no healer line for a strength/agility/shadow item, in any class (druid Restoration is rated only "
+check("no healer line for a strength/agility/shadow item, in any class (a healer is rated only "
       "by healing stats), with icons and in words", set(seen.values()), {(True, False)})
 
 # a capped percent is short, so pairs with the next one for damage specs too
@@ -1972,7 +1973,7 @@ GC.playerClass = "DRUID"
 GC.itemStats["cap-hide"] = rtC.eval('{ ITEM_MOD_AGILITY_SHORT = 8 }')
 GC.itemLoc["cap-hide"] = "INVTYPE_CHEST"
 cap_r = siC.SpecRatings("cap-hide", rtC.table_from([]))
-cap_cat = [x for x in cap_r.values() if x.spec.name == "Cat"][0].parts[1]
+cap_cat = [x for x in cap_r.values() if x.spec.name == "Feral (Cat)"][0].parts[1]
 check("SI-PCT-CAP: empty slot is capped percent, not points",
       (_slot(cap_cat, "percent"), _slot(cap_cat, "capped"), _slot(cap_cat, "points")), (300.0, True, None))
 cap_lines = [l[1] for l in siC.TooltipLines("cap-hide").values()]
@@ -2047,8 +2048,8 @@ check("ENCHANT-4: +3 Beweglichkeit: the comparison reads 8 against 4",
       [(d.key, d.diff) for d in c[1].diffs.values()], [("ITEM_MOD_AGILITY_SHORT", 4)])
 rE = {x.spec.name: round(x.parts[1].percent, 2) for x in siE.SpecRatings(
     "gloves-ench", rtE.table_from(["gloves"])).values()}
-check("ENCHANT-5: the specs' ratings use the augmented stats too (8 vs 4: +100% cat)",
-      rE["Cat"], 100.0)
+check("ENCHANT-5: the specs' ratings use the augmented stats too (8 vs 4: +100% Feral (Cat))",
+      rE["Feral (Cat)"], 100.0)
 # English: the client's names and header are read at the line's own words
 GE.ITEM_MOD_AGILITY_SHORT = "Agility"
 GE.ITEM_MOD_STAMINA_SHORT = "Stamina"

@@ -558,20 +558,22 @@ end
 -- health." / "Benutzen: Stellt 70 bis 90 Gesundheit wieder her."):
 -- { heal = { min, max } } for an instant amount ("Restores"/"Stellt" health as
 -- well as "Heals"/"Heilt" health or damage outside over time),
--- { hot = { total, duration } } for a bandage ("Heals 66 damage over 6 sec." /
--- "Heilt 66 Schaden über 6 Sek."): the stated total, averaged over a range
--- exactly like a potion's (70-90 -> 80),
+-- { hot = { total, duration } } for a stated total over time: a bandage
+-- ("Heals 66 damage over 6 sec." / "Heilt 66 Schaden über 6 Sek.") or food
+-- ("Restores 243 health over 21 sec." / "Stellt 243 Gesundheit über 21 Sek.
+-- wieder her."), the stated total averaged over a range exactly like a
+-- potion's (70-90 -> 80),
 -- { mana = { min, max } } for an instant mana amount ("Restores 140 to 175
 -- mana." / "Stellt 140 bis 175 Mana wieder her."),
--- or nil (plus a short reason). Only stated amounts; "Restores"/"Stellt" over
--- time may tick, so it stays unread ("over-time") and is never guessed.
+-- or nil (plus a short reason). Only stated amounts; a mana amount over time
+-- may tick, so it stays unread ("over-time") and is never guessed.
 -- Damage wordings are never read here: Parse above keeps reading those
 -- exactly as before.
 function Parser.ParseItemHeal(text, lang)
   if type(text) ~= "string" or text == "" then return nil, "empty" end
   local t
   t, lang = prepare(text, lang)
-  local lo, hi, healsVerb
+  local lo, hi
   local mlo, mhi
   local dur, minutes
   if lang == "de" then
@@ -587,12 +589,18 @@ function Parser.ParseItemHeal(text, lang)
     if not lo then lo = match(t, "stellt (" .. NUM .. ") leben wieder her") end
     if not lo then lo, hi = match(t, "stellt sofort (" .. NUM .. ") bis (" .. NUM .. ") leben wieder her") end
     if not lo then lo = match(t, "stellt sofort (" .. NUM .. ") leben wieder her") end
+    -- Food: "stellt 243 Gesundheit über 21 Sek. wieder her" (or "Leben"): the
+    -- duration sits between the amount and "wieder her", so the patterns above
+    -- do not see the amount.
+    if not lo then lo, hi = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") gesundheit \195\188ber") end
+    if not lo then lo = match(t, "stellt (" .. NUM .. ") gesundheit \195\188ber") end
+    if not lo then lo, hi = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") leben \195\188ber") end
+    if not lo then lo = match(t, "stellt (" .. NUM .. ") leben \195\188ber") end
     if not lo then
       lo, hi = match(t, "heilt (" .. NUM .. ") bis (" .. NUM .. ") schaden")
       if not lo then lo, hi = match(t, "heilt (" .. NUM .. ") bis (" .. NUM .. ") gesundheit") end
       if not lo then lo = match(t, "heilt (" .. NUM .. ") schaden") end
       if not lo then lo = match(t, "heilt (" .. NUM .. ") gesundheit") end
-      if lo then healsVerb = true end
     end
     -- "über 6 Sek." (minutes count as 60 seconds, as in Parse above)
     dur = match(t, "\195\188ber (" .. NUM .. ") sek")
@@ -610,7 +618,6 @@ function Parser.ParseItemHeal(text, lang)
       if not lo then lo, hi = match(t, "heals (" .. NUM .. ") to (" .. NUM .. ") health") end
       if not lo then lo = match(t, "heals (" .. NUM .. ") damage") end
       if not lo then lo = match(t, "heals (" .. NUM .. ") health") end
-      if lo then healsVerb = true end
     end
     dur = match(t, "over (" .. NUM .. ") sec")
     minutes = false
@@ -619,9 +626,12 @@ function Parser.ParseItemHeal(text, lang)
   dur = tonumber(dur)
   if dur and minutes then dur = dur * 60 end
   if dur then
-    -- Over time: only a Heals/Heilt wording states a bandage total; a
-    -- Restores/Stellt wording over time may tick, so it stays unread.
-    if lo and healsVerb then
+    -- Over time: a stated health total is the healing it says - a bandage's
+    -- ("Heals 66 damage over 6 sec." / "Heilt 66 Schaden über 6 Sek.") or
+    -- food's ("Restores 243 health over 21 sec." / "stellt 243 Gesundheit über
+    -- 21 Sek. wieder her"), Heals/Heilt as well as Restores/Stellt. A mana
+    -- amount over time may tick, so it stays unread.
+    if lo then
       lo, hi = tonumber(lo), tonumber(hi or lo)
       if lo and hi then return { hot = { total = (lo + hi) / 2, duration = dur } } end
     end
