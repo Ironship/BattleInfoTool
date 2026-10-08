@@ -1,7 +1,7 @@
--- BattleInfoTool ResourceDing: originally ported from ResourceDing/Core.lua at 540b462.
+-- UsefulPlatesAndTooltips ResourceDing: originally ported from ResourceDing/Core.lua at 540b462.
 -- Frozen in BIT: edit this module directly; tools/port.py protects its local gameplay fixes.
 local addonName, BIT = ...
--- Inside BattleInfoTool its own namespace; loaded on its own, the addon's table as before.
+-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon's table as before.
 local Addon = BIT.Module and BIT.Module("ResourceDing") or BIT
 if not BIT.Module then _G.ResourceDing = Addon end
 
@@ -114,26 +114,26 @@ local defaults = {
 Addon.defaults = defaults
 
 local function initializeDatabase()
-  if type(BattleInfoTool_ResourceDingDB) ~= "table" then BattleInfoTool_ResourceDingDB = {} end
+  if type(UsefulPlatesAndTooltips_ResourceDingDB) ~= "table" then UsefulPlatesAndTooltips_ResourceDingDB = {} end
   for key, value in pairs(defaults) do
-    local saved = BattleInfoTool_ResourceDingDB[key]
+    local saved = UsefulPlatesAndTooltips_ResourceDingDB[key]
     if type(saved) ~= type(value) or (type(value) == "number"
       and (saved ~= saved or saved == math.huge or saved == -math.huge)) then
-      BattleInfoTool_ResourceDingDB[key] = value
+      UsefulPlatesAndTooltips_ResourceDingDB[key] = value
     end
   end
-  if not Addon.SOUNDS[BattleInfoTool_ResourceDingDB.sound] then BattleInfoTool_ResourceDingDB.sound = defaults.sound end
-  if type(BattleInfoTool_ResourceDingDB.dotOffset) ~= "number" then BattleInfoTool_ResourceDingDB.dotOffset = defaults.dotOffset
-  elseif BattleInfoTool_ResourceDingDB.dotOffset < -80 then BattleInfoTool_ResourceDingDB.dotOffset = -80
-  elseif BattleInfoTool_ResourceDingDB.dotOffset > 30 then BattleInfoTool_ResourceDingDB.dotOffset = 30 end
-  if type(BattleInfoTool_ResourceDingDB.shardOffset) ~= "number" then BattleInfoTool_ResourceDingDB.shardOffset = defaults.shardOffset
-  elseif BattleInfoTool_ResourceDingDB.shardOffset < -80 then BattleInfoTool_ResourceDingDB.shardOffset = -80
-  elseif BattleInfoTool_ResourceDingDB.shardOffset > 30 then BattleInfoTool_ResourceDingDB.shardOffset = 30 end
-  local dotSize = tonumber(BattleInfoTool_ResourceDingDB.dotSize)
+  if not Addon.SOUNDS[UsefulPlatesAndTooltips_ResourceDingDB.sound] then UsefulPlatesAndTooltips_ResourceDingDB.sound = defaults.sound end
+  if type(UsefulPlatesAndTooltips_ResourceDingDB.dotOffset) ~= "number" then UsefulPlatesAndTooltips_ResourceDingDB.dotOffset = defaults.dotOffset
+  elseif UsefulPlatesAndTooltips_ResourceDingDB.dotOffset < -80 then UsefulPlatesAndTooltips_ResourceDingDB.dotOffset = -80
+  elseif UsefulPlatesAndTooltips_ResourceDingDB.dotOffset > 30 then UsefulPlatesAndTooltips_ResourceDingDB.dotOffset = 30 end
+  if type(UsefulPlatesAndTooltips_ResourceDingDB.shardOffset) ~= "number" then UsefulPlatesAndTooltips_ResourceDingDB.shardOffset = defaults.shardOffset
+  elseif UsefulPlatesAndTooltips_ResourceDingDB.shardOffset < -80 then UsefulPlatesAndTooltips_ResourceDingDB.shardOffset = -80
+  elseif UsefulPlatesAndTooltips_ResourceDingDB.shardOffset > 30 then UsefulPlatesAndTooltips_ResourceDingDB.shardOffset = 30 end
+  local dotSize = tonumber(UsefulPlatesAndTooltips_ResourceDingDB.dotSize)
   if dotSize ~= dotSize or not dotSize or dotSize < 8 then dotSize = 8
   elseif dotSize > 24 then dotSize = 24 end
-  BattleInfoTool_ResourceDingDB.dotSize = math.floor(dotSize + 0.5)
-  Addon.db = BattleInfoTool_ResourceDingDB
+  UsefulPlatesAndTooltips_ResourceDingDB.dotSize = math.floor(dotSize + 0.5)
+  Addon.db = UsefulPlatesAndTooltips_ResourceDingDB
   -- The saved table is shared by every character on the account, but the mana level is per class:
   -- each class keeps its own entry, and manaPercent is this character's copy of it.
   local _, class = UnitClass("player")
@@ -485,10 +485,10 @@ listenFor("UNIT_COMBO_POINTS", "player")
 events:SetScript("OnEvent", function(_, event, arg1)
   if event == "ADDON_LOADED" then
     if arg1 ~= addonName then return end
-    -- switched off in BattleInfoTool: silent
+    -- switched off in UsefulPlatesAndTooltips: silent
     if BIT.ShouldRun and not BIT.ShouldRun("ResourceDing") then events:UnregisterAllEvents() return end
     initializeDatabase()
-    -- inside BattleInfoTool the settings are built into its tab when that is first shown
+    -- inside UsefulPlatesAndTooltips the settings are built into its tab when that is first shown
     if not BIT.RegisterTab and Addon.CreateSettingsPanel then Addon.CreateSettingsPanel() end
     Addon.ResetPowerState()
     -- the dots, the shards and the mana level start once the settings are loaded (Dots.lua,

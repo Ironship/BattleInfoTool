@@ -1,4 +1,4 @@
--- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Estimate.lua at 8269edd.
+-- UsefulPlatesAndTooltips module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Estimate.lua at 8269edd.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: the optional spell-power estimate (the client's own shares, Classic's rules
 -- where it has none) and the button value.
@@ -6,7 +6,7 @@
 -- Pure Lua 5.1, no game API.
 
 local _, BIT = ...
--- Inside BattleInfoTool its own namespace; loaded on its own, the addon's table as before.
+-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon's table as before.
 local ns = BIT and BIT.Module and BIT.Module("SpellDamageInfo") or BIT or {}
 
 local Estimate = {}

@@ -5,12 +5,12 @@
 ResourceDing and SpellDamageInfo: the addon's tests (and fixtures) are taken from its git HEAD into
 a fresh temporary folder, the ported files from Modules/<name>/ are put beside them under their
 original names, the SavedVariables name the port changed is changed in the tests the same way,
-and every test runs there. The ported files, loaded without the BattleInfoTool core, behave as the
+and every test runs there. The ported files, loaded without the UsefulPlatesAndTooltips core, behave as the
 standalone addon does, so its tests must pass as they pass in its own repo.
 
 DoTInfo: only its suite lives here, in tools/dot_fixtures/ under the module's own names, and runs
 against Modules/DoTInfo/* directly (the module has no standalone repo any more). The fixtures load
-the canonical files exactly as BattleInfoTool.toc lists them.
+the canonical files exactly as UsefulPlatesAndTooltips.toc lists them.
 """
 import io
 import pathlib
@@ -27,14 +27,14 @@ SUITES = {
     "ResourceDing": {
         "repo": PROJECTS / "ResourceDing",
         "take": ["tests"],
-        "rename": [("ResourceDingDB", "BattleInfoTool_ResourceDingDB")],
+        "rename": [("ResourceDingDB", "UsefulPlatesAndTooltips_ResourceDingDB")],
         "run": [["lua", "tests/classic.test.lua"], ["lua", "tests/opener.test.lua"], ["lua", "tests/dots.test.lua"], ["lua", "tests/caster.test.lua"]],
     },
     "SpellDamageInfo": {
         "repo": PROJECTS / "SpellDamageInfo",
         # the .toc: its smoke test loads the files the .toc lists, in that order
         "take": ["tests", "SpellDamageInfo.toc"],
-        "rename": [("SpellDamageInfoDB", "BattleInfoTool_SpellDamageInfoDB")],
+        "rename": [("SpellDamageInfoDB", "UsefulPlatesAndTooltips_SpellDamageInfoDB")],
         # every test under Lua 5.1 (the game's), in the process locale and in "C"
         "run": [["python", "tests/check_lua51.py"]],
     },

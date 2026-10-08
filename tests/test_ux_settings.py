@@ -6,7 +6,7 @@ fixture = (ROOT / "tests/test_bit.py").read_text(encoding="utf-8")
 namespace = {"__file__": str(ROOT / "tests/test_bit.py")}
 exec(compile(fixture.split('print("-- every module on")', 1)[0], "fixture", "exec"), namespace)
 rt, G, BIT, _ = namespace["load"]()
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G.Fire("PLAYER_LOGIN")
 
 BIT.OpenSettings("HunterRangeFinder")

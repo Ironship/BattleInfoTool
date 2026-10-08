@@ -1,4 +1,4 @@
--- BattleInfoTool module DoTInfo: options window. Based on the standalone DoT addon's options
+-- UsefulPlatesAndTooltips module DoTInfo: options window. Based on the standalone DoT addon's options
 -- at e4faef4 by Joe Greive (MIT); it lives only here now and is edited directly.
 -- DoTInfo options window (/dotinfo).
 --
@@ -10,7 +10,7 @@
 -- don't depend on templates behaving the same in Forever. Settings are written straight to ns.db.
 
 local ADDON_NAME, BIT = ...
--- BattleInfoTool's own namespace for the module, shared by its four files.
+-- UsefulPlatesAndTooltips's own namespace for the module, shared by its four files.
 local ns = BIT.Module("DoTInfo")
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
@@ -113,7 +113,7 @@ end
 -- The preview only takes over the display out of combat: in combat the real target comes first, even with the
 -- window open (settings changes still apply to it live).
 local function syncDisplayHost()
-    -- Visible, not just shown: when the window is built into another addon's settings (BattleInfoTool), its
+    -- Visible, not just shown: when the window is built into another addon's settings (UsefulPlatesAndTooltips), its
     -- own frame stays "shown" while the settings around it are closed, and the end of a fight then put the
     -- marker back on the preview's mock target frame, drawn where the closed window had been.
     if not window or not window:IsVisible() then return end
@@ -935,7 +935,7 @@ local function buildPreview(pane)
 end
 
 -- The presets, the preview and the settings, in window: the addon's own window, below its title bar
--- with the presets beside anchor (its close button), or inside BattleInfoTool the tab it is built into.
+-- with the presets beside anchor (its close button), or inside UsefulPlatesAndTooltips the tab it is built into.
 local function buildContent(top, anchor)
     -- Presets, right-aligned in the title bar.
     local presetLabel = window:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
@@ -998,7 +998,7 @@ local function buildContent(top, anchor)
 end
 
 local function createWindow()
-    window = CreateFrame("Frame", "BattleInfoTool_DoTInfoOptions", UIParent, "BackdropTemplate")
+    window = CreateFrame("Frame", "UsefulPlatesAndTooltips_DoTInfoOptions", UIParent, "BackdropTemplate")
     window:Hide() -- new frames start shown; ns.openOptions shows it (running OnShow)
     window:SetSize(WINDOW_WIDTH, WINDOW_HEIGHT)
     window:SetPoint("CENTER")
@@ -1011,7 +1011,7 @@ local function createWindow()
     window:SetScript("OnDragStart", window.StartMoving)
     window:SetScript("OnDragStop", window.StopMovingOrSizing)
     setBackdrop(window, 0.06, 0.97)
-    if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "BattleInfoTool_DoTInfoOptions") end -- Escape closes it
+    if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "UsefulPlatesAndTooltips_DoTInfoOptions") end -- Escape closes it
 
     local title = window:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 16, -18)
@@ -1052,7 +1052,7 @@ function ns.registerOptions()
     Settings.RegisterAddOnCategory(category)
 end
 
--- Inside BattleInfoTool: the window's content in its tab, with the presets at the tab's top right.
+-- Inside UsefulPlatesAndTooltips: the window's content in its tab, with the presets at the tab's top right.
 -- BIT Minimal OFF-scene sample: a static mock bar with a fixed tick label, never
 -- live ticks and never real nameplates. DoTInfo is port-frozen, so this seam is
 -- edited directly here (see tools/port.py).

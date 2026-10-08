@@ -11,9 +11,9 @@ load = namespace["load"]
 # Preparing an OFF module is a settings operation. Repeated toggles must neither
 # build an unbounded collection of windows nor resurrect a hidden singleton.
 names = ("SpellDamageInfo", "DoTInfo", "StatsInfo", "ResourceDing", "Range", "ShieldsInfo", "HunterRangeFinder")
-saved = "BattleInfoToolDB={modules={" + ",".join(name + "={enabled=false}" for name in names) + "}}"
+saved = "UsefulPlatesAndTooltipsDB={modules={" + ",".join(name + "={enabled=false}" for name in names) + "}}"
 rt, G, BIT, _ = load(saved)
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G.Fire("PLAYER_LOGIN")
 for name in names:
     BIT.OpenSettings(name)
@@ -48,17 +48,17 @@ assert (G.hits.a, G.hits.b, G.hits.c) == (0, 1, 1)
 # Malformed saved settings must not flow to native geometry setters or checks.
 rt, G, BIT, _ = load('''
 playerClass="HUNTER"
-BattleInfoToolDB={modules={Range={size=0/0,showIn="false"},
+UsefulPlatesAndTooltipsDB={modules={Range={size=0/0,showIn="false"},
 HunterRangeFinder={plateOffset=math.huge,attachToPlate="false"}}}
-BattleInfoTool_ResourceDingDB={dots="false",dotOffset=0/0,shardOffset=math.huge}
+UsefulPlatesAndTooltips_ResourceDingDB={dots="false",dotOffset=0/0,shardOffset=math.huge}
 ''')
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G.Fire("PLAYER_LOGIN")
 assert BIT.DB().modules.Range.size == 26 and BIT.DB().modules.Range.showIn is True
 assert BIT.DB().modules.HunterRangeFinder.plateOffset == -8
 assert BIT.DB().modules.HunterRangeFinder.attachToPlate is True
-assert G.BattleInfoTool_ResourceDingDB.dots is True
-assert G.BattleInfoTool_ResourceDingDB.dotOffset == G.BattleInfoTool_ResourceDingDB.shardOffset == 2
+assert G.UsefulPlatesAndTooltips_ResourceDingDB.dots is True
+assert G.UsefulPlatesAndTooltips_ResourceDingDB.dotOffset == G.UsefulPlatesAndTooltips_ResourceDingDB.shardOffset == 2
 
 # Hunter preview and live lane share the same edge/offset. Range owns the target
 # mark whenever the hunter rail is hidden, including out-of-range acquisition.
@@ -73,7 +73,7 @@ function IsPlayerSpell() return true end
 function CheckInteractDistance() return true end
 target={hostile=true}; plate=NewPlate()
 ''')
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G.Fire("PLAYER_LOGIN")
 hunter, ranged = BIT.modules.HunterRangeFinder, BIT.modules.Range
 G.spellAnswers[75] = True
@@ -129,7 +129,7 @@ compact=FakeMock("compact",UIParent); compact.unit="raid7"
 compact.healthBar=FakeMock("healthBar",compact)
 units.raid7={absorb=123,max=500}; units.arena1={absorb=77,max=600}
 ''')
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G.Fire("PLAYER_LOGIN")
 shield = BIT.modules.ShieldsInfo
 G.CompactUnitFrame_UpdateAll(G.compact)
@@ -160,7 +160,7 @@ assert G.dotRefreshes == 1 and G.shardRefreshes == 1
 
 # Corrupt shared appearance must resolve to finite defaults, and explicit writes
 # must refuse it instead of passing NaN colors or geometry to native setters.
-rt, G, BIT, _ = load('''BattleInfoToolDB={appearance={global={scale=0/0,
+rt, G, BIT, _ = load('''UsefulPlatesAndTooltipsDB={appearance={global={scale=0/0,
 colors={accent={0/0,1,1,1}}}}}''')
 resolved = BIT.Style.Resolve("Range")
 assert resolved.scale == BIT.Style.GetDefaults("Range").scale
@@ -176,7 +176,7 @@ availableCharges=0
 function UnitPowerMax() return availableCharges end
 target={hostile=true}; plate=NewPlate()
 ''')
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G.Fire("PLAYER_LOGIN")
 BIT.OpenSettings("__together")
 together = BIT._pages["__together"]
@@ -189,7 +189,7 @@ assert together.rows.dots.shown, "available resource preview must not require a 
 # Classic target-owned combo points keep their fallback maximum when the
 # player power maximum is zero, including settings-only wake.
 rt, G, BIT, _ = load('playerClass="ROGUE"; function UnitPowerMax() return 0 end')
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 BIT.OpenSettings("__together")
 assert BIT._pages["__together"].rows.dots.shown
 print("ok final review: reusable OFF pages, subscribers, saved types, Hunter/Range lanes and probes, compact shield hooks, resource reset and available resources")

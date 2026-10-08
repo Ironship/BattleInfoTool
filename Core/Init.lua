@@ -1,4 +1,4 @@
--- BattleInfoTool: one addon made of parts (modules), each of which can be switched off.
+-- UsefulPlatesAndTooltips: one addon made of parts (modules), each of which can be switched off.
 -- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- Every module keeps its own namespace, BIT.Module(name), so two modules can both have a "db"
@@ -9,7 +9,7 @@
 
 local ADDON, BIT = ...
 BIT = BIT or {}
-BIT.name = ADDON or "BattleInfoTool"
+BIT.name = ADDON or "UsefulPlatesAndTooltips"
 BIT.modules = {} -- name -> the module's namespace
 BIT.order = {}   -- module names in the order their files load: the order of the settings tabs
 BIT.state = {}   -- name -> "on" | "off", decided at ADDON_LOADED
@@ -26,27 +26,27 @@ end
 
 local function say(msg)
   if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
-    DEFAULT_CHAT_FRAME:AddMessage("|cff66bbffBattleInfoTool|r: " .. tostring(msg))
+    DEFAULT_CHAT_FRAME:AddMessage("|cff66bbffUseful Plates and Tooltips|r: " .. tostring(msg))
   elseif print then
-    print("BattleInfoTool: " .. tostring(msg))
+    print("Useful Plates and Tooltips: " .. tostring(msg))
   end
 end
 BIT.Say = say
 
 ---------------------------------------------------------------------------------------------
--- Saved settings: BattleInfoToolDB.modules[name].enabled, and whatever a module of the core
+-- Saved settings: UsefulPlatesAndTooltipsDB.modules[name].enabled, and whatever a module of the core
 -- keeps there (BIT.Settings(name)). The ported modules keep their own SavedVariables.
 ---------------------------------------------------------------------------------------------
 
 local function db()
-  if type(BattleInfoToolDB) ~= "table" then BattleInfoToolDB = {} end
-  local d = BattleInfoToolDB
+  if type(UsefulPlatesAndTooltipsDB) ~= "table" then UsefulPlatesAndTooltipsDB = {} end
+  local d = UsefulPlatesAndTooltipsDB
   if type(d.modules) ~= "table" then d.modules = {} end
   return d
 end
 BIT.DB = db
 
--- The settings table of one module in BattleInfoToolDB, created with its defaults.
+-- The settings table of one module in UsefulPlatesAndTooltipsDB, created with its defaults.
 function BIT.Settings(name, defaults)
   local d = db()
   if type(d.modules[name]) ~= "table" then d.modules[name] = {} end
@@ -85,7 +85,7 @@ function BIT.IsRunning(name) return BIT.state[name] == "on" end
 
 -- A module's own slash command while the module is off.
 function BIT.SayOff(name)
-  say(name .. " is switched off. /bit opens the settings, where it can be switched on.")
+  say(name .. " is switched off. /upt opens the settings, where it can be switched on.")
 end
 
 ---------------------------------------------------------------------------------------------

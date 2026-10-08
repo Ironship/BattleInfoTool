@@ -35,7 +35,7 @@ def ready(class_="HUNTER", saved="", spells_changed_first=False):
     rt, G, BIT, files = fixture["load"](EXTRA + "\nplayerClass='" + class_ + "'\n" + saved)
     if spells_changed_first:
         G.Fire("SPELLS_CHANGED")
-    G.Fire("ADDON_LOADED", "BattleInfoTool")
+    G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
     G.Fire("ADDON_LOADED", "SomeOtherAddon")
     G.Fire("PLAYER_LOGIN")
     assert "Core\\Appearance.lua" in files and "Modules\\HunterRangeFinder\\HunterRangeFinder.lua" in files
@@ -223,7 +223,7 @@ assert hrA._hud().shown and lit(hrA._hud()) == 6
 
 # Settings preview and live dragging use current rows/buttons, not retired chevrons.
 rtP, GP, BITP, hrP = ready()
-GP.SlashCmdList.BATTLEINFOTOOL("hunter")
+GP.SlashCmdList.USEFULPLATESANDTOOLTIPS("hunter")
 content = BITP._pages.HunterRangeFinder.content
 assert content.lockButton.widget is not None and hrP._previewScene() is not None
 hrP._settings().longRange = True
@@ -255,7 +255,7 @@ assert not hrP._settings().showDeadzoneIcon and not hrP._previewScene().deadIcon
 
 # The loader preserves the no-gameplay-resource contract for off and non-hunter runs.
 for class_, saved, state in (
-    ("HUNTER", "BattleInfoToolDB={modules={HunterRangeFinder={enabled=false}}}", "off"),
+    ("HUNTER", "UsefulPlatesAndTooltipsDB={modules={HunterRangeFinder={enabled=false}}}", "off"),
     ("WARLOCK", "", "on"),
 ):
     rtD, GD, BITD, hrD = ready(class_, saved)
@@ -269,7 +269,7 @@ for class_, saved, state in (
         assert BITD._pages.HunterRangeFinder.content.hunterNote is not None
 
 # Saved legacy geometry remains bounded, and screen-coordinate reset is exact.
-rtV, GV, BITV, hrV = ready(saved="BattleInfoToolDB={modules={HunterRangeFinder={"
+rtV, GV, BITV, hrV = ready(saved="UsefulPlatesAndTooltipsDB={modules={HunterRangeFinder={"
                           "scale=99, opacity='high', chevronHeight=0.01, chevronWidth=4, x='bad', y=6}}}")
 values = hrV._settings()
 assert (values.scale, values.opacity, values.chevronHeight, values.chevronWidth) == (3, 1, 0.5, 1.5)
@@ -296,7 +296,7 @@ rtE.execute("SECRET_NUM=1876543; function issecretvalue(v) return v==SECRET or v
 ranges(GE, auto=1876543, item18904=1876543)
 probe = hrE.Probe()
 assert "secret" in probe and "1876543" not in probe and "band=OOR" in probe
-GE.SlashCmdList.BATTLEINFOTOOL("hunterprobe")
+GE.SlashCmdList.USEFULPLATESANDTOOLTIPS("hunterprobe")
 assert any("35 yd item" in text for text in GE.chat.values())
 
 print("ok Hunter: shipped .toc/dots, every band, long range, melee/dead/unknown, target acquisition, name/legacy probes, preview/drag/reset, gates and secrets")

@@ -1,4 +1,4 @@
--- BattleInfoTool module ShieldsInfo: the remaining absorb of a unit, as the client reports it
+-- UsefulPlatesAndTooltips module ShieldsInfo: the remaining absorb of a unit, as the client reports it
 -- (UnitGetTotalAbsorbs), shown as an overlay on the unit's own health bar -- the player, the
 -- target, the party (classic and compact party/raid frames) and every accessible nameplate.
 -- There is no floating HUD: the shield dots beside the character are retired, and the
@@ -15,7 +15,7 @@
 -- The overlay fill is the shared absorb colour (BIT.Style role "absorb") over a fill
 -- texture the settings choose: the native Blizzard WHITE8X8 ("flat") or one of the
 -- module's own textures. The settings sample paints the very same look from its own
--- fixed numbers; no game reading ever reaches it. The /bit tab shows that look live on a
+-- fixed numbers; no game reading ever reaches it. The /upt tab shows that look live on a
 -- mock bar (preview on the left, tabbed settings on the right, as in DoTInfo and
 -- SpellDamageInfo), so the fill, its opacity and the absorb colour can be picked while the
 -- same painter runs on the live overlays.
@@ -48,7 +48,7 @@ local DEFAULTS = {
 -- native Blizzard fill the shared style paints; the rest are plain textures (the stripes
 -- tile, REPEAT, so their pattern keeps its size on a bar of any width). A saved id that
 -- is not on this list reads as "flat": nothing here ever rejects a write with an error.
-local TEXTURE_DIR = "Interface\\AddOns\\BattleInfoTool\\Modules\\ShieldsInfo\\Textures\\"
+local TEXTURE_DIR = "Interface\\AddOns\\UsefulPlatesAndTooltips\\Modules\\ShieldsInfo\\Textures\\"
 local FILL_TEXTURES = {
   { id = "flat", label = "Flat", hint = "The native Blizzard fill: just the shared absorb colour.",
     path = WHITE },
@@ -731,7 +731,7 @@ local CAPABILITIES = { roles = { "absorb", "muted", "text" }, shapes = false,
   geometry = false, border = false, font = true, scale = false, opacity = true }
 
 ---------------------------------------------------------------------------------------------
--- The /bit settings tab: a live preview on the left, tabbed settings on the right (the
+-- The /upt settings tab: a live preview on the left, tabbed settings on the right (the
 -- DoTInfo/Options.lua layout). The preview's mock bars are painted by the very painter the
 -- live overlays wear (styleOverlay -> paintShield) and fed only the module's own sample
 -- numbers above -- no game reading reaches the preview, so it can never touch a combat

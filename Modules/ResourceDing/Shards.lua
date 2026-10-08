@@ -1,4 +1,4 @@
--- BattleInfoTool module ResourceDing: ported by tools/port.py from ResourceDing/Shards.lua at 540b462.
+-- UsefulPlatesAndTooltips module ResourceDing: ported by tools/port.py from ResourceDing/Shards.lua at 540b462.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- Soul Shards, where they are items in the bags (the Classic game: Classic Era and WoW Forever).
 -- On Retail a warlock has a shard bar instead, which Core.lua already treats as a resource.
@@ -10,7 +10,7 @@
 -- going up does.
 
 local _, BIT = ...
--- Inside BattleInfoTool its own namespace; loaded on its own, the addon's table as before.
+-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon's table as before.
 local Addon = BIT.Module and BIT.Module("ResourceDing") or BIT
 
 local SOUL_SHARD = 6265

@@ -1,4 +1,4 @@
-"""BattleInfoTool module ShieldsInfo, tested against the same fake game tests/test_bit.py uses.
+"""UsefulPlatesAndTooltips module ShieldsInfo, tested against the same fake game tests/test_bit.py uses.
 
     python tests/test_shieldsinfo.py
 
@@ -20,11 +20,11 @@ from lupa.lua51 import LuaRuntime
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MODULE = ROOT / "Modules" / "ShieldsInfo" / "ShieldsInfo.lua"
-CORE_FILES = [line.strip() for line in (ROOT / "BattleInfoTool.toc").read_text(encoding="utf-8").splitlines()
+CORE_FILES = [line.strip() for line in (ROOT / "UsefulPlatesAndTooltips.toc").read_text(encoding="utf-8").splitlines()
               if line.strip().startswith("Core\\")]
 
-AURA = r"Interface\AddOns\BattleInfoTool\Modules\ShieldsInfo\Textures\shield_aura.tga"
-AURA_MIRROR = r"Interface\AddOns\BattleInfoTool\Modules\ShieldsInfo\Textures\shield_aura_mirrored.tga"
+AURA = r"Interface\AddOns\UsefulPlatesAndTooltips\Modules\ShieldsInfo\Textures\shield_aura.tga"
+AURA_MIRROR = r"Interface\AddOns\UsefulPlatesAndTooltips\Modules\ShieldsInfo\Textures\shield_aura_mirrored.tga"
 
 
 def fake_prefix():
@@ -137,7 +137,7 @@ def boot(saved=None, extra=""):
     if extra:
         rt.execute(extra)
     BIT = rt.eval("{}")
-    loader = rt.eval("function(src, name, BIT) local f = assert(loadstring(src, '@' .. name)); return f('BattleInfoTool', BIT) end")
+    loader = rt.eval("function(src, name, BIT) local f = assert(loadstring(src, '@' .. name)); return f('UsefulPlatesAndTooltips', BIT) end")
     for f in CORE_FILES:
         loader((ROOT / f.replace("\\", "/")).read_text(encoding="utf-8"), f, BIT)
     if MODULE.exists():
@@ -147,7 +147,7 @@ def boot(saved=None, extra=""):
 
 def start(G, BIT):
     """The module's own start, as the whole-addon suite drives it."""
-    G.Fire("ADDON_LOADED", "BattleInfoTool")
+    G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
     G.Fire("PLAYER_LOGIN")
 
 
@@ -158,7 +158,7 @@ def on_bar(G, bar, name):
 
 
 def settings(G):
-    return G.BattleInfoToolDB.modules.ShieldsInfo
+    return G.UsefulPlatesAndTooltipsDB.modules.ShieldsInfo
 
 
 # ---------------------------------------------------------------------------------------------
@@ -171,7 +171,7 @@ check("ShieldsInfo registered its module and tab",
       (True, "Shields", "ShieldsInfo"))
 check("the tab fits the bounded settings content",
       BIT.tabs["ShieldsInfo"].width <= 760 and BIT.tabs["ShieldsInfo"].height <= 470, True)
-check("no BattleInfoTool_ShieldsInfoDB SavedVariables of its own", G.BattleInfoTool_ShieldsInfoDB, None)
+check("no UsefulPlatesAndTooltips_ShieldsInfoDB SavedVariables of its own", G.UsefulPlatesAndTooltips_ShieldsInfoDB, None)
 check("the module makes no global of its own", G.ShieldsInfo, None)
 
 start(G, BIT)
@@ -189,11 +189,11 @@ G3.Fire("ADDON_LOADED", "SomeOtherAddon")
 check("another addon's ADDON_LOADED is ignored", BIT3.state["ShieldsInfo"], None)
 check("  and does not create a driver", M3._driver(), None)
 start(G3, BIT3)
-check("  BattleInfoTool's own ADDON_LOADED starts it", BIT3.state["ShieldsInfo"], "on")
+check("  UsefulPlatesAndTooltips's own ADDON_LOADED starts it", BIT3.state["ShieldsInfo"], "on")
 
-rt2, G2, BIT2 = boot(saved="BattleInfoToolDB = { modules = { ShieldsInfo = { enabled = false } } }")
+rt2, G2, BIT2 = boot(saved="UsefulPlatesAndTooltipsDB = { modules = { ShieldsInfo = { enabled = false } } }")
 M2 = BIT2.modules["ShieldsInfo"]
-G2.Fire("ADDON_LOADED", "BattleInfoTool")
+G2.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G2.Fire("PLAYER_LOGIN")
 check("switched off: nothing runs, no overlays, no polling",
       (BIT2.state["ShieldsInfo"], M2._driver(), M2._overlayCount()), ("off", None, 0))
@@ -576,7 +576,7 @@ check("the opacity slider saves native fill translucency", round(settings(G).ove
 check("the opacity change leaves the underlying health bar untouched", modern.statusColor, None)
 check("settings changes reuse the same live overlay", M._overlayCount(), 1)
 
-rtO, GO, BITO = boot(saved="BattleInfoToolDB = { modules = { ShieldsInfo = "
+rtO, GO, BITO = boot(saved="UsefulPlatesAndTooltipsDB = { modules = { ShieldsInfo = "
                      "{ hud = true, numbers = true, scale = 9, mirror = true, preview = true, x = 4, y = 5 } } }")
 start(GO, BITO)
 MO = BITO.modules["ShieldsInfo"]

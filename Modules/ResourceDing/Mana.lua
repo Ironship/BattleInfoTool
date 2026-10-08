@@ -1,4 +1,4 @@
--- BattleInfoTool module ResourceDing: ported by tools/port.py from ResourceDing/Mana.lua at 540b462.
+-- UsefulPlatesAndTooltips module ResourceDing: ported by tools/port.py from ResourceDing/Mana.lua at 540b462.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- A sound when mana climbs to a level: a caster drinking need not watch the bar. 100% by default,
 -- 80% for a warlock, who takes the rest with Life Tap.
@@ -8,7 +8,7 @@
 -- forgets the last one, so mana that climbed unseen does not ding late when it shows again.
 
 local _, BIT = ...
--- Inside BattleInfoTool its own namespace; loaded on its own, the addon's table as before.
+-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon's table as before.
 local Addon = BIT.Module and BIT.Module("ResourceDing") or BIT
 
 local MANA = (Enum and Enum.PowerType and Enum.PowerType.Mana) or 0

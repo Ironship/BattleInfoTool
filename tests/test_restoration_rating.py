@@ -1,6 +1,6 @@
-"""BattleInfoTool StatsInfo: the druid Restoration (healer) item rating - intended behaviour.
+"""UsefulPlatesAndTooltips StatsInfo: the druid Restoration (healer) item rating - intended behaviour.
 
-The healer's rating is a transparent starter heuristic, BattleInfoTool's own design choice and
+The healer's rating is a transparent starter heuristic, UsefulPlatesAndTooltips's own design choice and
 NOT a simulator result (ForeverSim does not simulate healing): a weighted score of
 1 x +Healing (ITEM_MOD_SPELL_HEALING_DONE_SHORT), 1 x Spell Power (ITEM_MOD_SPELL_POWER_SHORT,
 the same bonus), 0.5 x Intellect, 0.5 x Spirit and 2 x MP5 (ITEM_MOD_MANA_REGENERATION_SHORT).
@@ -266,8 +266,8 @@ def load(saved=None, standalone=()):
     if saved:
         rt.execute(saved)
     BIT = rt.eval("{}")
-    loader = rt.eval("function(src, name, BIT) local f = assert(loadstring(src, '@' .. name)); return f('BattleInfoTool', BIT) end")
-    toc = (ROOT / "BattleInfoTool.toc").read_text(encoding="utf-8").splitlines()
+    loader = rt.eval("function(src, name, BIT) local f = assert(loadstring(src, '@' .. name)); return f('UsefulPlatesAndTooltips', BIT) end")
+    toc = (ROOT / "UsefulPlatesAndTooltips.toc").read_text(encoding="utf-8").splitlines()
     files = [l.strip() for l in toc if l.strip() and not l.startswith("#")]
     for f in files:
         loader((ROOT / f.replace("\\", "/")).read_text(encoding="utf-8"), f, BIT)
@@ -277,7 +277,7 @@ def load(saved=None, standalone=()):
 # ---------------------------------------------------------------------------------------------
 print("-- Restoration: the weights carry the druid's healer spec")
 rt, G, BIT, files = load()
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G.Fire("PLAYER_LOGIN")
 si = BIT.modules["StatsInfo"]
 si.settings.detail = "full"
@@ -540,7 +540,7 @@ hd = _json.load(open(ROOT / "tools" / "data" / "healer_weights.json", encoding="
 check("the healer data's provenance: a starter heuristic, not a simulated result, with the model",
       (hd["source"], hd["approximate"], "weighted score = 1 * +Healing + 1 * Spell Power + 0.5 * Intellect"
        " + 0.5 * Spirit + 2 * MP5" in hd["model"]),
-      ("BattleInfoTool starter heuristic, not simulated", True, True))
+      ("UsefulPlatesAndTooltips starter heuristic, not simulated", True, True))
 check("the generator's source bookkeeping keeps the healer specs from any sim run",
       (mw.HEALER_RUNS, "druid_restoration" in mw.HEALER_RUNS),
       ({"druid_restoration", "priest_holy", "paladin_holy", "shaman_restoration"}, True))
@@ -555,7 +555,7 @@ check("regenerating Weights.lua reproduces the file byte for byte (no drift)",
 text = after.decode("utf-8")
 check("  and the generated file never loses a healer or relabels it ForeverSim",
       tuple(x in text for x in ("druid/restoration", "priest/holy", "paladin/holy", "shaman/restoration"))
-      + ("BattleInfoTool starter heuristic, not simulated" in text,
+      + ("UsefulPlatesAndTooltips starter heuristic, not simulated" in text,
        after.count(b"approximate = true")), (True, True, True, True, True, 4))
 check("the sim specs' numbers did not move (spot values across classes)",
       (W.DRUID[1].survival.weights.ITEM_MOD_STAMINA_SHORT,

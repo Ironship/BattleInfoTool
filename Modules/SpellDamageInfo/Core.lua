@@ -1,4 +1,4 @@
--- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Core.lua at 8269edd.
+-- UsefulPlatesAndTooltips module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Core.lua at 8269edd.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: action button numbers, tooltip lines, settings and /sdi.
 -- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
@@ -9,7 +9,7 @@
 -- spell power in combat) are checked with issecretvalue before any comparison or maths.
 
 local ADDON, BIT = ...
--- Inside BattleInfoTool its own namespace; loaded on its own, the addon's table as before.
+-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon's table as before.
 local ns = BIT.Module and BIT.Module("SpellDamageInfo") or BIT
 local L, Parser, Estimate, Format = ns.L, ns.Parser, ns.Estimate, ns.Format
 
@@ -1752,8 +1752,8 @@ if type(SlashCmdList) == "table" then
 end
 
 local function loadSettings()
-  if type(BattleInfoTool_SpellDamageInfoDB) ~= "table" then BattleInfoTool_SpellDamageInfoDB = {} end
-  db = BattleInfoTool_SpellDamageInfoDB
+  if type(UsefulPlatesAndTooltips_SpellDamageInfoDB) ~= "table" then UsefulPlatesAndTooltips_SpellDamageInfoDB = {} end
+  db = UsefulPlatesAndTooltips_SpellDamageInfoDB
   for k, v in pairs(DEFAULTS) do
     if db[k] == nil then db[k] = v end
   end
@@ -1825,7 +1825,7 @@ for _, e in ipairs(RESET_EVENTS) do isReset[e] = true end
 frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
   if event == "ADDON_LOADED" then
     if arg1 == ADDON then
-      -- switched off in BattleInfoTool: silent
+      -- switched off in UsefulPlatesAndTooltips: silent
       if BIT.ShouldRun and not BIT.ShouldRun("SpellDamageInfo") then frame:UnregisterAllEvents() return end
       ns.DecideLangsAtLoad()
       loadSettings()

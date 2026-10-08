@@ -1,4 +1,4 @@
--- BattleInfoTool module StatsInfo: in an item's tooltip, what it changes against what you wear.
+-- UsefulPlatesAndTooltips module StatsInfo: in an item's tooltip, what it changes against what you wear.
 -- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- Written from scratch after the idea of RatingBuster (Whitetooth, GPL), none of whose code or
@@ -6,7 +6,7 @@
 -- them, so nothing here depends on the language of the tooltip.
 --
 -- Under each stat, what it gives the character (M.Worth). Only what the game shows to hold: see
--- there. /bit probe records what this client reports (the functions it has, the character's stats
+-- there. /upt probe records what this client reports (the functions it has, the character's stats
 -- and chances, and the equipped items' stats and tooltip lines) into the saved variables; the
 -- breakdown was built from five of them.
 
@@ -66,7 +66,7 @@ end
 -- stat line. The memo below holds those answers from the outermost call of one build to its
 -- end (memoized wraps the public entries), so a build pays for each link once: no stats are
 -- kept between builds, so nothing goes stale when the client's data arrives, and outside a
--- build (a direct call, /bit probe) nothing is cached at all -- exactly the old behavior.
+-- build (a direct call, /upt probe) nothing is cached at all -- exactly the old behavior.
 -- The tables handed out are shared within the build and read-only to their takers.
 local statsMemo, charMemo = {}, {}
 local memoDepth = 0
@@ -1928,7 +1928,7 @@ local function hookTooltips()
 end
 
 ---------------------------------------------------------------------------------------------
--- /bit probe: what this client reports, for the breakdown
+-- /upt probe: what this client reports, for the breakdown
 ---------------------------------------------------------------------------------------------
 
 -- Functions the breakdown could be built on; the probe records which of them exist.
@@ -2654,7 +2654,7 @@ BIT.RegisterTab("StatsInfo", {
 
     selectTab(tabs[1])
 
-    -- The probe row (a direct child of the tab's content): what /bit probe records.
+    -- The probe row (a direct child of the tab's content): what /upt probe records.
     local count -- SI-751: declared before the button so its OnClick sees the local
     local button = UI.Button(parent, "Record the probe", 170, function()
       M.Probe()

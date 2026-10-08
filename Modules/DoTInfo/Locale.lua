@@ -1,4 +1,4 @@
--- BattleInfoTool module DoTInfo: other client languages. Based on the standalone DoT addon's
+-- UsefulPlatesAndTooltips module DoTInfo: other client languages. Based on the standalone DoT addon's
 -- locale file at e4faef4 by Joe Greive (MIT); it lives only here now and is edited directly.
 -- Core.lua reads English spell descriptions and looks spells up by their English names. This file adds the
 -- German (deDE) wording for the same readings, and the non-English names for the name-keyed tables. The English
@@ -13,7 +13,7 @@
 --   * numbers: "1.132" is a thousand one hundred and thirty-two, "7,1 Sek." is seven point one seconds
 
 local ADDON_NAME, BIT = ...
--- BattleInfoTool's own namespace for the module, shared by its four files.
+-- UsefulPlatesAndTooltips's own namespace for the module, shared by its four files.
 local ns = BIT.Module("DoTInfo")
 
 local L = {}

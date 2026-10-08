@@ -26,7 +26,7 @@ def click(frame):
 
 
 rt, game, addon, _ = load()
-game.Fire("ADDON_LOADED", "BattleInfoTool")
+game.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 game.Fire("PLAYER_LOGIN")
 tab, dot = addon.tabs["DoTInfo"], addon.modules["DoTInfo"]
 
@@ -82,7 +82,7 @@ rt.execute("""
     units.nameplate1 = units.target
     plate = NewPlate()
 """)
-game.Fire("ADDON_LOADED", "BattleInfoTool")
+game.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 game.Fire("PLAYER_LOGIN")
 dot = addon.modules["DoTInfo"]
 assert all(dot.refreshNames[name] for name in ("Client Corruption", "Client Pain", "Client Agony"))
@@ -102,13 +102,13 @@ def cues(parent):
     return [frame for frame in game.AllFrames.values()
             if frame.kind == "CreateTexture" and frame.width == 3 and below(rt, frame, parent)]
 
-assert any(mark.shown for mark in cues(game.BattleInfoTool_DoTInfoRemaining))
+assert any(mark.shown for mark in cues(game.UsefulPlatesAndTooltips_DoTInfoRemaining))
 assert any(mark.shown for mark in cues(game.plate))
 dot.db.refreshCue = False
 assert not dot.dotBreakdownForUnit("target")[0][1].refreshDue
 dot.refresh()
 game.Tick(0.2)
-assert not any(mark.shown for mark in cues(game.BattleInfoTool_DoTInfoRemaining))
+assert not any(mark.shown for mark in cues(game.UsefulPlatesAndTooltips_DoTInfoRemaining))
 assert not any(mark.shown for mark in cues(game.plate))
 rt.execute("""
     SECRET = {}

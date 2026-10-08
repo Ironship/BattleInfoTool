@@ -3,7 +3,7 @@ a secret STRING GUID (what the WoW Forever client hands over in combat) must nev
 the per-target latch table -- the client raises "cannot be indexed with secret keys" on
 every touch -- and must not cost the ding.
 
-Loads only Modules/ResourceDing/Core.lua, standalone (no BattleInfoTool core), against a
+Loads only Modules/ResourceDing/Core.lua, standalone (no UsefulPlatesAndTooltips core), against a
 compact fake game -- the same arrangement tools/test_modules.py uses for the addon's own
 suites, and how the file behaves on its own per its header. The latch table the tests
 install is a strict one: it records every read and write key and raises on the secret

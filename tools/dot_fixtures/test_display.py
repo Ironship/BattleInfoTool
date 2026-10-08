@@ -46,7 +46,7 @@ GameFontNormalSmall = mock("font")
 function CreateColor(...) return { ... } end
 db = { dotColors = "single", segmentDividers = true, fillOpacity = 50, smoothMotion = false, showMarkers = true,
        showLabel = true }
-local ADDON_NAME = "BattleInfoTool"
+local ADDON_NAME = "UsefulPlatesAndTooltips"
 local function isSecret() return false end
 local function trace() end
 """

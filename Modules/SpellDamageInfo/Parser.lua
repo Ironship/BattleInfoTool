@@ -1,4 +1,4 @@
--- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Parser.lua at 8269edd.
+-- UsefulPlatesAndTooltips module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Parser.lua at 8269edd.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: reads a spell's damage and healing out of its description text.
 -- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
@@ -24,7 +24,7 @@
 -- Pure Lua 5.1, no game API, so it can be tested outside the game.
 
 local _, BIT = ...
--- Inside BattleInfoTool its own namespace; loaded on its own, the addon's table as before.
+-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon's table as before.
 local ns = BIT and BIT.Module and BIT.Module("SpellDamageInfo") or BIT or {}
 
 local Parser = {}

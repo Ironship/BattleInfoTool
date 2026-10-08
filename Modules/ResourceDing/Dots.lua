@@ -1,4 +1,4 @@
--- BattleInfoTool ResourceDing: originally ported from ResourceDing/Dots.lua at 540b462.
+-- UsefulPlatesAndTooltips ResourceDing: originally ported from ResourceDing/Dots.lua at 540b462.
 -- Frozen in BIT: edit this module directly; tools/port.py protects its local gameplay fixes.
 -- Combo points as dots under the target's nameplate: a rogue or a cat druid sees at a glance
 -- how many are built, where the eyes already are.
@@ -14,7 +14,7 @@
 -- going away is left at once.
 
 local _, BIT = ...
--- Inside BattleInfoTool its own namespace; loaded on its own, the addon's table as before.
+-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon's table as before.
 local Addon = BIT.Module and BIT.Module("ResourceDing") or BIT
 
 local CIRCLE = "Interface\\CharacterFrame\\TempPortraitAlphaMask" -- a white disc

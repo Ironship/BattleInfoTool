@@ -1,4 +1,4 @@
--- BattleInfoTool module StatsInfo: over a quest's reward buttons, one small badge that answers
+-- UsefulPlatesAndTooltips module StatsInfo: over a quest's reward buttons, one small badge that answers
 -- the only question the screen asks -- which reward to take: a green up arrow on an upgrade,
 -- or a coin on the choice that sells for the most when nothing is an upgrade.
 -- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
@@ -267,7 +267,7 @@ end
 local tipFrame
 local function hiddenTooltipLink(kind, index, questLog)
   if not tipFrame then
-    local ok, f = pcall(CreateFrame, "GameTooltip", "BattleInfoToolQuestRewardTooltip", nil, "GameTooltipTemplate")
+    local ok, f = pcall(CreateFrame, "GameTooltip", "UsefulPlatesAndTooltipsQuestRewardTooltip", nil, "GameTooltipTemplate")
     if ok then tipFrame = f end
   end
   if type(tipFrame) ~= "table" then return nil end

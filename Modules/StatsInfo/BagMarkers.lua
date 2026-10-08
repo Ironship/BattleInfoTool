@@ -1,9 +1,9 @@
--- BattleInfoTool module StatsInfo: over the game's own bag buttons, a small arrow that
+-- UsefulPlatesAndTooltips module StatsInfo: over the game's own bag buttons, a small arrow that
 -- tells whether the item is an upgrade for some spec against what is worn in that slot,
 -- and, on an upgrade, one beneficiary-spec icon (Blizzard assets only).
 -- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
--- Loaded after StatsInfo.lua (see BattleInfoTool.toc). Everything here uses the module's
+-- Loaded after StatsInfo.lua (see UsefulPlatesAndTooltips.toc). Everything here uses the module's
 -- own existing evaluator (M.Compare, M.SpecRatings and their generated Weights.lua) and the
 -- tooltip's own 0.05% display threshold, so a badge never disagrees with the tooltip's
 -- score lines. The meaning is "against what you wear in that slot", never a BiS claim.
@@ -85,7 +85,7 @@ local active = false -- the badge part is running (module on, setting on AND the
 -- defined earlier (Lua locals are captured by reference, so these forward declarations
 -- keep the closures bound to the real functions, not to nil globals).
 local scheduleRefresh, requestBaganatorRefresh
--- /bit bagprobe reads these while it is defined before them, same capture rule.
+-- /upt bagprobe reads these while it is defined before them, same capture rule.
 local widgetProbes, baganatorRegistered, moduleOn
 
 local safeBound
@@ -440,7 +440,7 @@ function M.BagVerdict(link)
   return verdict
 end
 
--- Bag-arrow diagnostics: /bit bagprobe <shift-clicked item> prints every gate of
+-- Bag-arrow diagnostics: /upt bagprobe <shift-clicked item> prints every gate of
 -- the marker pipeline, so a never-showing arrow can be pinned to one cause.
 function M.BagProbe(link)
   local function say(m) if BIT.Say then BIT.Say("bagprobe: " .. tostring(m)) end end
@@ -450,7 +450,7 @@ function M.BagProbe(link)
     tostring(M.settings and M.settings.bagMarkers),
     (baganatorRegistered and "widget registered" or "NO WIDGET (Baganator missing at load)")))
   if type(link) ~= "string" or link == "" then
-    say("shift-click an item after the command, e.g. /bit bagprobe [Sword]")
+    say("shift-click an item after the command, e.g. /upt bagprobe [Sword]")
     return
   end
   if isSecret(link) then say("link is secret -> dead (wait for data, then retry)") return end
@@ -826,7 +826,7 @@ local function liveOwned(details, info)
   return true
 end
 
--- /bit bagprobe diagnostics: what the Baganator corner callback actually answered for each
+-- /upt bagprobe diagnostics: what the Baganator corner callback actually answered for each
 -- item id since the last reload. Counters only (no timers, no scans), so a never-showing
 -- arrow can be pinned to one gate of the live widget path instead of guessed at.
 widgetProbes = {}
@@ -925,7 +925,7 @@ local function registerBaganator()
   end
   baganatorRegistered = true
   Baganator.API.RegisterCornerWidget(
-    "BattleInfoTool StatsInfo: green up / red down against what you wear",
+    "Useful Plates and Tooltips StatsInfo: green up / red down against what you wear",
     WIDGET_ID, baganatorOnUpdate, baganatorOnInit, { corner = "top_right", priority = 5 })
   requestBaganatorRefresh()
 end
@@ -1065,7 +1065,7 @@ end
 
 -- The marker pipeline over the buttons the client shows right now: one line per button --
 -- which link (if any) the client reads there, what it verdicts to, and whether a marker
--- frame exists and is shown. /bit bagprobe runs it after the per-link report; want (a
+-- frame exists and is shown. /upt bagprobe runs it after the per-link report; want (a
 -- shift-clicked link) narrows it to that item's buttons.
 function M.BagProbeButtons(want)
   local function say(m) if BIT.Say then BIT.Say("bagprobe: " .. tostring(m)) end end

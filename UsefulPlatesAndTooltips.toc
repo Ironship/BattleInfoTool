@@ -1,9 +1,9 @@
 ## Interface: 16001
-## Title: BattleInfoTool
-## Notes: Spell damage on your action buttons, DoTs that will kill your target, stats against what you wear, sounds for full combo points, mana and Soul Shards, and a range mark over your target. Every part can be switched off. /bit
+## Title: Useful Plates and Tooltips
+## Notes: Useful nameplate and tooltip info for WoW: Forever: DoT marks, shields, hunter range, combo points, stat comparisons and action bar damage numbers. Every part can be switched off. /upt
 ## Author: Ironship
 ## Version: 0.9.45
-## SavedVariables: BattleInfoToolDB, BattleInfoTool_SpellDamageInfoDB, BattleInfoTool_DoTInfoDB, BattleInfoTool_ResourceDingDB
+## SavedVariables: UsefulPlatesAndTooltipsDB, UsefulPlatesAndTooltips_SpellDamageInfoDB, UsefulPlatesAndTooltips_DoTInfoDB, UsefulPlatesAndTooltips_ResourceDingDB
 
 Core\Init.lua
 Core\PlateLayout.lua

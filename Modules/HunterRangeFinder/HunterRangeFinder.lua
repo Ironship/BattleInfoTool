@@ -1,12 +1,12 @@
--- BattleInfoTool module HunterRangeFinder: the hunter's approximate range in native markers.
+-- UsefulPlatesAndTooltips module HunterRangeFinder: the hunter's approximate range in native markers.
 -- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
--- The hunter's range ladder in seven stacked chevrons, fully inside BattleInfoTool:
+-- The hunter's range ladder in seven stacked chevrons, fully inside UsefulPlatesAndTooltips:
 --   * the settings live in one BIT.Settings("HunterRangeFinder") store, built into the module's
---     tab (/bit hunter), instead of a standalone store with a window and slash commands of its own;
+--     tab (/upt hunter), instead of a standalone store with a window and slash commands of its own;
 --   * the module starts a HUD only for a Hunter with the module switched on; any other class (or
 --     a switched-off module) creates no frames, events or polling, and the tab explains that.
--- /bit hunterprobe prints what the client answers, for diagnostics.
+-- /upt hunterprobe prints what the client answers, for diagnostics.
 -- Range ladder and melee/dead-zone checks adapted from the supplied Bands.lua.
 --
 -- R1 (BIT Minimal): the display is a compact native segment rail or bar plus a readable
@@ -72,10 +72,10 @@ end
 -- never crashes on unknown/malformed appearance, never creates unrelated
 -- module settings, never rewrites .lua files (runs inside the addon on load).
 local function migrateHunterShape()
-    if type(BattleInfoToolDB) ~= "table" then return end
-    local mods = BattleInfoToolDB.modules
+    if type(UsefulPlatesAndTooltipsDB) ~= "table" then return end
+    local mods = UsefulPlatesAndTooltipsDB.modules
     if type(mods) ~= "table" then return end
-    local a = BattleInfoToolDB.appearance
+    local a = UsefulPlatesAndTooltipsDB.appearance
     if type(a) ~= "table" then return end
     local mmods = a.modules
     if type(mmods) ~= "table" then return end
@@ -685,7 +685,7 @@ local CAPABILITIES = {
 -- never style, and the retired display flags map to nothing visual.
 local function hunterLegacy()
     local legacy = {}
-    local mods = type(BattleInfoToolDB) == "table" and BattleInfoToolDB.modules
+    local mods = type(UsefulPlatesAndTooltipsDB) == "table" and UsefulPlatesAndTooltipsDB.modules
     local s = type(mods) == "table" and mods[M.moduleName]
     if type(s) ~= "table" then return legacy end
     if type(s.scale) == "number" and s.scale ~= 1 then legacy.scale = s.scale end
@@ -955,7 +955,7 @@ local function clamp(value, default, lo, hi)
 end
 
 local function prepareHunterSettings()
-  local rawMods = type(BattleInfoToolDB) == "table" and BattleInfoToolDB.modules
+  local rawMods = type(UsefulPlatesAndTooltipsDB) == "table" and UsefulPlatesAndTooltipsDB.modules
   local rawHunter = type(rawMods) == "table" and rawMods["HunterRangeFinder"]
   local hadOldOffset = type(rawHunter) == "table" and type(rawHunter.plateOffset) == "number"
     and finiteNum(rawHunter.plateOffset, nil) ~= nil
@@ -993,7 +993,7 @@ loader:SetScript("OnEvent", function(self, event, name)
     -- no frames, units, timers or sounds here.
     pcall(migrateHunterShape)
     if not BIT.ShouldRun("HunterRangeFinder") then
-        -- Switched off in /bit: no frames, no events, nothing polled.
+        -- Switched off in /upt: no frames, no events, nothing polled.
         self:UnregisterEvent("SPELLS_CHANGED")
         return
     end
@@ -1420,7 +1420,7 @@ local function buildTabs(parent, isHunter)
     range:gap()
     range:note("The bands are approximate item probes, never exact yards: 8-10, 10-15, 15-20, 20-25, "
         .. "25-30 and 30-35 yd. MELEE is Wing Clip's reach; the 5-8 yd dead zone sits between melee and the "
-        .. "first dot. /bit hunterprobe prints what the client answers for the probes.")
+        .. "first dot. /upt hunterprobe prints what the client answers for the probes.")
 
     local appearance = addTab("Appearance")
     local editor = BIT.UI.Appearance(appearance.inner, M.moduleName, CAPABILITIES, refreshAll, hunterLegacy)
