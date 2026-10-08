@@ -1,7 +1,8 @@
 -- BattleInfoTool: the settings window (/bit). One tab per module, in the order the modules'
--- files load. Each tab starts with the module's Enable switch; below it the module builds its own
--- settings (BIT.RegisterTab), the first time the tab is shown, and only while the module runs:
--- a module that is off never ran its code, so it has nothing to show settings for.
+-- files load, plus a Together tab that is not a module. Each module tab starts with Enable.
+-- The module's own settings are built the first time the tab is shown while it runs, and
+-- also the moment Enable is ticked while it is still off (a waker fills defaults only;
+-- gameplay still starts at the next /reload). Opening a tab that is off does not wake it.
 -- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- The window is made of plain frames (no secure templates, no protected calls), so it opens in
@@ -14,14 +15,28 @@ local HEADER_HEIGHT = 40
 local TAB_HEIGHT = 26
 local SWITCH_HEIGHT = 36
 local MARGIN = 10
+local SCROLL_BAR_WIDTH = 16
 local DEFAULT_TAB = { width = 640, height = 360 }
 local MAX_CONTENT_HEIGHT = 470 -- the window stays bounded; taller tabs scroll inside it
 local MODULE_PREVIEW_GAP = 12 -- OFF-page gap between the appearance editor and a module's own preview scene
 local MODULE_PREVIEW_BOTTOM = 8 -- OFF-page bottom allowance below a module's preview scene
+local TOGETHER = "__together"
+
+local SHORT_LABEL = {
+  SpellDamageInfo = "Spells",
+  DoTInfo = "DoTs",
+  StatsInfo = "Stats",
+  ResourceDing = "Points",
+  Range = "Range",
+  ShieldsInfo = "Shields",
+  HunterRangeFinder = "Hunter",
+}
 
 local window
 local tabButtons, pages = {}, {}
+local parkedPages = {} -- retain one off page and one prepared page per module
 local current
+local tabRows = 1
 
 ---------------------------------------------------------------------------------------------
 -- Widgets shared by the modules of the core (StatsInfo, Range)
@@ -56,7 +71,6 @@ function UI.Check(parent, labelText, get, set, tooltip)
   box.label = box:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   box.label:SetPoint("LEFT", box, "RIGHT", 4, 0)
   box.label:SetText(labelText)
-  box:SetScript("OnClick", function(self) set(self:GetChecked() and true or false) end)
   if tooltip then
     box:SetScript("OnEnter", function(self)
       GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -67,6 +81,7 @@ function UI.Check(parent, labelText, get, set, tooltip)
     box:SetScript("OnLeave", function() GameTooltip:Hide() end)
   end
   function box:Refresh() self:SetChecked(get() and true or false) end
+  box:SetScript("OnClick", function(self) set(self:GetChecked() and true or false) end)
   box:Refresh()
   return box
 end
@@ -175,16 +190,310 @@ local function stateText(name)
 end
 
 local function refreshSwitch(page)
+  if not page.switch then return end
   page.switch:Refresh()
   page.stateLine:SetText(stateText(page.name))
   local pending = (BIT.state[page.name] == "on") ~= BIT.IsSwitchedOn(page.name)
   page.reload:SetShown(pending)
 end
 
+local function playerClass()
+  if type(UnitClass) ~= "function" then return nil end
+  return select(2, UnitClass("player"))
+end
+
+local function tabTextColor(name, on)
+  local irrelevant = name == "HunterRangeFinder" and playerClass() ~= "HUNTER"
+  if on then
+    if irrelevant then return 0.62, 0.62, 0.48 end
+    return 1, 1, 1
+  end
+  if irrelevant then return 0.42, 0.42, 0.38 end
+  return 0.75, 0.75, 0.75
+end
+
+-- A vertical slider on the scroll frame's right. The thumb at the top is the start of the
+-- content (WoW's vertical slider keeps its minimum at the bottom, so the value is inverted).
+-- Hidden while the content fits. Mouse wheel and the slider move the same offset.
+local function attachScroll(page, topOffset)
+  local scroll = CreateFrame("ScrollFrame", nil, page)
+  scroll:SetPoint("TOPLEFT", 0, -topOffset)
+  scroll:SetPoint("BOTTOMRIGHT", -SCROLL_BAR_WIDTH, 0)
+  scroll:EnableMouseWheel(true)
+  local content = CreateFrame("Frame", nil, scroll)
+  local function contentWidth()
+    local w = 0
+    if type(scroll.GetWidth) == "function" then w = scroll:GetWidth() or 0 end
+    if type(w) ~= "number" or w <= 1 then
+      w = (window:GetWidth() or 200) - 2 * MARGIN - SCROLL_BAR_WIDTH
+    end
+    return math.max(1, w)
+  end
+  content:SetWidth(contentWidth())
+  scroll:SetScrollChild(content)
+
+  local bar = CreateFrame("Slider", nil, page)
+  bar:SetOrientation("VERTICAL")
+  bar:SetWidth(12)
+  bar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 2, 0)
+  bar:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", 2, 0)
+  bar:SetMinMaxValues(0, 1)
+  bar:SetValue(1)
+  if type(bar.SetThumbTexture) == "function" then
+    bar:SetThumbTexture("Interface\\Buttons\\UI-SliderBar-Button-Vertical")
+  end
+  local track = bar:CreateTexture(nil, "BACKGROUND")
+  track:SetColorTexture(0.28, 0.28, 0.32, 1)
+  track:SetPoint("TOPLEFT", 4, 0)
+  track:SetPoint("BOTTOMRIGHT", -4, 0)
+
+  local function scrollOffset()
+    if type(scroll.GetVerticalScroll) ~= "function" then return 0 end
+    local v = scroll:GetVerticalScroll()
+    if type(v) ~= "number" then return 0 end
+    return v
+  end
+  local function maxScroll()
+    return math.max(0, (content:GetHeight() or 0) - (scroll:GetHeight() or 0))
+  end
+  local function syncBar()
+    local max = maxScroll()
+    bar._sync = true
+    bar:SetMinMaxValues(0, math.max(max, 0.001))
+    if max <= 0 then bar:Hide() else bar:Show() end
+    if scrollOffset() > max and type(scroll.SetVerticalScroll) == "function" then
+      scroll:SetVerticalScroll(max)
+    end
+    bar:SetValue(max - math.min(scrollOffset(), max))
+    bar._sync = false
+  end
+  local function setScroll(at)
+    local max = maxScroll()
+    at = math.min(math.max(at or 0, 0), max)
+    if type(scroll.SetVerticalScroll) == "function" then scroll:SetVerticalScroll(at) end
+    syncBar()
+  end
+  scroll:SetScript("OnMouseWheel", function(_, delta)
+    setScroll(scrollOffset() - (delta or 0) * 24)
+  end)
+  content:SetScript("OnSizeChanged", function() syncBar() end)
+  scroll:SetScript("OnSizeChanged", function(_, width)
+    if type(width) == "number" and width > 0 then content:SetWidth(width) end
+    syncBar()
+  end)
+  bar:SetScript("OnValueChanged", function(_, value)
+    if bar._sync or type(value) ~= "number" then return end
+    local max = maxScroll()
+    if type(scroll.SetVerticalScroll) == "function" then
+      scroll:SetVerticalScroll(math.min(math.max(max - value, 0), max))
+    end
+  end)
+  page.scroll, page.content, page.scrollBar = scroll, content, bar
+  page.syncScroll = syncBar
+  return content
+end
+
+local function headerBottom()
+  return HEADER_HEIGHT + TAB_HEIGHT * tabRows
+end
+
+local function savedWindowPoint()
+  if type(BIT.DB) ~= "function" then return nil end
+  local saved = BIT.DB()
+  local p = type(saved) == "table" and saved.window or nil
+  if type(p) ~= "table" or type(p.point) ~= "string" then return nil end
+  if type(p.x) ~= "number" or type(p.y) ~= "number" then return nil end
+  return p
+end
+
+local function applyWindowPoint()
+  window:ClearAllPoints()
+  local p = savedWindowPoint()
+  if not p then
+    window:SetPoint("CENTER")
+    return
+  end
+  window:SetPoint(p.point, UIParent, p.relativePoint or p.point, p.x, p.y)
+end
+
+local function rememberWindowPoint()
+  if type(window.GetPoint) ~= "function" then return end
+  local point, _, relativePoint, x, y = window:GetPoint(1)
+  if type(point) ~= "string" or type(x) ~= "number" or type(y) ~= "number" then return end
+  if type(BIT.DB) ~= "function" then return end
+  BIT.DB().window = {
+    point = point,
+    relativePoint = type(relativePoint) == "string" and relativePoint or point,
+    x = x,
+    y = y,
+  }
+end
+
+local selectTab
+
+local function buildTogether(page)
+  local content = attachScroll(page, 0)
+  local title = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  title:SetPoint("TOPLEFT", 8, -8)
+  title:SetText("Together")
+  local blurb = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  blurb:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
+  blurb:SetPoint("RIGHT", content, "RIGHT", -8, 0)
+  blurb:SetJustifyH("LEFT")
+  blurb:SetText("Every enabled mark on one nameplate. Offsets use the live seat: the top of a row is -offset under the health bar.")
+
+  local scene = CreateFrame("Frame", nil, content)
+  scene:SetSize(400, 230)
+  scene:SetPoint("TOPLEFT", 8, -64)
+  local bar = CreateFrame("StatusBar", nil, scene)
+  bar:SetSize(240, 18)
+  bar:SetPoint("TOPLEFT", 28, -110)
+  bar:SetMinMaxValues(0, 100)
+  bar:SetValue(100)
+  local barFill = bar:CreateTexture(nil, "BACKGROUND")
+  barFill:SetAllPoints()
+  barFill:SetColorTexture(0.25, 0.05, 0.05, 1)
+
+  local dotFill = bar:CreateTexture(nil, "ARTWORK")
+  dotFill:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
+  dotFill:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 0, 0)
+  dotFill:SetWidth(150)
+  dotFill:SetColorTexture(0.75, 0.2, 0.25, 0.9)
+
+  local shield = bar:CreateTexture(nil, "OVERLAY")
+  shield:SetColorTexture(0.95, 0.85, 0.35, 0.85)
+
+  local rangeIcon = content:CreateTexture(nil, "OVERLAY")
+  rangeIcon:SetSize(16, 16)
+  rangeIcon:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
+
+  local function textureRow(count, texture, color)
+    local row = CreateFrame("Frame", nil, scene)
+    row.marks = {}
+    for i = 1, count do
+      local mark = row:CreateTexture(nil, "ARTWORK")
+      mark:SetTexture(texture)
+      mark:SetVertexColor(color[1], color[2], color[3], i == count and 0.35 or 1)
+      row.marks[i] = mark
+    end
+    return row
+  end
+  local dots = textureRow(5, "Interface\\CharacterFrame\\TempPortraitAlphaMask", {1, 0.8, 0.2})
+  local shards = textureRow(2, "Interface\\TargetingFrame\\UI-RaidTargetingIcon_3", {1, 1, 1})
+  local rail = textureRow(6, "Interface\\CharacterFrame\\TempPortraitAlphaMask", {0.9, 0.75, 0.3})
+  page.rows = { dots = dots, shards = shards, hunter = rail }
+  local function layoutRow(row, size)
+    row:SetSize(#row.marks * (size + 3) - 3, size)
+    for i, mark in ipairs(row.marks) do
+      mark:SetSize(size, size)
+      mark:ClearAllPoints()
+      mark:SetPoint("LEFT", row, "LEFT", (i - 1) * (size + 3), 0)
+    end
+  end
+
+  local caption = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  caption:SetPoint("TOPLEFT", scene, "BOTTOMLEFT", 0, -12)
+  caption:SetPoint("RIGHT", content, "RIGHT", -8, 0)
+  caption:SetJustifyH("LEFT")
+  page.caption = caption
+
+  local warn = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  warn:SetPoint("TOPLEFT", caption, "BOTTOMLEFT", 0, -8)
+  warn:SetPoint("RIGHT", content, "RIGHT", -8, 0)
+  warn:SetJustifyH("LEFT")
+
+  local function moduleOn(name)
+    if BIT.IsRunning(name) then return true end
+    return BIT.woke and BIT.woke[name] == true
+  end
+  local function seat(widget, offset)
+    widget:ClearAllPoints()
+    widget:SetPoint("TOP", bar, "BOTTOM", 0, -(offset or 0))
+  end
+
+  function page:refresh()
+    local plate = BIT.Plate or {}
+    local rows = plate.Rows()
+    local owns = rows.hunter.on
+    local dotDB = BattleInfoTool_DoTInfoDB or {}
+    local mods = BIT.DB().modules or {}
+    local dotsOn = moduleOn("DoTInfo") and dotDB.showMarkers ~= false and dotDB.nameplateMode ~= "off"
+    local shieldsOn = moduleOn("ShieldsInfo") and (mods.ShieldsInfo or {}).nameplates ~= false
+    local rs = mods.Range or {}
+    local rangeOn = moduleOn("Range") and (rs.showIn ~= false or rs.showOut ~= false)
+    local rdOn = rows.dots.on or rows.shards.on
+    local hunterOn = rows.hunter.on
+
+    dotFill:SetShown(dotsOn)
+    shield:ClearAllPoints()
+    if shieldsOn and dotsOn then
+      shield:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
+      shield:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 0, 0)
+      shield:SetHeight(plate.SHIELD_EDGE or 4)
+      shield:Show()
+    elseif shieldsOn then
+      shield:SetAllPoints(bar)
+      shield:Show()
+    else
+      shield:Hide()
+    end
+
+    rangeIcon:ClearAllPoints()
+    rangeIcon:SetPoint("BOTTOM", bar, "TOP", 0, 6)
+    rangeIcon:SetTexture(rs.showIn ~= false and "Interface\\RaidFrame\\ReadyCheck-Ready"
+      or "Interface\\RaidFrame\\ReadyCheck-NotReady")
+    rangeIcon:SetShown(rangeOn and not owns)
+
+    for name, widget in pairs(page.rows) do
+      local row = rows[name]
+      widget:SetShown(row.on)
+      layoutRow(widget, row.height)
+      seat(widget, row.offset)
+    end
+    local parts = {}
+    if not dotsOn then parts[#parts + 1] = "DoTs off" end
+    if not shieldsOn then parts[#parts + 1] = "Shields off" end
+    if not rangeOn then parts[#parts + 1] = "Range off" end
+    if not rdOn then parts[#parts + 1] = "Points unavailable or off" end
+    if not hunterOn then parts[#parts + 1] = "Hunter off" end
+    if owns then parts[#parts + 1] = "Range check hidden: the hunter rail owns this plate" end
+    if #parts == 0 then
+      caption:SetText("DoT fill stays on the bar. A shield shares that bar as a thin top edge.")
+    else
+      -- Whatever is switched off, the drawn shield is still named: its gold edge is never unexplained.
+      local text = table.concat(parts, " · ")
+      if shieldsOn then
+        text = text .. "\n" .. (dotsOn and "The thin top edge is the shield." or "The shield fills the bar.")
+      end
+      caption:SetText(text)
+    end
+    local clash = plate.ClashText(rows)
+    warn:SetText(clash)
+    if type(clash) == "string" and clash ~= "Nameplate lanes are clear." then
+      warn:SetTextColor(1, 0.75, 0.3)
+    else
+      warn:SetTextColor(0.6, 0.85, 0.6)
+    end
+    content:SetHeight(400)
+    if page.syncScroll then page.syncScroll() end
+  end
+  page:refresh()
+  return page
+end
+
 local function buildPage(name)
+  if name == TOGETHER then
+    local page = CreateFrame("Frame", nil, window)
+    page:SetPoint("TOPLEFT", MARGIN, -headerBottom())
+    page:SetPoint("BOTTOMRIGHT", -MARGIN, MARGIN)
+    page:Hide()
+    page.name = name
+    return buildTogether(page)
+  end
+
   local tab = BIT.tabs[name] or {}
   local page = CreateFrame("Frame", nil, window)
-  page:SetPoint("TOPLEFT", MARGIN, -(HEADER_HEIGHT + TAB_HEIGHT))
+  page:SetPoint("TOPLEFT", MARGIN, -headerBottom())
   page:SetPoint("BOTTOMRIGHT", -MARGIN, MARGIN)
   page:Hide()
   page.name = name
@@ -193,7 +502,21 @@ local function buildPage(name)
     function() return BIT.IsSwitchedOn(name) end,
     function(v)
       BIT.SetSwitchedOn(name, v)
-      refreshSwitch(page)
+      -- Still running: the page stays, and only the pending-reload line changes.
+      -- Ticked on while off: wake defaults and build the real settings.
+      -- Ticked off while not running: back to the off note. Gameplay waits for /reload.
+      if BIT.IsRunning(name) then
+        refreshSwitch(page)
+        return
+      end
+      if v then
+        BIT.Wake(name)
+      elseif BIT.woke then
+        BIT.woke[name] = nil
+      end
+      page:Hide()
+      pages[name], parkedPages[name] = parkedPages[name], page
+      selectTab(name)
     end, tab.summary)
   page.switch:SetPoint("TOPLEFT", 4, -6)
   page.stateLine = page:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
@@ -205,33 +528,11 @@ local function buildPage(name)
   end)
   page.reload:SetPoint("TOPRIGHT", -4, -7)
 
-  -- The content area is bounded and scrollable: the module's own controls (or the note and
-  -- the appearance editor while the module is off) live in the scroll child, and the window
-  -- itself stays at the bounded tab size, so nothing overflows past the tabs at any UI scale.
-  local scroll = CreateFrame("ScrollFrame", nil, page)
-  scroll:SetPoint("TOPLEFT", 0, -SWITCH_HEIGHT)
-  scroll:SetPoint("BOTTOMRIGHT", 0, 0)
-  scroll:EnableMouseWheel(true)
-  local content = CreateFrame("Frame", nil, scroll)
-  -- SetScrollChild owns the child's anchors: the native API replaces them with
-  -- TOPLEFT, so an opposing RIGHT anchor set before it cannot supply a width.
-  -- Give the child explicit geometry, as Blizzard's scroll frames do.
-  content:SetWidth(window:GetWidth() - 2 * MARGIN)
-  scroll:SetScrollChild(content)
-  scroll:SetScript("OnMouseWheel", function(_, delta)
-    local maxScroll = math.max(0, content:GetHeight() - scroll:GetHeight())
-    local at = scroll:GetVerticalScroll() - delta * 24
-    scroll:SetVerticalScroll(math.min(math.max(at, 0), maxScroll))
-  end)
-  scroll:SetScript("OnSizeChanged", function(_, width)
-    if width > 0 then content:SetWidth(width) end
-  end)
-  page.scroll, page.content = scroll, content
+  local content = attachScroll(page, SWITCH_HEIGHT)
 
-  -- The scroll child is at least as tall as the module's declared tab and the viewport.
-  local viewport = window:GetHeight() - HEADER_HEIGHT - TAB_HEIGHT - SWITCH_HEIGHT - 2 * MARGIN
+  local viewport = window:GetHeight() - headerBottom() - SWITCH_HEIGHT - 2 * MARGIN
   local function layoutContent()
-    local needed = tab.height or DEFAULT_TAB.height
+    local needed = math.max(tab.height or DEFAULT_TAB.height, page.offNote and 0 or content:GetHeight())
     if page.appearance then
       needed = math.max(needed, 74 + page.appearance:GetHeight())
       if page.modulePreview then
@@ -240,9 +541,11 @@ local function buildPage(name)
       end
     end
     content:SetHeight(math.max(needed, viewport))
+    if page.syncScroll then page.syncScroll() end
   end
 
-  if BIT.IsRunning(name) and type(tab.build) == "function" then
+  local showLive = (BIT.IsRunning(name) or (BIT.woke and BIT.woke[name])) and type(tab.build) == "function"
+  if showLive then
     local ok, err = pcall(tab.build, content)
     if not ok then
       BIT.Say("the " .. name .. " settings could not be built: " .. tostring(err))
@@ -254,15 +557,8 @@ local function buildPage(name)
     note:SetJustifyH("LEFT")
     note:SetText((tab.summary and (tab.summary .. "\n\n") or "")
       .. "Its settings are here while it runs; its appearance and a sample preview are below"
-      .. " -- they need no module runtime.")
+      .. " -- they need no module runtime. Tick Enable to open the settings before the next reload.")
     page.offNote = note
-    -- The shared appearance editor works without the module's runtime: no events, no
-    -- gameplay, no mechanics data. Its preview is the panel's own fictitious sample.
-    -- Optional pure per-module preview seam: a tab may supply buildPreview(parent)
-    -- for a static fictitious scene frame and previewRender(scene, style) for its
-    -- pure render. The editor's own refresh path re-renders that SAME scene with the
-    -- freshly resolved MODULE style (module overrides keep winning); no second
-    -- subscription is added and no runtime is started.
     local refreshModulePreview = nil
     if type(tab.buildPreview) == "function" or type(tab.previewRender) == "function" then
       refreshModulePreview = function()
@@ -279,9 +575,7 @@ local function buildPage(name)
     end
     page.appearance = BIT.UI.Appearance(content, name, tab.capabilities, refreshModulePreview, tab.legacy)
     page.appearance:SetPoint("TOPLEFT", 8, -74)
-    -- The scene itself: built once through the optional builder and retained as
-    -- page.modulePreview. A nil result is a silent static fallback; a builder
-    -- error is reported and the ordinary editor stays usable.
+    page.appearance.onLayout = layoutContent
     if type(tab.buildPreview) == "function" then
       local ok, scene = pcall(tab.buildPreview, content)
       if ok and type(scene) == "table"
@@ -305,16 +599,59 @@ local function buildPage(name)
   return page
 end
 
-local function select(name)
+selectTab = function(name)
   if not pages[name] then pages[name] = buildPage(name) end
   for n, page in pairs(pages) do page:SetShown(n == name) end
   for _, button in ipairs(tabButtons) do
     local on = button.name == name
+    local r, g, b = tabTextColor(button.name, on)
     button.bg:SetColorTexture(on and 0.2 or 0.1, on and 0.3 or 0.1, on and 0.45 or 0.12, 1)
-    button.text:SetTextColor(on and 1 or 0.75, on and 1 or 0.75, on and 1 or 0.75)
+    button.text:SetTextColor(r, g, b)
   end
   current = name
-  refreshSwitch(pages[name])
+  local page = pages[name]
+  if name == TOGETHER and type(page.refresh) == "function" then page:refresh() end
+  refreshSwitch(page)
+end
+
+local function addTabButton(name, label, tipTitle, tipBody, extraTip)
+  local button = CreateFrame("Button", nil, window)
+  button.name = name
+  button.bg = button:CreateTexture(nil, "BACKGROUND")
+  button.bg:SetAllPoints()
+  button.text = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  button.text:SetPoint("CENTER")
+  button.text:SetText(label)
+  local width = math.max(64, (button.text:GetStringWidth() or 48) + 18)
+  button:SetSize(width, TAB_HEIGHT - 2)
+  button:SetScript("OnClick", function() selectTab(name) end)
+  button:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText(tipTitle or label, 1, 1, 1)
+    if tipBody and tipBody ~= "" then GameTooltip:AddLine(tipBody, nil, nil, nil, true) end
+    if extraTip then GameTooltip:AddLine(extraTip, 0.8, 0.8, 0.6, true) end
+    GameTooltip:Show()
+  end)
+  button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  tabButtons[#tabButtons + 1] = button
+  return button
+end
+
+local function layoutTabs()
+  local maxW = (window:GetWidth() or 400) - MARGIN
+  local x = MARGIN
+  local row = 0
+  for _, button in ipairs(tabButtons) do
+    local width = button:GetWidth() or 64
+    if x > MARGIN and x + width > maxW then
+      x = MARGIN
+      row = row + 1
+    end
+    button:ClearAllPoints()
+    button:SetPoint("TOPLEFT", x, -(HEADER_HEIGHT + row * TAB_HEIGHT))
+    x = x + width + 4
+  end
+  tabRows = row + 1
 end
 
 local function createWindow()
@@ -322,7 +659,6 @@ local function createWindow()
   window = CreateFrame("Frame", "BattleInfoToolSettings", UIParent, "BackdropTemplate")
   window:Hide()
   window:SetSize(w + 2 * MARGIN, HEADER_HEIGHT + TAB_HEIGHT + SWITCH_HEIGHT + h + MARGIN)
-  window:SetPoint("CENTER")
   window:SetFrameStrata("DIALOG")
   window:SetToplevel(true)
   window:SetClampedToScreen(true)
@@ -330,7 +666,11 @@ local function createWindow()
   window:SetMovable(true)
   window:RegisterForDrag("LeftButton")
   window:SetScript("OnDragStart", window.StartMoving)
-  window:SetScript("OnDragStop", window.StopMovingOrSizing)
+  window:SetScript("OnDragStop", function(self)
+    if type(self.StopMovingOrSizing) == "function" then self:StopMovingOrSizing() end
+    rememberWindowPoint()
+  end)
+  applyWindowPoint()
   UI.Backdrop(window, 0.06, 0.97)
   if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "BattleInfoToolSettings") end
 
@@ -340,32 +680,34 @@ local function createWindow()
   local close = CreateFrame("Button", nil, window, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", -6, -6)
 
-  local x = MARGIN
+  addTabButton(TOGETHER, "Together", "Together",
+    "Every enabled mark on one nameplate, and a warning when their lanes overlap.")
   for _, name in ipairs(BIT.order) do
     local tab = BIT.tabs[name] or {}
-    local button = CreateFrame("Button", nil, window)
-    button.name = name
-    button.bg = button:CreateTexture(nil, "BACKGROUND")
-    button.bg:SetAllPoints()
-    button.text = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    button.text:SetPoint("CENTER")
-    button.text:SetText(tab.title or name)
-    button:SetSize(math.max(96, (button.text:GetStringWidth() or 80) + 24), TAB_HEIGHT - 2)
-    button:SetPoint("TOPLEFT", x, -HEADER_HEIGHT)
-    button:SetScript("OnClick", function() select(name) end)
-    x = x + button:GetWidth() + 4
-    tabButtons[#tabButtons + 1] = button
+    local extra
+    if name == "HunterRangeFinder" and playerClass() ~= "HUNTER" then
+      extra = "Hunter only. Settings are here for an alt."
+    end
+    addTabButton(name, SHORT_LABEL[name] or tab.title or name, tab.title or name, tab.summary, extra)
   end
+  layoutTabs()
+  window:SetHeight(HEADER_HEIGHT + TAB_HEIGHT * tabRows + SWITCH_HEIGHT + h + MARGIN)
+
   window:SetScript("OnShow", function()
-    if current and pages[current] then refreshSwitch(pages[current]) end
+    if current and pages[current] then
+      if current == TOGETHER and type(pages[current].refresh) == "function" then
+        pages[current]:refresh()
+      end
+      refreshSwitch(pages[current])
+    end
   end)
 end
 
 -- Opens the window, on a module's tab when name is given; a second call without a name closes it.
 function BIT.OpenSettings(name)
   if not window then createWindow() end
-  if name and BIT.tabs[name] then
-    select(name)
+  if name == TOGETHER or (name and BIT.tabs[name]) then
+    selectTab(name)
     window:Show()
     return
   end
@@ -373,7 +715,7 @@ function BIT.OpenSettings(name)
     window:Hide()
     return
   end
-  select(current or BIT.order[1])
+  selectTab(current or TOGETHER)
   window:Show()
 end
 
@@ -393,6 +735,7 @@ local function slash(msg)
   local word, rest = msg:match("^%s*(%S*)%s*(.-)%s*$")
   word = (word or ""):lower()
   if word == "" then BIT.OpenSettings() return end
+  if word == "together" or word == "all" then BIT.OpenSettings(TOGETHER) return end
   if BIT.commands[word] then BIT.commands[word](rest) return end
   for _, name in ipairs(BIT.order) do
     if word == name:lower() or BIT.tabWords[word] == name then BIT.OpenSettings(name) return end

@@ -58,6 +58,7 @@ local FILLERS_DE = {
 
 -- A number as it looks after normalisation (thousand separators removed, "." as decimal point).
 local NUM = "[0-9]+%.?[0-9]*"
+local englishNumbers
 
 local function detectLanguage(t)
   if find(t, "sek%.") or find(t, "schaden") or find(t, "punkt%(e%)") or find(t, "heilt ")
@@ -131,16 +132,16 @@ local function formatNumber(v)
 end
 
 local function replaceFormulas(t)
-  local n
+  local n, prev
   repeat
+    prev = t
     t, n = gsub(t, "%[([0-9 %.%+%-%*/%(%)]+)%]", function(expr)
       local v = evalArithmetic(expr)
       if v then return formatNumber(v) end
     end)
-  until n == 0
+  until n == 0 or t == prev
   -- Whatever is still in brackets holds words (optional glyph or talent text); it is not
   -- part of the spell's own numbers.
-  local prev
   repeat
     prev = t
     t = gsub(t, "%b[]", " ")
@@ -571,6 +572,10 @@ end
 -- exactly as before.
 function Parser.ParseItemHeal(text, lang)
   if type(text) ~= "string" or text == "" then return nil, "empty" end
+  -- Forever can mix English descriptions with the German client's units and numbers.
+  local textLang = Parser.TextLanguage(text, lang)
+  if lang == "de" and textLang == "en" then text = englishNumbers(text) end
+  lang = textLang
   local t
   t, lang = prepare(text, lang)
   local lo, hi
@@ -593,8 +598,11 @@ function Parser.ParseItemHeal(text, lang)
       if not a then a, d = match(t, "stellt (" .. NUM .. ") leben \195\188ber (" .. NUM .. ") sek") end
       if not a then a, b, d = match(t, "heilt (" .. NUM .. ") bis (" .. NUM .. ") schaden \195\188ber (" .. NUM .. ") sek") end
       if not a then a, d = match(t, "heilt (" .. NUM .. ") schaden \195\188ber (" .. NUM .. ") sek") end
-      if not a then a, b, m = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") gesundheit \195\188ber (" .. NUM .. ") min") end
-      if not a then a, m = match(t, "stellt (" .. NUM .. ") gesundheit \195\188ber (" .. NUM .. ") min"); if a then d, minutes = m, true end end
+      if not a then
+        a, b, d = match(t, "stellt (" .. NUM .. ") bis (" .. NUM .. ") gesundheit \195\188ber (" .. NUM .. ") min")
+        if not a then a, d = match(t, "stellt (" .. NUM .. ") gesundheit \195\188ber (" .. NUM .. ") min") end
+        if a then minutes = true end
+      end
       if a then lo, hi, dur = a, (b or a), d end
     end
     -- Over time (duration first): "stellt im Verlauf von 21 Sek. insgesamt 243
@@ -638,8 +646,11 @@ function Parser.ParseItemHeal(text, lang)
       if not a then a, d = match(t, "heals (" .. NUM .. ") damage over (" .. NUM .. ") sec") end
       if not a then a, b, d = match(t, "heals (" .. NUM .. ") to (" .. NUM .. ") health over (" .. NUM .. ") sec") end
       if not a then a, d = match(t, "heals (" .. NUM .. ") health over (" .. NUM .. ") sec") end
-      if not a then a, b, m = match(t, "restores (" .. NUM .. ") to (" .. NUM .. ") health over (" .. NUM .. ") min") end
-      if not a then a, m = match(t, "restores (" .. NUM .. ") health over (" .. NUM .. ") min"); if a then d, minutes = m, true end end
+      if not a then
+        a, b, d = match(t, "restores (" .. NUM .. ") to (" .. NUM .. ") health over (" .. NUM .. ") min")
+        if not a then a, d = match(t, "restores (" .. NUM .. ") health over (" .. NUM .. ") min") end
+        if a then minutes = true end
+      end
       if a then lo, hi, dur = a, (b or a), d end
     end
     -- Instant: "Restores 70 to 90 health." / "Heals 66 damage."
@@ -1368,7 +1379,7 @@ end
 local GERMAN_WORDS = { " und ", " der ", " die ", " das ", " den ", " dem ", " des ", " ein", " um ", " mit ", " von ",
   " zu ", "schaden", " ihr ", " euch", " euer", " eure" }
 local ENGLISH_WORDS = { " the ", " a ", " you", " for ", " and ", " of ", " to ", " with ", " from ", " into ", " is ",
-  " by ", "damage", " sec" }
+  " by ", "damage", " sec", "health", "restores", "heals" }
 
 function Parser.TextLanguage(text, lang)
   if lang ~= "de" or type(text) ~= "string" then return lang end
@@ -1380,7 +1391,7 @@ end
 -- The English text of a German client still has the client's German numbers and units:
 -- "Cannibalize 1.290 of your own Health over 15 Sek.", "suffer 175 bis 189 Holy damage". They are
 -- put the English way, so the English readers take them as they are meant.
-local function englishNumbers(text)
+englishNumbers = function(text)
   local t, prev = text, nil
   repeat prev = t; t = gsub(t, "([0-9])%.([0-9][0-9][0-9])", "%1%2") until t == prev
   t = gsub(t, "([0-9]),([0-9])", "%1.%2")

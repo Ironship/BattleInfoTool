@@ -18,11 +18,14 @@ local DEFAULTS = {
   reduction = true,     -- show by how much a debuff lowers the enemy's damage, in red
   size = 100,           -- button number size in percent of the default (SIZE_MIN..SIZE_MAX)
   position = "bottom",  -- where the number sits on the button: bottom, center or top
+  sidePosition = "opposite", -- second line: opposite the number, or forced bottom / top
+  skipUtilityBars = true,   -- no numbers on the stance bar or the pet bar
   interfaceLang = "auto",  -- interface language: "auto", "en", "de"
   weapon = true,        -- potential damage of weapon abilities and attack power spells, in blue
 }
 local BUTTON_MODES = { total = true, direct = true, off = true }
 local POSITIONS = { bottom = true, center = true, top = true }
+local SIDE_POSITIONS = { opposite = true, bottom = true, top = true }
 local SIZE_MIN, SIZE_MAX = 50, 200
 
 local db = {}
@@ -141,7 +144,7 @@ end
 local function getCastTime(spellID)
   if C_Spell and type(C_Spell.GetSpellInfo) == "function" then
     local ok, info = pcall(C_Spell.GetSpellInfo, spellID)
-    if ok and type(info) == "table" then
+    if ok and not isSecret(info) and type(info) == "table" then
       local ms = info.castTime
       if not isSecret(ms) and type(ms) == "number" then return ms / 1000 end
     end
@@ -267,6 +270,7 @@ local function readWeapon()
   if type(UnitAttackSpeed) == "function" then
     local ok, speed, off = pcall(UnitAttackSpeed, "player")
     if ok then
+      local offSecret = isSecret(off)
       speed = number(speed)
       if speed and speed > 0 then
         weaponStats.meleeSpeed = speed
@@ -274,15 +278,19 @@ local function readWeapon()
         weaponStats.speedSeal = ns.ActiveSeal and ns.ActiveSeal() or nil
       end
       off = number(off)
-      if off ~= nil or speed then weaponStats.offhandSpeed = (off and off > 0) and off or nil end
+      if not offSecret then weaponStats.offhandSpeed = (off and off > 0) and off or nil end
     end
   end
   if type(UnitRangedDamage) == "function" then
     local ok, speed, lo, hi = pcall(UnitRangedDamage, "player")
     if ok then
       speed, lo, hi = number(speed), number(lo), number(hi)
-      if speed and lo and hi and speed > 0 and hi > 0 then
-        weaponStats.ranged, weaponStats.rangedSpeed = (lo + hi) / 2, speed
+      if speed and lo and hi then
+        if speed > 0 and hi > 0 then
+          weaponStats.ranged, weaponStats.rangedSpeed = (lo + hi) / 2, speed
+        else
+          weaponStats.ranged, weaponStats.rangedSpeed = nil, nil
+        end
       end
     end
   end
@@ -290,7 +298,7 @@ local function readWeapon()
     local ok, base, pos, neg = pcall(UnitAttackPower, "player")
     if ok then
       base, pos, neg = number(base), number(pos), number(neg)
-      if base then weaponStats.ap = base + (pos or 0) + (neg or 0) end
+      if base and pos and neg then weaponStats.ap = base + pos + neg end
     end
   end
   if type(UnitHealthMax) == "function" then
@@ -641,7 +649,7 @@ local function itemUseText(itemID)
   if memo ~= nil then return memo ~= "" and memo or nil end
   if type(C_TooltipInfo) ~= "table" or type(C_TooltipInfo.GetHyperlink) ~= "function" then return nil end
   local ok, data = pcall(C_TooltipInfo.GetHyperlink, "item:" .. tostring(itemID))
-  if not ok or isSecret(data) or type(data) ~= "table" or type(data.lines) ~= "table" then return nil end
+  if not ok or isSecret(data) or type(data) ~= "table" or isSecret(data.lines) or type(data.lines) ~= "table" then return nil end
   local out, cacheable, shown = {}, true, 0
   for _, line in ipairs(data.lines) do
     if type(line) ~= "table" or isSecret(line) then
@@ -849,14 +857,30 @@ local function setFont(fs, size)
 end
 
 -- Shrink the text until it fits inside the button.
-local function fitWidth(fs, button)
+local function fitWidth(fs, button, countShown)
   local w = readNumber(button, "GetWidth")
   if not w or type(fs.GetStringWidth) ~= "function" then return end
-  local size = fontSizes[fs]
+  local available = w - 2
+  if countShown then
+    local count = rawget(button, "Count") or rawget(button, "count")
+    local countWidth = type(count) == "table" and readNumber(count, "GetStringWidth") or nil
+    available = math.max(MIN_FONT, available - (countWidth or 12) - 4)
+  end
+  local size, initialSize = fontSizes[fs], fontSizes[fs]
   for _ = 1, 10 do
     local sw = readNumber(fs, "GetStringWidth")
-    if not sw or sw <= w - 2 or size <= MIN_FONT then return end
-    size = math.max(MIN_FONT, math.min(size - 1, math.floor(size * (w - 2) / sw)))
+    if not sw or sw <= available then return end
+    if size <= MIN_FONT then
+      if countShown then
+        -- A full cost/gain label cannot fit beside a count: put it just above that corner.
+        fs:ClearAllPoints()
+        fs:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 14)
+        setFont(fs, initialSize)
+        fitWidth(fs, button, false)
+      end
+      return
+    end
+    size = math.max(MIN_FONT, math.min(size - 1, math.floor(size * available / sw)))
     setFont(fs, size)
   end
 end
@@ -898,9 +922,27 @@ local function placeMain(fs, button, countShown)
   end
 end
 
+-- The second line's corner. "opposite" keeps today's place: top when the number is not
+-- already there. A choice that lands on the number's own end is nudged to the other end,
+-- so Drain Life, Life Tap and a reduction never share the hotkey or the item count.
+local function sideAnchor()
+  local side = db.sidePosition
+  if not SIDE_POSITIONS[side] then side = "opposite" end
+  local anchor
+  if side == "opposite" then
+    anchor = (db.position == "top") and "bottom" or "top"
+  else
+    anchor = side
+  end
+  if anchor == db.position then
+    anchor = (db.position == "top") and "bottom" or "top"
+  end
+  return anchor
+end
+
 local function placeSide(fs, button)
   fs:ClearAllPoints()
-  if db.position == "top" then
+  if sideAnchor() == "bottom" then
     fs:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
   else
     fs:SetPoint("TOPLEFT", button, "TOPLEFT", 2, -2)
@@ -934,6 +976,34 @@ end
 local function hide(fs)
   if fs then fs:SetText(""); fs:Hide() end
 end
+
+-- BonusActionButton is the main combat bar in forms/stealth on older clients,
+-- not the stance selector. Keep its numbers; StanceButton is never collected.
+-- Turning pet skip on drops collected buttons and hides their labels.
+local function dropListed(list, pred, slots)
+  local i = 1
+  while list[i] do
+    local button = list[i]
+    if pred(button) then
+      hide(labels[button])
+      hide(sideLabels[button])
+      if slots then slots[button] = nil end
+      table.remove(list, i)
+    else
+      i = i + 1
+    end
+  end
+end
+
+local function recollectButtons()
+  collectButtons()
+  if db.skipUtilityBars ~= false then
+    dropListed(petButtons, function() return true end, petSlots)
+  else
+    collectPetButtons()
+  end
+end
+ns.RecollectButtons = recollectButtons
 
 local function spellOnSlot(slot)
   if isSecret(slot) or type(slot) ~= "number" or type(GetActionInfo) ~= "function" then return nil end
@@ -1059,32 +1129,26 @@ ns.ButtonText = buttonText
 
 -- Life Tap has two full labels, not a small reduction in the opposite corner. Keep both
 -- below the hotkey even at 200% size; the health cost is always above the mana gained.
-local function drawStacked(button, fs, side, mainText, mainColor, sideText, sideColor)
+local function drawStacked(button, fs, side, mainText, mainColor, sideText, sideColor, countShown)
   local h = readNumber(button, "GetHeight") or 36
   local size = math.min(fontSize(button, SIDE_SHARE), math.max(MIN_FONT, math.floor((h - 18) / 2)))
-  local mainY = 2
+  placeMain(fs, button, countShown)
+  setFont(fs, size)
+  fs:SetTextColor(mainColor[1], mainColor[2], mainColor[3])
+  fs:SetText(mainText)
+  fitWidth(fs, button, countShown and db.position == "bottom")
+  fs:Show()
   if side and sideText then
-    side:ClearAllPoints()
-    side:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 2)
-    side:SetJustifyH("LEFT")
+    placeSide(side, button)
     setFont(side, size)
     local c = sideColor or Format.WEAPON_COLOR
     side:SetTextColor(c[1], c[2], c[3])
     side:SetText(sideText)
-    fitWidth(side, button)
+    fitWidth(side, button, countShown and sideAnchor() == "bottom")
     side:Show()
-    mainY = fontSizes[side] + 3
   else
     hide(side)
   end
-  fs:ClearAllPoints()
-  fs:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, mainY)
-  fs:SetJustifyH("LEFT")
-  setFont(fs, size)
-  fs:SetTextColor(mainColor[1], mainColor[2], mainColor[3])
-  fs:SetText(mainText)
-  fitWidth(fs, button)
-  fs:Show()
 end
 
 -- Draws the text from buttonText on a button: fs is the main FontString, side the reduction's
@@ -1096,14 +1160,14 @@ local function drawNumber(button, fs, side, mainText, mainColor, sideText, count
     return
   end
   if layout == "stacked" then
-    drawStacked(button, fs, side, mainText, mainColor, sideText, sideColor)
+    drawStacked(button, fs, side, mainText, mainColor, sideText, sideColor, countShown)
     return
   end
   placeMain(fs, button, countShown)
   setFont(fs, fontSize(button, 1))
   fs:SetTextColor(mainColor[1], mainColor[2], mainColor[3])
   fs:SetText(mainText)
-  fitWidth(fs, button)
+  fitWidth(fs, button, countShown and db.position == "bottom")
   fs:Show()
 
   if sideText and side then
@@ -1112,6 +1176,7 @@ local function drawNumber(button, fs, side, mainText, mainColor, sideText, count
     local c = sideColor or Format.REDUCTION_COLOR
     side:SetTextColor(c[1], c[2], c[3])
     side:SetText(sideText)
+    fitWidth(side, button, countShown and sideAnchor() == "bottom")
     side:Show()
   else
     hide(side)
@@ -1560,6 +1625,8 @@ end
 local function validSetting(key, value)
   if key == "button" then return BUTTON_MODES[value] == true end
   if key == "position" then return POSITIONS[value] == true end
+  if key == "sidePosition" then return SIDE_POSITIONS[value] == true end
+  if key == "skipUtilityBars" then return type(value) == "boolean" end
   if key == "size" then return type(value) == "number" and value >= SIZE_MIN and value <= SIZE_MAX end
   if key == "estimate" or key == "tooltip" or key == "reduction" or key == "weapon" then return type(value) == "boolean" end
   if key == "interfaceLang" then return value == "auto" or value == "en" or value == "de" end
@@ -1580,6 +1647,7 @@ function ns.SetSetting(key, value)
   if not validSetting(key, value) then return false end
   if key == "size" then value = math.floor(value + 0.5) end
   db[key] = value
+  if key == "skipUtilityBars" and type(ns.RecollectButtons) == "function" then ns.RecollectButtons() end
   requestUpdate()
   return true
 end
@@ -1587,6 +1655,8 @@ end
 function ns.ResetSettings()
   for k, v in pairs(DEFAULTS) do db[k] = v end
   ns.SetInterfaceAndRefreshL(DEFAULTS.interfaceLang)
+  -- Reset skips the pet bar again; the main bonus combat bar keeps its numbers.
+  if type(ns.RecollectButtons) == "function" then ns.RecollectButtons() end
   requestUpdate()
 end
 
@@ -1705,6 +1775,8 @@ local function loadSettings()
     end
   end
   if not POSITIONS[db.position] then db.position = DEFAULTS.position end
+  if not SIDE_POSITIONS[db.sidePosition] then db.sidePosition = DEFAULTS.sidePosition end
+  if type(db.skipUtilityBars) ~= "boolean" then db.skipUtilityBars = DEFAULTS.skipUtilityBars end
   if db.interfaceLang ~= "auto" and db.interfaceLang ~= "en" and db.interfaceLang ~= "de" then
     db.interfaceLang = DEFAULTS.interfaceLang
   end
@@ -1715,6 +1787,14 @@ local function loadSettings()
   elseif db.size > SIZE_MAX then
     db.size = SIZE_MAX
   end
+end
+
+if BIT.RegisterWaker then
+  BIT.RegisterWaker("SpellDamageInfo", function()
+    if type(ns.DecideLangsAtLoad) == "function" then ns.DecideLangsAtLoad() end
+    loadSettings()
+    if type(ns.InitInterfaceL) == "function" then ns.InitInterfaceL(db.interfaceLang) end
+  end)
 end
 
 ---------------------------------------------------------------------------------------------
@@ -1753,7 +1833,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     end
   elseif event == "PLAYER_LOGIN" then
     collectButtons()
-    collectPetButtons()
+    if db.skipUtilityBars == false then collectPetButtons() end
     hookTooltips()
     for _, e in ipairs(UPDATE_EVENTS) do register(e) end
     for _, e in ipairs(RESET_EVENTS) do register(e) end
@@ -1813,7 +1893,12 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
       requestUpdate()
     end
   elseif event == "PET_BAR_UPDATE" then
-    collectPetButtons()
+    -- collectPetButtons only grows. The skip has to drop a bar the event just found.
+    if db and db.skipUtilityBars ~= false then
+      dropListed(petButtons, function() return true end, petSlots)
+    elseif db then
+      collectPetButtons()
+    end
     requestUpdate()
   else
     if isReset[event] then clearCache() end

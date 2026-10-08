@@ -60,7 +60,7 @@ local FILL_TEXTURES = {
     path = TEXTURE_DIR .. "Stripes.tga", tiled = true },
   { id = "shield_aura", label = "Shield aura", hint = "The module's own shield aura art.",
     path = TEXTURE_DIR .. "shield_aura.tga" },
-  { id = "shield_aura_mirrored", label = "Shield aura (mirrored)",
+  { id = "shield_aura_mirrored", label = "Mirrored aura",
     hint = "The shield aura art, mirrored.",
     path = TEXTURE_DIR .. "shield_aura_mirrored.tga" },
 }
@@ -264,9 +264,28 @@ local function overlayFor(healthBar)
     return b
   end)
   if not ok or type(bar) ~= "table" then return nil end
-  o = { bar = bar, unit = nil, plate = false, party = false, current = false }
+  o = { bar = bar, unit = nil, plate = false, party = false, current = false, edge = false }
   overlays[healthBar] = o
   return o
+end
+
+-- A DoT marker already paints the fill. The shield then keeps a thin edge along the top
+-- so both stay readable. With no DoT marker the overlay covers the bar, as before.
+local function applyOverlayMode(o, edge)
+  edge = edge and true or false
+  if o.edge == edge then return end
+  local bar = o.bar
+  local healthBar = type(bar.GetParent) == "function" and bar:GetParent() or nil
+  if type(healthBar) ~= "table" then return end
+  bar:ClearAllPoints()
+  if edge then
+    bar:SetPoint("TOPLEFT", healthBar, "TOPLEFT", 0, 0)
+    bar:SetPoint("TOPRIGHT", healthBar, "TOPRIGHT", 0, 0)
+    bar:SetHeight(BIT.Plate and BIT.Plate.SHIELD_EDGE or 4)
+  else
+    bar:SetAllPoints(healthBar)
+  end
+  o.edge = edge
 end
 
 -- One unit's remaining absorb on one health bar. Raw values go to the native setters only;
@@ -277,7 +296,7 @@ end
 -- compared, and a depleted plain shield hides like any missing one.
 local function updateBar(unit, healthBar, enabled)
   local o = type(healthBar) == "table" and overlays[healthBar] or nil
-  if type(healthBar) ~= "table" or not enabled or unit == nil then
+  if type(healthBar) ~= "table" or not enabled or isSecret(unit) or type(unit) ~= "string" then
     hideOverlay(o)
     return
   end
@@ -293,6 +312,8 @@ local function updateBar(unit, healthBar, enabled)
     if not o then return end
   end
   local ok = pcall(function()
+    local dotOn = BIT.Plate and type(BIT.Plate.DotOnUnit) == "function" and BIT.Plate.DotOnUnit(unit)
+    applyOverlayMode(o, dotOn == true)
     o.bar:SetMinMaxValues(0, maxHealth)
     o.bar:SetValue(absorb)
     o.bar:Show()
@@ -370,7 +391,7 @@ end
 
 -- One member frame into the bars list when it carries a unit and a health bar.
 local function collectMember(f, bars)
-  if type(f) == "table" and type(f.unit) == "string" then
+  if type(f) == "table" and not isSecret(f.unit) and type(f.unit) == "string" then
     local bar = partyBarOf(f)
     if bar then bars[#bars + 1] = { unit = f.unit, bar = bar } end
   end
@@ -408,7 +429,19 @@ end
 -- and CompactRaidFrameContainer's members (memberUnitFrames or EnumerateActive). The
 -- compact hooks update the same frames between ticks; this is the plan B when a hook
 -- never fired or a frame refreshed past them.
+local compactFrames = setmetatable({}, { __mode = "k" })
+local function compactGroup(frame)
+  if type(frame) ~= "table" or isSecret(frame.unit) or type(frame.unit) ~= "string" then return false end
+  if type(frame.IsForbidden) == "function" and frame:IsForbidden() then return false end
+  if type(frame.IsVisible) == "function" and not frame:IsVisible() then return false end
+  return frame.unit:match("^party%d+$") or frame.unit:match("^raid%d+$") or frame.unit:match("^arena%d+$")
+end
+
 local function compactBars(bars)
+  -- Frames learned from Blizzard's hooks may belong to a nested raid pool or arena UI.
+  for frame in pairs(compactFrames) do
+    if compactGroup(frame) then collectMember(frame, bars) end
+  end
   local cpf = _G.CompactPartyFrame
   if type(cpf) == "table" and type(cpf.memberUnitFrames) == "table" then
     for _, f in pairs(cpf.memberUnitFrames) do
@@ -529,7 +562,8 @@ local function compactUpdate(frame)
   local ok = pcall(function()
     if type(frame) ~= "table" then return end
     if type(frame.IsForbidden) == "function" and frame:IsForbidden() then return end
-    if type(frame.unit) ~= "string" then return end
+    if not compactGroup(frame) then return end
+    compactFrames[frame] = true
     local bar = partyBarOf(frame)
     if type(bar) ~= "table" then return end
     updateBar(frame.unit, bar, settings ~= nil and settings.party or false)
@@ -628,14 +662,19 @@ local function start()
   driver:Show()
 end
 
+local function prepareShieldSettings()
+  settings = BIT.Settings("ShieldsInfo", DEFAULTS)
+  M.settings = settings
+end
+if BIT.RegisterWaker then BIT.RegisterWaker("ShieldsInfo", prepareShieldSettings) end
+
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("ADDON_LOADED")
 loader:SetScript("OnEvent", function(self, _, name)
   if name ~= BIT.name then return end
   self:UnregisterAllEvents()
   if not BIT.ShouldRun("ShieldsInfo") then return end
-  settings = BIT.Settings("ShieldsInfo", DEFAULTS)
-  M.settings = settings
+  prepareShieldSettings()
   start()
 end)
 
@@ -904,6 +943,16 @@ local function pushButton(parent, text, width, onClick)
   button:SetText(text)
   button:SetScript("OnClick", onClick)
   return button
+end
+
+-- The width the text needs in the panel button's own font (GameFontNormal), measured on a hidden
+-- string, so a label such as "Nameplate" is never cut off by its button.
+local function labelWidth(parent, text)
+  local probe = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  probe:SetText(text)
+  local width = probe:GetStringWidth() or 0
+  probe:Hide()
+  return width
 end
 
 local function closeMenu()
@@ -1253,15 +1302,22 @@ local function buildLivePreview(pane)
   switch:SetPoint("TOPLEFT", which, "BOTTOMLEFT", 0, -4)
   local switchButtons = {}
   local switchRow = {}
+  -- Each button is as wide as its own name needs, with 9 px either side of the text; the four and
+  -- their 3 px gaps stay within the card.
+  local left = 0
   for i = 1, #FRAME_MOCKS do
     local m = FRAME_MOCKS[i]
-    local b = pushButton(switch, m.label, 62, function()
+    local b = pushButton(switch, m.label, 56, function()
       preview.frame = m.id
       changed()
     end)
-    b:SetPoint("TOPLEFT", switch, "TOPLEFT", (i - 1) * 66, 0)
+    local width = math.max(56, math.ceil(labelWidth(switch, m.label)) + 18)
+    b:SetWidth(width)
+    b:SetPoint("TOPLEFT", switch, "TOPLEFT", left, 0)
+    left = left + width + 3
     switchButtons[m.id] = b
   end
+  M._frameButtons = switchButtons
   function switchRow:Refresh()
     for id, b in pairs(switchButtons) do
       b:SetAlpha(id == preview.frame and 1 or 0.55)
@@ -1443,7 +1499,13 @@ local function buildTabs(area)
     if ok and type(editor) == "table" then
       editor:SetPoint("TOPLEFT", effects.inner, "TOPLEFT", 0, -effects.y)
       effects.editor = editor
-      effects.y = effects.y + (editor:GetHeight() or 0) + 8
+      local editorTop = effects.y
+      editor.onLayout = function()
+        effects.y = editorTop + (editor:GetHeight() or 0) + 8
+        effects:finish()
+        effects.content:SetVerticalScroll(0)
+      end
+      effects.y = editorTop + (editor:GetHeight() or 0) + 8
     end
   end
   effects.resetExtra = function()

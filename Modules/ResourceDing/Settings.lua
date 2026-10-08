@@ -300,6 +300,8 @@ end
 -- HUD draws (Dots.lua / Shards.lua layout, sizes and clamps), over fixed data.
 ---------------------------------------------------------------------------
 
+local plateClashRow
+
 function updateLivePreview()
   local scene = previewScene
   if not scene or not Addon.db then return end
@@ -308,6 +310,9 @@ function updateLivePreview()
   local size = clampNumber(db.dotSize, 8, 24, 14)
   local dotOffset = clampNumber(db.dotOffset, -80, 30, 2)
   local shardOffset = clampNumber(db.shardOffset, -80, 30, 2)
+  if plateClashRow and plateClashRow.text and BIT.Plate and type(BIT.Plate.ClashText) == "function" then
+    plateClashRow.text:SetText(BIT.Plate.ClashText())
+  end
   local points = math.floor(tonumber(previewState.points) or MAX_POINTS)
   if points < 0 then points = 0 elseif points > MAX_POINTS then points = MAX_POINTS end
 
@@ -368,7 +373,7 @@ function updateLivePreview()
     end
   end
 
-  local caption = points .. " of " .. MAX_POINTS .. " combo points"
+  local caption = "Sample: " .. points .. " of " .. MAX_POINTS .. " combo points"
   if points >= MAX_POINTS then caption = caption .. " (full)" end
   if db.enabled and db.shardDiamonds then caption = caption .. "  |  " .. points .. " soul shards" end
   scene.caption:SetText(caption)
@@ -562,7 +567,11 @@ local function buildTabs()
   dots:slider("dotSize", "Dot / diamond size", 8, 24, 1,
     { tooltip = "How big the circles and the shard diamonds are." })
   dots:slider("dotOffset", "Dot offset (- = above)", -80, 30, 1,
-    { tooltip = "How far the dots sit from the health bar; negative puts them above it." })
+    { tooltip = "How far the dots sit from the health bar. The same seat as the hunter rail: top of the row, -offset under the bar." })
+  plateClashRow = dots:note("Nameplate lanes")
+  if plateClashRow and plateClashRow.text and BIT.Plate and type(BIT.Plate.ClashText) == "function" then
+    plateClashRow.text:SetText(BIT.Plate.ClashText())
+  end
   dots:gap()
 
   local shards = addTab("Shards")
@@ -615,7 +624,12 @@ end
 -- Built into its tab of the BattleInfoTool window: the live preview on the left,
 -- the settings as tabs on the right, each with "Reset this tab".
 function Addon.CreateSettingsPanel(parent)
-  if Addon.settingsPanel then return Addon.settingsPanel end
+  if Addon.settingsPanel then
+    if parent then Addon.settingsPanel:SetParent(parent) end
+    Addon.settingsPanel:SetAllPoints()
+    Addon.settingsPanel:Show()
+    return Addon.settingsPanel
+  end
   local panel = CreateFrame("Frame", nil, parent)
   panel:SetAllPoints()
   panel.name = "ResourceDing"

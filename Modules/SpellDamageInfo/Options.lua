@@ -20,7 +20,7 @@ local ns = BIT.Module and BIT.Module("SpellDamageInfo") or BIT
 local L, Estimate = ns.L, ns.Estimate
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
-local WINDOW_WIDTH, WINDOW_HEIGHT = 660, 384
+local WINDOW_WIDTH, WINDOW_HEIGHT = 660, 460
 local HEADER_HEIGHT = 46
 local PREVIEW_WIDTH = 250
 local ROW_HEIGHT = 28
@@ -37,7 +37,10 @@ local SIZE_STEP = 5
 -- 157) and Forever's Rockbiter Weapon (554 attack power, shown as what it adds to each hit).
 local SAMPLE_POWER = { [2] = 50, [3] = 50, [4] = 50, [5] = 50, [6] = 50, [7] = 50 }
 local SAMPLE_WEAPON = { melee = 120, meleeSpeed = 2.6 }
-local PER_ROW = 3
+local PER_ROW = 4
+-- A caption is no wider than its column: the columns are (PREVIEW_WIDTH + span) / (PER_ROW + 1)
+-- apart, so a name wraps onto a second line rather than running into the next column's name.
+local CAPTION_WIDTH = (PREVIEW_WIDTH + MOCK_SIZE * MOCK_SCALE) / (PER_ROW + 1) - 4
 local SAMPLES = {
   { name = "OPT_SAMPLE_1", icon = "Interface\\Icons\\Spell_Fire_Immolation", hotkey = "1", castTime = 2,
     spellID = 25309,
@@ -53,11 +56,35 @@ local SAMPLES = {
     weapon = { kind = "ap", amount = 554 } },
   { name = "OPT_SAMPLE_6", icon = "Interface\\Icons\\Spell_Shadow_BurningSpirit", hotkey = "Mou...",
     view = { healthCost = 58, manaGain = 58 } },
+  { name = "OPT_SAMPLE_7", icon = "Interface\\Icons\\Spell_Shadow_LifeDrain02", hotkey = "7",
+    view = { transfer = true, direct = { min = 55, max = 55 }, heal = { min = 55, max = 55 } } },
+  { name = "OPT_SAMPLE_8", icon = "Interface\\Icons\\Spell_Shadow_LifeDrain", hotkey = "8",
+    view = { healthCost = 58, petHeal = true } },
+  { name = "OPT_SAMPLE_9", icon = "Interface\\Icons\\INV_Misc_Food_72", hotkey = "9",
+    view = { hot = { total = 552, duration = 24 } } },
+  { name = "OPT_SAMPLE_10", icon = "Interface\\Icons\\INV_Misc_Bandage_20", hotkey = "0",
+    view = { heal = { min = 600, max = 600 } } },
 }
 
 local window
 local controls = {} -- every settings row, refreshed after each change
 local menu -- the shared choice list
+local localized = {} -- widget -> locale key; refresh text without rebuilding its frame
+
+local function localeKey(text)
+  for key, value in pairs(L) do
+    if value == text then return key end
+  end
+end
+
+local function localizedText(widget, key)
+  localized[widget] = key
+  widget:SetText(L[key])
+end
+
+local function choiceLabel(entry)
+  return entry.localeKey and L[entry.localeKey] or entry.label
+end
 
 local function db() return ns.GetSettings() end
 
@@ -107,6 +134,7 @@ end
 
 local function updatePreview()
   if not window then return end
+  for widget, key in pairs(localized) do widget:SetText(L[key]) end
   for _, mock in ipairs(window.mocks) do
     local mainText, mainColor, sideText, sideColor, layout = sampleText(mock.sample)
     ns.DrawNumber(mock, mock.main, mock.side, mainText, mainColor, sideText, false, sideColor, layout)
@@ -157,15 +185,17 @@ local function mockButton(pane, sample, x, y)
 
   local caption = pane:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   caption:SetPoint("TOP", mock, "BOTTOM", 0, -6)
-  caption:SetWidth(76)
-  caption:SetText(L[sample.name])
+  caption:SetWidth(CAPTION_WIDTH)
+  caption:SetJustifyH("CENTER")
+  localizedText(caption, sample.name)
+  mock.caption = caption
   return mock
 end
 
 local function buildPreview(pane)
   local title = pane:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   title:SetPoint("TOPLEFT", 12, -12)
-  title:SetText(L.OPT_PREVIEW)
+  localizedText(title, "OPT_PREVIEW")
 
   window.mocks = {}
   local span = MOCK_SIZE * MOCK_SCALE
@@ -180,14 +210,14 @@ local function buildPreview(pane)
 
   window.offNote = pane:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   window.offNote:SetPoint("TOP", pane, "TOP", 0, -44 - span - 36)
-  window.offNote:SetText(L.OPT_PREVIEW_OFF)
+  localizedText(window.offNote, "OPT_PREVIEW_OFF")
   window.offNote:Hide()
 
   local hint = pane:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   hint:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 12, 12)
   hint:SetWidth(PREVIEW_WIDTH - 24)
   hint:SetJustifyH("LEFT")
-  hint:SetText(L.OPT_PREVIEW_HINT)
+  localizedText(hint, "OPT_PREVIEW_HINT")
 end
 
 ---------------------------------------------------------------------------------------------
@@ -201,14 +231,17 @@ local function makeRow(parent, labelText, opts)
   row.label:SetPoint("LEFT", 6, 0)
   row.label:SetWidth(LAYOUT.label - 8)
   row.label:SetJustifyH("LEFT")
-  row.label:SetText(labelText)
+  localizedText(row.label, localeKey(labelText))
   row.enabledIf = opts.enabledIf
   if opts.tooltip then
+    local labelKey, tooltipKey = localeKey(labelText), localeKey(opts.tooltip)
     row:EnableMouse(true)
     row:SetScript("OnEnter", function(self)
       GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-      GameTooltip:SetText(labelText, 1, 1, 1)
-      GameTooltip:AddLine(opts.tooltip, nil, nil, nil, true)
+      GameTooltip:SetText(L[labelKey] or labelText, 1, 1, 1)
+      local tooltipText = L[tooltipKey] or opts.tooltip
+      if opts.retailNote and ns.IsRetail() then tooltipText = tooltipText .. " " .. L.OPT_RETAIL end
+      GameTooltip:AddLine(tooltipText, nil, nil, nil, true)
       GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -319,7 +352,8 @@ local function openMenu(owner, list, current, pick)
     button:ClearAllPoints()
     button:SetPoint("TOPLEFT", menu, "TOPLEFT", 1, -4 - (i - 1) * 20)
     button:SetPoint("RIGHT", menu, "RIGHT", -1, 0)
-    button.text:SetText(entry.id == current and ("|cffffd100" .. entry.label .. "|r") or entry.label)
+    local label = choiceLabel(entry)
+    button.text:SetText(entry.id == current and ("|cffffd100" .. label .. "|r") or label)
     button:SetScript("OnClick", function()
       menu:Hide()
       pick(entry.id)
@@ -334,6 +368,7 @@ local function openMenu(owner, list, current, pick)
 end
 
 local function choice(parent, key, labelText, list, opts)
+  for _, entry in ipairs(list) do entry.localeKey = localeKey(entry.label) end
   local row = makeRow(parent, labelText, opts)
   local button = CreateFrame("Button", nil, row, "BackdropTemplate")
   button:SetSize(LAYOUT.control, 22)
@@ -354,7 +389,7 @@ local function choice(parent, key, labelText, list, opts)
   end)
   function row:Refresh()
     local entry = findEntry(list, db()[key])
-    text:SetText(entry and entry.label or tostring(db()[key]))
+    text:SetText(entry and choiceLabel(entry) or tostring(db()[key]))
     self:ApplyEnabled(button)
   end
   row.widget, row.text = button, text
@@ -364,7 +399,7 @@ end
 local function pushButton(parent, text, width, onClick)
   local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
   button:SetSize(width, 22)
-  button:SetText(text)
+  localizedText(button, localeKey(text))
   button:SetScript("OnClick", onClick)
   return button
 end
@@ -394,15 +429,21 @@ local function buildSettings(area)
     { id = "center", label = L.OPT_POS_CENTER },
     { id = "top", label = L.OPT_POS_TOP },
   }, { tooltip = L.OPT_POSITION_TIP, enabledIf = numbersShown }))
+  place("sidePosition", choice(area, "sidePosition", L.OPT_SIDE, {
+    { id = "opposite", label = L.OPT_SIDE_OPPOSITE },
+    { id = "bottom", label = L.OPT_SIDE_BOTTOM },
+    { id = "top", label = L.OPT_SIDE_TOP },
+  }, { tooltip = L.OPT_SIDE_TIP, enabledIf = numbersShown }))
+  place("skipUtilityBars", checkbox(area, "skipUtilityBars", L.OPT_SKIP_BARS,
+    { tooltip = L.OPT_SKIP_BARS_TIP, enabledIf = numbersShown }))
   y = y + 8
   -- On Retail the descriptions already hold the player's stats, so both estimates stand down.
   local notRetail = function() return not ns.IsRetail() end
-  local retailNote = ns.IsRetail() and (" " .. L.OPT_RETAIL) or ""
   place("estimate", checkbox(area, "estimate", L.OPT_ESTIMATE,
-    { tooltip = L.OPT_ESTIMATE_TIP .. retailNote, enabledIf = notRetail }))
+    { tooltip = L.OPT_ESTIMATE_TIP, retailNote = true, enabledIf = notRetail }))
   place("tooltip", checkbox(area, "tooltip", L.OPT_TOOLTIP, { tooltip = L.OPT_TOOLTIP_TIP }))
   place("reduction", checkbox(area, "reduction", L.OPT_REDUCTION, { tooltip = L.OPT_REDUCTION_TIP }))
-  place("weapon", checkbox(area, "weapon", L.OPT_WEAPON, { tooltip = L.OPT_WEAPON_TIP .. retailNote, enabledIf = notRetail }))
+  place("weapon", checkbox(area, "weapon", L.OPT_WEAPON, { tooltip = L.OPT_WEAPON_TIP, retailNote = true, enabledIf = notRetail }))
   y = y + 8
   place("interfaceLang", choice(area, "interfaceLang", L.OPT_LANGUAGE, {
     { id = "auto", label = L.LANG_AUTO },
@@ -532,23 +573,30 @@ end)
 -- tools/port.py from tools/sdi_bit_edits.json on every regeneration;
 -- tools/port.py itself is untouched.
 local function buildSDIPreview(parent)
+  -- OFF previews can be opened before ADDON_LOADED wakes this module's locale.
+  if not L.OVER then
+    local saved = type(BattleInfoTool_SpellDamageInfoDB) == "table" and BattleInfoTool_SpellDamageInfoDB
+    ns.InitInterfaceL(saved and saved.interfaceLang or "auto")
+  end
   local scene = CreateFrame("Frame", nil, parent)
   scene:SetSize(560, 120)
   scene.title = scene:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   scene.title:SetPoint("TOPLEFT", 12, -4)
-  scene.title:SetText("SpellDamageInfo sample (not your buttons)")
+  localizedText(scene.title, "OPT_OFF_SAMPLE")
   scene.main = scene:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   scene.main:SetPoint("TOPLEFT", 12, -30)
   scene.main:SetText("279")
   scene.main:SetHeight(14)
   scene.side = scene:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   scene.side:SetPoint("TOPLEFT", 12, -52)
-  scene.side:SetText("510 over 15 sec")
+  scene.side:SetText(string.format(L.OVER, "510", "15"))
   scene.side:SetHeight(14)
   return scene
 end
 
 local function renderSDIPreview(scene, style)
+  scene.title:SetText(L.OPT_OFF_SAMPLE)
+  scene.side:SetText(string.format(L.OVER, "510", "15"))
   BIT.Style.ApplyText(scene.title, style, "text")
   BIT.Style.ApplyText(scene.main, style, "text")
   BIT.Style.ApplyText(scene.side, style, "text")

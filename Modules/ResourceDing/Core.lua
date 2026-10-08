@@ -116,7 +116,11 @@ Addon.defaults = defaults
 local function initializeDatabase()
   if type(BattleInfoTool_ResourceDingDB) ~= "table" then BattleInfoTool_ResourceDingDB = {} end
   for key, value in pairs(defaults) do
-    if BattleInfoTool_ResourceDingDB[key] == nil then BattleInfoTool_ResourceDingDB[key] = value end
+    local saved = BattleInfoTool_ResourceDingDB[key]
+    if type(saved) ~= type(value) or (type(value) == "number"
+      and (saved ~= saved or saved == math.huge or saved == -math.huge)) then
+      BattleInfoTool_ResourceDingDB[key] = value
+    end
   end
   if not Addon.SOUNDS[BattleInfoTool_ResourceDingDB.sound] then BattleInfoTool_ResourceDingDB.sound = defaults.sound end
   if type(BattleInfoTool_ResourceDingDB.dotOffset) ~= "number" then BattleInfoTool_ResourceDingDB.dotOffset = defaults.dotOffset
@@ -141,6 +145,7 @@ local function initializeDatabase()
   Addon.db.manaPercent = Addon.db.manaLevels[Addon.manaClass]
   if not Addon.SOUNDS[Addon.db.manaSound] then Addon.db.manaSound = Addon.SOUND_ORDER[1] end
 end
+if BIT.RegisterWaker then BIT.RegisterWaker("ResourceDing", initializeDatabase) end
 
 function Addon.GetResource()
   local _, class = UnitClass("player")
@@ -367,7 +372,7 @@ end
 
 function Addon.ResetPowerState()
   Addon.CheckPower(true)
-  if Addon.RefreshDots then Addon.RefreshDots() end
+  Addon.RefreshMarks()
   if Addon.settingsPanel and Addon.settingsPanel.refresh then Addon.settingsPanel.refresh() end
 end
 
@@ -405,15 +410,22 @@ end
 local HIGHLIGHT_SETTLED = 0.5
 
 local settleScheduled = false
+-- The saved table can exist before the module is running: Enable prepares it
+-- for the settings page, and /reload is what starts the sounds and the dots.
+local function gameplayOn()
+  return not BIT.IsRunning or BIT.IsRunning("ResourceDing")
+end
+
 local function lookAtDisplay()
   Addon.looks = (Addon.looks or 0) + 1
+  if not gameplayOn() then return end
   if Addon.db then Addon.CheckPower(false) end
   -- the display has the count plainly now: the dots show it too
   if Addon.RefreshDots then Addon.RefreshDots() end
 end
 
 local function lookAgainLater()
-  if not Addon.db then return end
+  if not Addon.db or not gameplayOn() then return end
   if settleScheduled then return end
   settleScheduled = true
   if C_Timer and C_Timer.After then

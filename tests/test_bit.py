@@ -275,7 +275,7 @@ def chat(G):
 # ---------------------------------------------------------------------------------------------
 print("-- every module on")
 rt, G, BIT, files = load()
-check("the .toc lists the core and seven modules' files", len(files), 26)  # pre-existing bug in this assert: it read 23 while the .toc already listed 25; QuestMarkers.lua adds one (26)
+check("the .toc lists the core and seven modules' files", len(files), 28)  # PlateLayout.lua and WorldMarkers.lua add two (28)
 check("the tabs are in the order the files load", list(BIT.order.values()),
       ["SpellDamageInfo", "DoTInfo", "StatsInfo", "ResourceDing", "Range", "ShieldsInfo", "HunterRangeFinder"])
 G.Fire("ADDON_LOADED", "BattleInfoTool")
@@ -490,6 +490,7 @@ check("the setting is on by default", rt.eval("BattleInfoToolDB.modules.Range.di
 # ---------------------------------------------------------------------------------------------
 print("-- StatsInfo")
 si = BIT.modules["StatsInfo"]
+si.settings.detail = "full"  # this block checks the full breakdown; compact is tested on its own
 si.settings.icons = False  # the lines in words first; the icons further down
 si.settings.specs = False  # and the specs' ratings on their own below
 G.itemStats["new-ring"] = rt.eval('{ ITEM_MOD_AGILITY_SHORT = 5, ITEM_MOD_STAMINA_SHORT = 3 }')
@@ -1638,8 +1639,11 @@ print("-- RD-3: one ComboFrame redraw looks at the display once, not once per ho
 # The Forever client draws the classic display: ComboFrame's OnEvent calls
 # ComboFrame_Update (mirror 1.60.1/70009), and the addon hooks both -- one
 # redraw reaches both hooks, and only one of them may do the look.
+# Blizzard's updater returns before painting when maxComboPoints is missing,
+# and the addon looks only when that updater can actually repaint.
 rtRD3, GRD3, BITRD3, _ = load(saved="""
 ComboFrame = FakeMock("ComboFrame")
+ComboFrame.maxComboPoints = 5
 function ComboFrame:IsShown() return true end
 ComboFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
 ComboFrame:RegisterEvent("UNIT_POWER_FREQUENT")
@@ -1926,7 +1930,7 @@ lifeTip = sdi.Format.TooltipLines(lifeView, sdi.L)
 check("  tooltip shows cost and gain", (lifeTip[1][1], lifeTip[2][1]), ("-58 HP", "+58 mana"))
 
 # ---------------------------------------------------------------------------------------------
-print("-- SDI-LIFETAP-POS: both labels below the hotkey, HP above mana")
+print("-- SDI-LIFETAP-POS: the two lines take opposite ends, so they do not share a corner")
 rtLP, GLP, BITLP, _ = load()
 GLP.Fire("ADDON_LOADED", "BattleInfoTool")
 GLP.Fire("PLAYER_LOGIN")
@@ -1943,6 +1947,7 @@ rtLP.execute('''
 ''')
 life_texts = sdiLP.ButtonText(rtLP.eval('{ healthCost = 58, manaGain = 58 }'), None)
 life_layout = life_texts[4] if len(life_texts) > 4 else None
+life_anchors = {"bottom": ("BOTTOM", "TOPLEFT"), "center": ("CENTER", "TOPLEFT"), "top": ("TOPLEFT", "BOTTOMLEFT")}
 for position in ("bottom", "center", "top"):
     sdiLP.SetSetting("position", position)
     for size in (50, 100, 200):
@@ -1950,11 +1955,8 @@ for position in ("bottom", "center", "top"):
         sdiLP.DrawNumber(GLP.lifeButton, GLP.lifeMainLabel, GLP.lifeSideLabel,
                          *life_texts[:3], False, life_texts[3], life_layout)
         mp, sp = GLP.lifeMainLabel.points[1], GLP.lifeSideLabel.points[1]
-        safe_stack = (mp[1] == "BOTTOMLEFT" and sp[1] == "BOTTOMLEFT"
-                      and mp[3] == "BOTTOMLEFT" and sp[3] == "BOTTOMLEFT"
-                      and mp[5] >= sp[5] + GLP.lifeSideLabel.fontSize + 1
-                      and 36 - mp[5] - GLP.lifeMainLabel.fontSize >= 14)
-        check(f"SDI-LIFETAP-POS: {position}/{size}% leaves hotkey clear and keeps HP above mana", safe_stack)
+        check(f"SDI-LIFETAP-POS: {position}/{size}% puts the cost and the mana on opposite ends",
+              (mp[1], sp[1]), life_anchors[position])
         check(f"  {position}/{size}% both labels fit width",
               GLP.lifeMainLabel.GetStringWidth(GLP.lifeMainLabel) <= 34
               and GLP.lifeSideLabel.GetStringWidth(GLP.lifeSideLabel) <= 34)
@@ -1969,6 +1971,7 @@ rtC, GC, BITC, _ = load()
 GC.Fire("ADDON_LOADED", "BattleInfoTool")
 GC.Fire("PLAYER_LOGIN")
 siC = BITC.modules["StatsInfo"]
+siC.settings.detail = "full"
 GC.playerClass = "DRUID"
 GC.itemStats["cap-hide"] = rtC.eval('{ ITEM_MOD_AGILITY_SHORT = 8 }')
 GC.itemLoc["cap-hide"] = "INVTYPE_CHEST"
@@ -2330,6 +2333,211 @@ check("ENCHANT-39: its enchant is read once the tooltip's lines arrive",
       dict(siE.ItemStats("tardy")), {"ITEM_MOD_AGILITY_SHORT": 8})
 check("ENCHANT-40: an arrived tooltip is cached then (no scan without new data)",
       int(GE.tooltopCallsE), 3)
+
+# ---------------------------------------------------------------------------------------------
+print("-- UX: nameplate lanes, compact tooltip, /bit shell, SDI second line")
+rtU, GU, BITU, _ = load()
+rtU.execute("""
+function LootFrame_Update() end
+function MerchantFrame_Update() end
+function GroupLootFrame_OpenNewFrame() end
+""")
+GU.Fire("ADDON_LOADED", "BattleInfoTool")
+GU.Fire("PLAYER_LOGIN")
+plate = BITU.Plate
+span = plate.Span(2, 14)
+check("Plate.Span puts the top of the row at -offset", (span[0], span[1]), (-16, -2))
+check("default hunter rail overlaps default combo dots", plate.Clash(-8, 16, 2, 14), True)
+check("ranges that only touch do not clash", plate.Clash(0, 10, 10, 10), False)
+check("a refresh inside one tick, 3s or a quarter of the duration is due", plate.RefreshDue(2, 24, 3), True)
+check("a spent DoT is not a refresh", plate.RefreshDue(0, 24, 3), False)
+check("time outside that window is not a refresh", plate.RefreshDue(20, 24, 3), False)
+check("this warlock does not own the nameplate", plate.HunterOwnsNameplate(), False)
+check("the refresh cue knows the German names",
+      BITU.modules["DoTInfo"].refreshNames["Verderbnis"] == True
+      and BITU.modules["DoTInfo"].refreshNames["Schattenwort: Schmerz"] == True, True)
+check("world markers hook the loot frame only once StatsInfo is running",
+      GU.hooks["LootFrame_Update"] is not None, True)
+
+sdiU = BITU.modules["SpellDamageInfo"]
+sdiDb = sdiU.GetSettings()
+check("stance and pet bars are skipped by default", sdiDb.skipUtilityBars, True)
+check("the second line starts opposite the number", sdiDb.sidePosition, "opposite")
+foodU = sdiU.ButtonText(rtU.eval("{ hot = { total = 552, duration = 24 } }"), None)
+food_text = foodU[0] if isinstance(foodU, tuple) else foodU
+check("a food button reads the heal over time", food_text, "552")
+drainU = sdiU.ButtonText(rtU.eval("{ transfer = true, direct = { min = 55, max = 55 }, heal = { min = 55, max = 55 } }"), None)
+check("Drain Life is two stacked lines", (drainU[0], drainU[2], drainU[4]), ("55", "+55", "stacked"))
+rtU.execute("""
+  uxButton = FakeMock("button")
+  uxButton:SetSize(36, 36)
+  uxMain = uxButton:CreateFontString()
+  uxSide = uxButton:CreateFontString()
+  for _, label in ipairs({ uxMain, uxSide }) do
+    function label:SetFont() return true end
+    function label:GetStringWidth() return #(self.text or "") * 6 end
+  end
+""")
+sdiU.DrawNumber(GU.uxButton, GU.uxMain, GU.uxSide, drainU[0], drainU[1], drainU[2], False, drainU[3], drainU[4])
+check("stacked Drain Life keeps the number at the bottom and the heal at the top left",
+      (GU.uxMain.points[1][1], GU.uxSide.points[1][1]), ("BOTTOM", "TOPLEFT"))
+
+siU = BITU.modules["StatsInfo"]
+check("tooltips start compact", siU.settings.detail, "compact")
+check("loot, roll and merchant arrows start on", siU.settings.worldMarkers, True)
+GU.playerClass = "DRUID"
+GU.itemStats["ux-hide"] = rtU.eval("{ ITEM_MOD_AGILITY_SHORT = 8 }")
+GU.itemLoc["ux-hide"] = "INVTYPE_CHEST"
+compactU = [l[1] for l in siU.TooltipLines("ux-hide").values()]
+check("a compact tooltip is one line", len(compactU), 1)
+check("  and that line is the best-spec arrow",
+      "Better" in compactU[0] or "Worse" in compactU[0] or "Fills an empty slot" in compactU[0], True)
+rtU.execute("function IsShiftKeyDown() return true end")
+fullU = [l[1] for l in siU.TooltipLines("ux-hide").values()]
+check("Shift expands the same item to the full breakdown", len(fullU) > 1, True)
+rtU.execute("IsShiftKeyDown = nil")
+
+GU.SlashCmdList.BATTLEINFOTOOL("")
+winU = GU.BattleInfoToolSettings
+labelsU = {}
+for i in range(1, len(winU.children) + 1):
+    child = winU.children[i]
+    font = getattr(child, "text", None)
+    if getattr(child, "kind", None) == "Button" and isinstance(getattr(child, "name", None), str) and font is not None:
+        labelsU[child.name] = font.text
+check("the tabs use short names", labelsU, {
+    "__together": "Together", "SpellDamageInfo": "Spells", "DoTInfo": "DoTs", "StatsInfo": "Stats",
+    "ResourceDing": "Points", "Range": "Range", "ShieldsInfo": "Shields", "HunterRangeFinder": "Hunter",
+})
+GU.SlashCmdList.BATTLEINFOTOOL("together")
+together = BITU._pages["__together"]
+check("/bit together shows the shared nameplate", together is not None and together.shown, True)
+check("the settings page has a scrollbar", together.scrollBar is not None and together.scrollBar.kind == "Slider", True)
+check("opening Together did not report a failed build",
+      [m for m in chat(GU) if "could not be built" in m], [])
+BITU.OpenSettings("StatsInfo")
+BITU.OpenSettings("SpellDamageInfo")
+shownU = []
+for i in range(1, len(GU.AllFrames) + 1):
+    text = getattr(GU.AllFrames[i], "text", None)
+    if isinstance(text, str):
+        shownU.append(text)
+check("Stats explains Shift and offers the full tooltip",
+      ("Hold Shift for the full breakdown." in shownU, "Always show the full tooltip" in shownU,
+       "Arrows on loot, rolls and merchants" in shownU), (True, True, True))
+check("SDI offers the second-line anchor and the stance/pet skip",
+      ("Zweite Zeile" in shownU, "Haltungsleiste und Begleiterleiste auslassen" in shownU), (True, True))
+mocksU = sdiU._optionsWindow().mocks
+check("the preview samples Drain Life, Health Funnel, food and a bandage", len(mocksU), 10)
+
+# ---------------------------------------------------------------------------------------------
+print("-- UX: an off module stays off until Enable, and waking it does not start it")
+rtW, GW, BITW, _ = load(saved="BattleInfoToolDB = { modules = { SpellDamageInfo = { enabled = false }, StatsInfo = { enabled = false } } }")
+rtW.execute("""
+function LootFrame_Update() end
+function MerchantFrame_Update() end
+""")
+GW.Fire("ADDON_LOADED", "BattleInfoTool")
+GW.Fire("PLAYER_LOGIN")
+check("a switched-off StatsInfo does not hook loot", GW.hooks["LootFrame_Update"], None)
+BITW.OpenSettings("SpellDamageInfo")
+off = BITW._pages["SpellDamageInfo"]
+check("opening an off tab still shows the note", off.offNote is not None, True)
+check("  and still does not create its saved variables", GW.BattleInfoTool_SpellDamageInfoDB, None)
+check("the advanced look starts hidden", off.appearance.advanced.shown, False)
+off.switch.checked = True
+off.switch.scripts.OnClick(off.switch)
+woke = BITW._pages["SpellDamageInfo"]
+check("ticking Enable builds the real settings", woke.offNote, None)
+check("  and prepares the saved variables", GW.BattleInfoTool_SpellDamageInfoDB is not None, True)
+check("  gameplay still waits for a reload", (BITW.state["SpellDamageInfo"], woke.reload.shown), ("off", True))
+check("  the state line says so", "Switched on after a reload" in (woke.stateLine.text or ""), True)
+BITW.OpenSettings("StatsInfo")
+statsOff = BITW._pages["StatsInfo"]
+statsOff.switch.checked = True
+statsOff.switch.scripts.OnClick(statsOff.switch)
+check("waking StatsInfo still does not hook loot", GW.hooks["LootFrame_Update"], None)
+check("  but its settings are ready", BITW.modules["StatsInfo"].settings is not None, True)
+
+# A paged loot button's slot is not its index, and a merchant button carries its own link.
+rtU.execute("""
+LootButton1 = FakeMock("lootbtn")
+LootButton1.slot = 4
+LootButton1.shown = true
+lootSlots = {}
+function GetLootSlotLink(slot) table.insert(lootSlots, slot) return nil end
+MerchantItem1ItemButton = FakeMock("merchbtn")
+MerchantItem1ItemButton.shown = true
+MerchantItem1ItemButton.link = "item:11"
+MerchantFrame = { page = 2, selectedTab = 1 }
+""")
+GU.hooks["LootFrame_Update"]()
+check("a paged loot button asks for its slot, not its index",
+      [GU.lootSlots[i] for i in range(1, len(GU.lootSlots) + 1)], [4])
+siU.BagVerdict = rtU.eval("function(link) merchantSeen = link return nil end")
+GU.hooks["MerchantFrame_Update"]()
+check("a merchant button uses the link it is showing", GU.merchantSeen, "item:11")
+rtU.execute("""
+MerchantFrame.selectedTab = 2
+function GetBuybackItemLink(i) return "buyback:" .. i end
+""")
+GU.hooks["MerchantFrame_Update"]()
+check("the buyback tab uses the buyback link", GU.merchantSeen, "buyback:1")
+pet_before = len(sdiU._petButtons)
+rtU.execute("""
+PetActionButton1 = FakeMock("petbtn")
+function PetActionButton1:GetID() return 1 end
+""")
+GU.Fire("PET_BAR_UPDATE")
+check("the pet bar stays clear while stance and pet bars are skipped", len(sdiU._petButtons), pet_before)
+
+# Enable prepares ResourceDing's settings and does not arm the ding.
+rtR, GR, BITR, _ = load(saved="BattleInfoToolDB = { modules = { ResourceDing = { enabled = false } } }")
+GR.Fire("ADDON_LOADED", "BattleInfoTool")
+GR.Fire("PLAYER_LOGIN")
+BITR.OpenSettings("ResourceDing")
+rdPage = BITR._pages["ResourceDing"]
+rdPage.switch.checked = True
+rdPage.switch.scripts.OnClick(rdPage.switch)
+rdW = BITR.modules["ResourceDing"]
+check("ticking Enable prepares the points settings", rdW.db is not None, True)
+check("  the module is still waiting for a reload", BITR.state["ResourceDing"], "off")
+probe = {"n": 0}
+real_check = rdW.CheckPower
+def _count_check(*_args):
+    probe["n"] += 1
+rdW.CheckPower = _count_check
+rdW.LookAtDisplay()
+rdW.CheckPower = real_check
+check("a combo redraw before that reload does not check the bar", probe["n"], 0)
+
+rtOn, GOn, BITOn, _ = load()
+GOn.Fire("ADDON_LOADED", "BattleInfoTool")
+GOn.Fire("PLAYER_LOGIN")
+rdOn = BITOn.modules["ResourceDing"]
+probe_on = {"n": 0}
+real_on = rdOn.CheckPower
+def _count_on(*_args):
+    probe_on["n"] += 1
+rdOn.CheckPower = _count_on
+rdOn.LookAtDisplay()
+rdOn.CheckPower = real_on
+check("a running module still checks the bar on that redraw", probe_on["n"], 1)
+
+# Together does not warn about a module that is not on the plate.
+rtT, GT, BITT, _ = load(saved="BattleInfoToolDB = { modules = { HunterRangeFinder = { enabled = false } } }")
+GT.Fire("ADDON_LOADED", "BattleInfoTool")
+GT.Fire("PLAYER_LOGIN")
+GT.SlashCmdList.BATTLEINFOTOOL("together")
+together_text = []
+for i in range(1, len(GT.AllFrames) + 1):
+    text = getattr(GT.AllFrames[i], "text", None)
+    if isinstance(text, str):
+        together_text.append(text)
+check("a switched-off hunter rail is not an overlap",
+      any("Hunter rail overlaps" in t for t in together_text), False)
+check("a Classic warlock has diamonds, not a simultaneous combo row",
+      any("Combo dots overlap shard diamonds." in t for t in together_text), False)
 
 print("failed:", failures)
 sys.exit(1 if failures else 0)

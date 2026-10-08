@@ -21,6 +21,8 @@ local DEFAULTS = {
   bagMarkers = true,   -- the small green/red arrows over the game's own bag buttons
   questMarkers = true, -- the one badge over a quest's reward buttons (an upgrade, or the coin)
   bagSpecIcons = true, -- on an up arrow, the beneficiary spec's icon (+N for the rest)
+  worldMarkers = true, -- the same arrows on loot, need/greed rolls and merchant buttons
+  detail = "compact",  -- tooltip density: "compact" (one line; Shift or "full" expands it)
 }
 
 -- Inventory slots an item of an equip location goes into. Two slots: compared with each.
@@ -46,7 +48,11 @@ for i, key in ipairs(FIRST) do RANK[key] = i end
 
 local settings
 
-local function isSecret(v) return type(issecretvalue) == "function" and issecretvalue(v) or false end
+local function isSecret(v)
+  if type(issecretvalue) ~= "function" then return false end
+  local ok, secret = pcall(issecretvalue, v)
+  return ok and secret or false
+end
 
 local function ask(fn, ...)
   if type(fn) ~= "function" then return nil end
@@ -160,7 +166,7 @@ end
 -- allocation per hover and per spec line, and these run a dozen times per tooltip.
 local function computeClass()
   local _, class = ask(UnitClass, "player")
-  return class
+  return type(class) == "string" and not isSecret(class) and class or nil
 end
 
 local function charClass()
@@ -169,6 +175,7 @@ end
 
 -- The name the client gives a stat key ("Beweglichkeit"), or nil when it has none.
 local function statName(key)
+  if type(key) ~= "string" or isSecret(key) then return nil end
   local name = _G[key]
   if type(name) == "string" and name ~= "" then return name end
   return nil
@@ -218,7 +225,7 @@ local function itemStats(link, alloc)
   if type(clean) ~= "table" then clean = ask(GetItemStats, plain) end
   if type(clean) == "table" then
     for k, v in pairs(tooltipEnchant(link)) do
-      if type(k) == "string" and statName(k) and type(v) == "number" and v ~= 0
+      if type(k) == "string" and statName(k) and not isSecret(v) and type(v) == "number" and v ~= 0
           and v == v and v ~= math.huge and v ~= -math.huge then
         local base = clean[k]
         -- A secret clean stat (the client hides the value in combat, marking it with
@@ -240,15 +247,17 @@ M.ItemStats = memoized(itemStatsFresh)
 local function equipLoc(link)
   local _, _, _, loc = ask(C_Item and C_Item.GetItemInfoInstant, link)
   if loc == nil then _, _, _, loc = ask(GetItemInfoInstant, link) end
-  return type(loc) == "string" and loc or nil
+  return type(loc) == "string" and not isSecret(loc) and loc or nil
 end
 
 local function equipped(slot)
   local link = ask(GetInventoryItemLink, "player", slot)
   -- A secret link is not a link: it reads as a string (type() cannot tell), but Compare
   -- equates it with the new link below and that comparison raises on a combat-secret value
-  -- (the bag handlers went down to it). Wearing "unknown" is wearing nothing comparable.
-  if type(link) ~= "string" or isSecret(link) then return nil end
+  -- (the bag handlers went down to it). A hidden link is an unknown baseline,
+  -- distinct from a genuinely empty slot (nil).
+  if isSecret(link) then return nil, true end
+  if type(link) ~= "string" then return nil, link ~= nil end
   return link
 end
 
@@ -258,6 +267,7 @@ end
 -- recommendation). Uncached worn stats skip the block; the tooltip is rebuilt on arrival.
 local function itemCached(link)
   local id = ask(C_Item and C_Item.GetItemInfoInstant, link)
+  if isSecret(id) then return false end
   if not id or not (C_Item and C_Item.IsItemDataCachedByID) then return true end -- cannot tell: old behavior
   return ask(C_Item.IsItemDataCachedByID, id) ~= false
 end
@@ -276,7 +286,8 @@ end
 local function compareWith(slots, target, new, comparisons, alloc)
   local old, names, wornSlots = alloc("cmpOld"), alloc("cmpNames"), alloc("cmpWornSlots")
   for _, slot in ipairs(slots) do
-    local worn = equipped(slot)
+    local worn, unknown = equipped(slot)
+    if unknown then return end -- an unreadable worn item is never priced as an empty slot
     if worn then
       local wornStats = itemStats(worn, alloc)
       if next(wornStats) == nil and not itemCached(worn) then
@@ -323,11 +334,13 @@ end
 -- weapon: with the main hand, an empty one too (it goes there, and a weapon in the off hand stays;
 -- set against the off hand, an identical dagger was rated as its main-hand worth over its off-hand one).
 local function compareBody(link, alloc)
+  if type(link) ~= "string" or isSecret(link) then return nil end
   local loc = equipLoc(link)
   if not loc then return nil end
   -- Not before the client has the item: its stats would read as none, every stat lost. The tooltip is
   -- built again when the data arrives.
   local id = ask(C_Item and C_Item.GetItemInfoInstant, link)
+  if isSecret(id) then return nil end
   if id and C_Item and C_Item.IsItemDataCachedByID and ask(C_Item.IsItemDataCachedByID, id) == false then return nil end
   local slots
   if BOTH_HANDS[loc] then
@@ -342,7 +355,8 @@ local function compareBody(link, alloc)
   end
   local new = itemStats(link, alloc)
   local comparisons = alloc("comparisons")
-  local mainHand = equipped(16)
+  local mainHand, unknownMainHand = equipped(16)
+  if unknownMainHand and #slots == 1 and slots[1] == 17 then return nil end
   if BOTH_HANDS[loc] then
     local s = alloc("compSlots")
     s[1], s[2] = 16, 17
@@ -1088,7 +1102,8 @@ local EMPTY = {} -- a read-only stand-in for "nothing to compare with"; never wr
 
 local function specRatingsBody(link, against, slots, offHand, alloc)
   local class = charClass()
-  local specs = type(class) == "string" and M.SPECS and M.SPECS[class]
+  -- A secret class (in combat) must not be used as a table key.
+  local specs = type(class) == "string" and not isSecret(class) and M.SPECS and M.SPECS[class]
   if not specs then return nil end
   local out = alloc("specRows")
   against = against or EMPTY
@@ -1114,8 +1129,10 @@ local function specRatingsBody(link, against, slots, offHand, alloc)
         else part.percent = p end
       elseif new > 0.05 then
         part.percent, part.capped = MAX_PERCENT, true -- empty slot / worn worth nothing: past the cap
+        part.noBaseline = true
       elseif new < -0.05 then
         part.percent, part.capped = -MAX_PERCENT, true
+        part.noBaseline = true
       else
         part.percent = 0
       end
@@ -1249,6 +1266,20 @@ M.IconText = icon
 -- A rating that changes nothing: what ratingText shows as 0%.
 local function changesNothing(part) return math.abs(part.percent or 0) < 0.05 end
 
+-- Shared by the compact summary and the bag/reward badges: a tank's two measures
+-- pointing in opposite directions are a tradeoff, never an unequivocal upgrade.
+function M.RatingVerdict(parts)
+  local up, down, approx = false, false, false
+  for _, part in ipairs(parts) do
+    local value = part.percent or 0
+    if part.approx then approx = true end
+    if value >= 0.05 then up = true elseif value <= -0.05 then down = true end
+  end
+  if up and not down then return "up", approx end
+  if down and not up then return "down", approx end
+  return "none", approx
+end
+
 -- The ratings with something to say: a spec the item changes nothing for is left out, and so is a
 -- tank's number that stays the same. { { spec, parts } }, possibly empty.
 local function worthSaying(ratings)
@@ -1341,7 +1372,7 @@ end
 -- the same item), bounded like the other memos.
 local itemNameMemo, itemNameCount = {}, 0
 local function itemName(link)
-  if type(link) ~= "string" then return "?" end
+  if type(link) ~= "string" or isSecret(link) then return "?" end
   local hit = itemNameMemo[link]
   if hit then return hit end
   local name = (link:match("%[(.-)%]")) or "?"
@@ -1398,18 +1429,27 @@ local function inspecting()
   return ok and shown == true
 end
 
--- The spec and measure the item is most worth to: the largest percentage of the ratings'
--- parts that change anything. nil when it changes nothing for every spec.
+-- A summary can be green for an unequivocal gaining spec, and red only if every
+-- evaluated spec loses. Contradictory tank measures and neutral specs block red.
 local function bestPart(ratings)
-  local best
+  local best, spec, down, downSpec
+  local allDown, changed = true, false
   for _, r in ipairs(ratings) do
+    local verdict = M.RatingVerdict(r.parts)
+    if verdict ~= "down" then allDown = false end
     for _, part in ipairs(r.parts) do
-      if not changesNothing(part) and (not best or (part.percent or 0) > (best.percent or 0)) then
-        best = part
+      if not changesNothing(part) then
+        changed = true
+        if verdict == "up" and (not best or part.percent > best.percent) then
+          best, spec = part, r.spec
+        elseif verdict == "down" and (not down or part.percent > down.percent) then
+          down, downSpec = part, r.spec
+        end
       end
     end
   end
-  return best
+  if not best and allDown then best, spec = down, downSpec end
+  return best, spec, changed, allDown
 end
 
 -- The small stream arrows BagMarkers paints on a bag button's corner, in a line of text.
@@ -1423,11 +1463,20 @@ local ARROW_DOWN = "|TInterface\\Buttons\\UI-MicroStream-Red:12:12:0:0:1:1:0:1:0
 -- The at-a-glance line for a tooltip carrying someone else's item: which way it goes against
 -- our own gear, and the best spec's number behind it ("Better than your gear (best spec:
 -- 25% better dmg spec)").
-local function gearLine(part)
+local function gearLine(part, spec, comparison)
   local v = part.percent or 0
   local arrow, word = ARROW_UP, "Better than your gear"
   if v < 0 then arrow, word = ARROW_DOWN, "Worse than your gear" end
-  return arrow .. " " .. coloured(v, word) .. " (best spec: " .. ratingText(part) .. ")"
+  local who = spec and spec.name or "best spec"
+  if comparison and part.noBaseline then
+    if #comparison.against == 0 then
+      local emptyWord = v > 0 and "Fills an empty slot" or "Lower score in an empty slot"
+      return arrow .. " " .. coloured(v, emptyWord) .. " (" .. who .. (part.approx and ", approx." or "") .. ")"
+    end
+    return arrow .. " " .. coloured(v, word) .. " (" .. who .. ": "
+      .. coloured(v, "score changes from zero" .. (part.approx and " (approx.)" or "")) .. ")"
+  end
+  return arrow .. " " .. coloured(v, word) .. " (" .. who .. ": " .. ratingText(part) .. ")"
 end
 
 ---------------------------------------------------------------------------------------------
@@ -1615,17 +1664,59 @@ local function statText(diff, key)
   return text
 end
 
-local function tooltipLinesBody(link, gameCompares, alloc)
+local function tooltipWantsFull()
+  if settings and settings.detail == "full" then return true end
+  if type(IsShiftKeyDown) == "function" and IsShiftKeyDown() then return true end
+  return false
+end
+
+-- One line: the best spec and its arrow. Worth, the spec wall and the tank block stay in the full body.
+local function tooltipLinesCompact(link, alloc)
   local lines = alloc("lines")
-  if not (settings and settings.compare) then return lines end
+  if not (settings and (settings.compare or settings.specs)) then return lines end
+  local comps = compareBody(link, alloc) or EMPTY
+  local best, bestSpec, bestComparison, down, downSpec, downComparison
+  local allDown, changed = true, false
+  for _, c in ipairs(comps) do
+    local ratings = specRatingsBody(link, c.against, c.slots, c.offHand, alloc)
+    if ratings then
+      local part, spec, hasChange, downOnly = bestPart(ratings)
+      changed, allDown = changed or hasChange, allDown and downOnly
+      if part and part.percent > 0 and (not best or part.percent > best.percent) then
+        best, bestSpec, bestComparison = part, spec, c
+      elseif part and part.percent < 0 and (not down or part.percent > down.percent) then
+        down, downSpec, downComparison = part, spec, c
+      end
+    else
+      allDown = false
+    end
+  end
+  if not best and allDown then best, bestSpec, bestComparison = down, downSpec, downComparison end
+  if best then
+    local line = alloc("line")
+    line[1], line[2], line[3], line[4] = gearLine(best, bestSpec, bestComparison), 1, 1, 1
+    lines[#lines + 1] = line
+  elseif changed then
+    local line = alloc("line")
+    line[1], line[2], line[3], line[4] = "No clear upgrade; hold Shift for details", 0.7, 0.7, 0.7
+    lines[#lines + 1] = line
+  end
+  return lines
+end
+
+local function tooltipLinesBody(link, gameCompares, alloc)
+  if not tooltipWantsFull() then return tooltipLinesCompact(link, alloc) end
+  local lines = alloc("lines")
+  if not (settings and (settings.compare or settings.specs)) then return lines end
   local comps = compareBody(link, alloc) or EMPTY
   -- Nothing of ours in any slot: the empty blocks then name their slots as well.
   local allEmpty = true
   for _, c in ipairs(comps) do
     if #c.against > 0 then allEmpty = false end
   end
-  local foreign = inspecting()
+  local foreign = settings.compare and inspecting()
   for _, c in ipairs(comps) do
+    if settings.compare then
     local against = #c.against > 0 and namesJoined(c.against) or "an empty slot"
     against = against .. slotLabel(c, allEmpty)
     local head = (foreign and "Compared with your gear: " or "Against ") .. against
@@ -1715,6 +1806,7 @@ local function tooltipLinesBody(link, gameCompares, alloc)
         end
       end
     end
+    end
     -- The specs' ratings, and for someone else's item the up/down line in front of them:
     -- the arrow and the best spec's number. The ratings are measured for the arrow even
     -- when the specs' own lines are switched off.
@@ -1722,10 +1814,14 @@ local function tooltipLinesBody(link, gameCompares, alloc)
       and specRatingsBody(link, c.against, c.slots, c.offHand, alloc)
     if ratings then
       if foreign then
-        local best = bestPart(ratings)
+        local best, spec, changed = bestPart(ratings)
         if best then
           local l = alloc("line")
-          l[1], l[2], l[3], l[4] = gearLine(best), 1, 1, 1
+          l[1], l[2], l[3], l[4] = gearLine(best, spec), 1, 1, 1
+          lines[#lines + 1] = l
+        elseif changed then
+          local l = alloc("line")
+          l[1], l[2], l[3], l[4] = "No clear upgrade for this slot", 0.7, 0.7, 0.7
           lines[#lines + 1] = l
         end
       end
@@ -1800,8 +1896,9 @@ local function hookTooltips()
     -- a tooltip rebuilt in the same frame is a new build and gets its lines again. Without
     -- GetTime or NumLines (a minimal client) nothing is skipped: the old behavior.
     local t = ask(GetTime)
+    local density = tooltipWantsFull() and "full" or "compact"
     local rec = addedTo[tooltip]
-    if type(t) == "number" and rec and rec.link == link and rec.t == t then
+    if type(t) == "number" and rec and rec.link == link and rec.t == t and rec.density == density then
       local n = ask(tooltip.NumLines, tooltip)
       if n == nil or (rec.lines and n >= rec.lines) then return end
     end
@@ -1818,7 +1915,7 @@ local function hookTooltips()
         rec = {}
         addedTo[tooltip] = rec
       end
-      rec.link, rec.t = link, t
+      rec.link, rec.t, rec.density = link, t, density
       rec.lines = ask(tooltip.NumLines, tooltip)
     end
   end
@@ -1943,6 +2040,12 @@ BIT.RegisterCommand("probe", function() M.Probe() end)
 -- Start, and the settings tab
 ---------------------------------------------------------------------------------------------
 
+local function prepareStatsSettings()
+  settings = BIT.Settings("StatsInfo", DEFAULTS)
+  M.settings = settings
+end
+if BIT.RegisterWaker then BIT.RegisterWaker("StatsInfo", prepareStatsSettings) end
+
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("ADDON_LOADED")
 loader:RegisterEvent("PLAYER_LOGIN")
@@ -1951,8 +2054,7 @@ loader:SetScript("OnEvent", function(self, event, name)
     if name ~= BIT.name then return end
     self:UnregisterEvent("ADDON_LOADED")
     if not BIT.ShouldRun("StatsInfo") then self:UnregisterAllEvents() return end
-    settings = BIT.Settings("StatsInfo", DEFAULTS)
-    M.settings = settings
+    prepareStatsSettings()
     BIT.DB().statsLearned = nil -- what 0.4.x measured in play; the game's own numbers replace it
   elseif event == "PLAYER_LOGIN" then
     self:UnregisterEvent("PLAYER_LOGIN")
@@ -2003,6 +2105,14 @@ local function sampleLines(iconSize)
   local function add(text, r, g, b) out[#out + 1] = { text = text, r = r, g = g, b = b } end
   add(SAMPLE.title, 1, 1, 1)
   for _, l in ipairs(SAMPLE.itemLines) do add(l[1], l[2], l[3], l[4]) end
+  if not tooltipWantsFull() then
+    if s.compare or s.specs then
+      local best = SAMPLE.specs[1]
+      add(gearLine({ percent = MAX_PERCENT, capped = true, noBaseline = true, kind = "damage" },
+        best, { against = {} }), 1, 1, 1)
+    end
+    return out
+  end
   if s.compare then
     add(DIVIDER, 1, 1, 1)
     if s.icons then
@@ -2019,8 +2129,6 @@ local function sampleLines(iconSize)
       for _, d in ipairs(SAMPLE.stats) do
         if s.worth then
           add("  " .. UP .. d.stat .. "|r: " .. UP .. d.worth .. "|r", 0.7, 0.7, 0.7)
-        else
-          add("  " .. UP .. d.stat .. "|r", 1, 1, 1)
         end
       end
     end
@@ -2044,7 +2152,7 @@ end
 -- a real bag button's corner -- not the old WHITE8X8 pieces (commit 221cdee moved the bag
 -- and quest badges to the Blizzard arrows; the mock follows). scene.tipLines and the bag's
 -- corner badge are re-laid-out by renderMockTooltip on every change.
-local TIP_LINES = 12 -- the sample never needs more; the pool is padded with blanks
+local TIP_LINES = 20 -- the sample never needs more; the pool is padded with blanks
 local function buildMockTooltip(scene)
   local tip = CreateFrame("Frame", nil, scene, "BackdropTemplate")
   BIT.UI.Backdrop(tip, 0.09, 0.98)
@@ -2100,11 +2208,7 @@ end
 --   scale      the card's width, the rows' line boxes, the bag button mock and its badge
 --   opacity    the rows, the caption, the title and the whole bag button mock
 --
--- The card keeps one fixed height at every font and scale: the rows wrap inside it and the
--- ones that do not fit are dropped, so the scene can never stretch over the pane and push the
--- TRY IT sliders and the buttons below it around. The style is clamped here as well -- the
--- shared appearance editor's own bounds (fontSize 6..48, scale 0.1..10) are wider than what
--- the sample can draw legibly, and a stored 48px font must not run off the card either.
+-- The sample grows with wrapped text; the outer settings scroll owns overflow.
 local SCENE_HEIGHT = 280
 local MIN_FONT, MAX_FONT = 6, 24
 local MIN_SCALE, MAX_SCALE = 0.5, 2
@@ -2153,11 +2257,11 @@ local function renderMockTooltip(scene, style)
     scene.title:ClearAllPoints()
     scene.title:SetPoint("TOPLEFT", 12, -4)
     scene.title:SetPoint("RIGHT", scene, "RIGHT", -12, 0) -- wrapped into the card
-    scene.title:SetHeight(fs + 8)
+    scene.title:SetText("Preview: sample item")
+    scene.title:SetHeight(0)
   end
   local titleDepth = scene.title and (measure(scene.title, fs + 8) + 8) or (fs + 16)
-  -- The foot of the card first -- the bag button mock and the caption -- so the rows above
-  -- can never run into them or past the card.
+  -- Measure the footer before placing it below the complete tooltip.
   local bagSize = clamp(math.floor(32 * scale + 0.5), 16, 48)
   local k = bagSize / 32 -- the button mock's zoom: the corner badge follows the scale
   local badgeSize = math.max(10, math.floor(MARKER * k + 0.5))
@@ -2170,9 +2274,9 @@ local function renderMockTooltip(scene, style)
   caption:SetFont(font, captionFont, outline)
   caption:SetTextColor(0.7, 0.7, 0.7, opacity)
   local captionH = measure(caption, captionFont + 2)
-  local bagTop = SCENE_HEIGHT - 6 - captionH - 4 - bagSize
+  local bagTop
   scene.bag:ClearAllPoints()
-  scene.bag:SetPoint("TOPLEFT", 12, -bagTop)
+
   scene.bag:SetSize(bagSize, bagSize)
   scene.bag:SetAlpha(opacity) -- the badge fades with the lines above it
   -- The corner badge, at the button's own zoom: the arrow one icon-width left of the icon,
@@ -2201,9 +2305,7 @@ local function renderMockTooltip(scene, style)
   -- The line box a row is laid out in: the row's own wrapped height, never shorter than the
   -- scaled one, so the rows spread apart when the scale grows.
   local rowBox = (fs + 4) * scale
-  -- The rows fill the tip from its top and stop above the bag button mock; what does not
-  -- fit is dropped instead of spilling over the card and the controls below it.
-  local room = bagTop - 2 - titleDepth
+  -- Keep every sample row; place the bag and controls after the measured tooltip.
   local y = 6
   for i, slot in ipairs(scene.tipLines) do
     local entry = lines[i]
@@ -2215,19 +2317,18 @@ local function renderMockTooltip(scene, style)
       slot:SetPoint("TOPLEFT", tip, "TOPLEFT", 8, -y)
       slot:SetPoint("RIGHT", tip, "RIGHT", -8, 0)
       local h = math.max(measure(slot, fs + 4), rowBox)
-      if y + h <= room then
-        slot:Show()
-        y = y + h
-      else
-        slot:SetText("")
-        slot:Hide()
-      end
+      slot:Show()
+      y = y + h
     else
       slot:SetText("")
       slot:Hide()
     end
   end
-  tip:SetHeight(math.max(10, math.min(y + 2, math.max(10, room))))
+  tip:SetHeight(y + 2)
+  bagTop = titleDepth + y + 16
+  scene.bag:SetPoint("TOPLEFT", 12, -bagTop)
+  scene:SetHeight(bagTop + bagSize + captionH + 10)
+  if scene.onLayout then scene.onLayout() end
 end
 
 local function buildStatsPreview(parent)
@@ -2309,6 +2410,13 @@ BIT.RegisterTab("StatsInfo", {
     pane.title = pane:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     pane.title:SetText("Live preview (sample item, not your gear)")
     previewScene = pane
+    pane.onLayout = function()
+      parent:SetHeight(math.max(520, pane:GetHeight() + 220))
+    end
+    pane:RegisterEvent("MODIFIER_STATE_CHANGED")
+    pane:SetScript("OnEvent", function(_, _, key)
+      if pane:IsVisible() and (key == "LSHIFT" or key == "RSHIFT") then renderPreview() end
+    end)
     buildMockTooltip(pane)
 
     -- TRY IT: the appearance the preview is drawn in -- the same three fields the shared
@@ -2433,6 +2541,9 @@ BIT.RegisterTab("StatsInfo", {
         if updateBagIconState then updateBagIconState() end
       elseif key == "questMarkers" then
         if v then M.EnableQuestMarkers() else M.DisableQuestMarkers() end
+      elseif key == "worldMarkers" then
+        if v and M.EnableWorldMarkers then M.EnableWorldMarkers()
+        elseif M.DisableWorldMarkers then M.DisableWorldMarkers() end
       elseif key == "bagSpecIcons" then
         M.RefreshBags(true)
       end
@@ -2463,6 +2574,8 @@ BIT.RegisterTab("StatsInfo", {
     box("questMarkers", "Quest reward arrows",
       "One badge over a quest's rewards: a green up arrow on the first upgrade, or a coin on "
         .. "the choice that sells for the most when nothing is an upgrade.")
+    box("worldMarkers", "Arrows on loot, rolls and merchants",
+      "The same bag verdict on loot slots, need/greed rolls and merchant buttons.")
     updateBagIconState = function()
       local on = (settings or DEFAULTS).bagMarkers
       bagSpecIcons:SetAlpha(on and 1 or 0.35)
@@ -2474,6 +2587,8 @@ BIT.RegisterTab("StatsInfo", {
       for k, v in pairs(DEFAULTS) do settings[k] = v end
       if settings.bagMarkers then M.EnableBagMarkers() else M.DisableBagMarkers() end
       if settings.questMarkers then M.EnableQuestMarkers() else M.DisableQuestMarkers() end
+      if settings.worldMarkers ~= false and M.EnableWorldMarkers then M.EnableWorldMarkers()
+      elseif M.DisableWorldMarkers then M.DisableWorldMarkers() end
       M.RefreshBags(true)
       for _, c in ipairs(checkRows) do c:Refresh() end
       updateBagIconState()
@@ -2514,6 +2629,16 @@ BIT.RegisterTab("StatsInfo", {
       .. "off hand and ranged slot apart.", true)
     ratings:body("Not counted: what a hunter's pet gets from your stats, weapon skill, and Spirit for the "
       .. "specs the simulator does not weigh it for.", true)
+    local detailBox = UI.Check(ratings.content, "Always show the full tooltip",
+      function() return (settings or DEFAULTS).detail == "full" end,
+      function(v)
+        settings.detail = v and "full" or "compact"
+        renderPreview()
+      end,
+      "Off: one line, the best spec and its arrow. Hold Shift for the full breakdown.")
+    ratings:place(detailBox)
+    checkRows[#checkRows + 1] = detailBox
+    ratings:body("Hold Shift for the full breakdown.")
 
     -- Bag arrows: the two arrows, and when neither shows.
     local bags = addTab("Bag arrows")

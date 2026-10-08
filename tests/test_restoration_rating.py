@@ -280,6 +280,7 @@ rt, G, BIT, files = load()
 G.Fire("ADDON_LOADED", "BattleInfoTool")
 G.Fire("PLAYER_LOGIN")
 si = BIT.modules["StatsInfo"]
+si.settings.detail = "full"
 W = si.SPECS
 
 resto_spec = None
@@ -544,8 +545,11 @@ check("the generator's source bookkeeping keeps the healer specs from any sim ru
       (mw.HEALER_RUNS, "druid_restoration" in mw.HEALER_RUNS),
       ({"druid_restoration", "priest_holy", "paladin_holy", "shaman_restoration"}, True))
 before = (ROOT / "Modules" / "StatsInfo" / "Weights.lua").read_bytes()
-mw.main()
-after = (ROOT / "Modules" / "StatsInfo" / "Weights.lua").read_bytes()
+import tempfile
+with tempfile.TemporaryDirectory() as generated:
+    mw.OUT = pathlib.Path(generated) / "Weights.lua"
+    mw.main()
+    after = mw.OUT.read_bytes()
 check("regenerating Weights.lua reproduces the file byte for byte (no drift)",
       after == before, True)
 text = after.decode("utf-8")

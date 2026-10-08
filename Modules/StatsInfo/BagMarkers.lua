@@ -92,7 +92,7 @@ local safeBound
 local function safeStatBound()
   if safeBound then return safeBound end
   local _, class = ask(UnitClass, "player")
-  local specs = type(class) == "string" and M.SPECS and M.SPECS[class]
+  local specs = type(class) == "string" and not isSecret(class) and M.SPECS and M.SPECS[class]
   local maxW = 0
   for _, spec in ipairs(specs or {}) do
     for _, kind in ipairs({ "survival", "threat", "damage", "healing" }) do
@@ -113,7 +113,7 @@ local function safeStatBound()
   -- value must keep every step finite. Derived from the REAL weights: no invented cap.
   local bound = 1.7e308 / ((maxW * 100) + 1) / 64
   if not (bound > 1) then bound = 1.7e308 / 64 end -- no weighted measure: raw diffs only
-  safeBound = bound
+  if specs then safeBound = bound end -- a hidden class may become readable after combat
   return bound
 end
 
@@ -134,8 +134,9 @@ end
 -- answer first, then the classic link's own item:<id> (the hyperlink shape is defined by
 -- the client; the id needs no cached data to parse).
 local function itemIDOf(link)
-  if type(link) ~= "string" then return nil end
+  if type(link) ~= "string" or isSecret(link) then return nil end
   local id = ask(C_Item and C_Item.GetItemInfoInstant, link)
+  if isSecret(id) then return nil end
   if type(id) == "number" then return id end
   return tonumber(link:match("^item:(%d+):")) or tonumber(link:match("item:(%d+):"))
 end
@@ -147,8 +148,8 @@ local function cacheState(link)
   local id = itemIDOf(link)
   if not id then return "proceed" end -- nothing to verify against; the stats check decides
   local cached = ask(C_Item.IsItemDataCachedByID, id)
-  if cached == nil then return "dead" end
   if isSecret(cached) then return "dead" end
+  if cached == nil then return "dead" end
   if cached == false then return "wait" end
   return "proceed"
 end
@@ -219,9 +220,9 @@ local function itemReadiness(link)
   end
   local bound = safeStatBound()
   local n = 0
-  for _, v in pairs(stats) do
+  for k, v in pairs(stats) do
     n = n + 1
-    if isSecret(v) then return "dead" end
+    if isSecret(k) or isSecret(v) then return "dead" end
     if type(v) ~= "number" then return "dead" end
     if v ~= v or v == math.huge or v == -math.huge then return "dead" end
     if math.abs(v) > bound then return "dead" end
@@ -256,28 +257,12 @@ local function onItemDataArrived(id)
   requestBaganatorRefresh()
 end
 
--- One spec's verdict from its rating parts (rows of M.SpecRatings): "up" when at least
--- one part is positive and none is negative, "down" when at least one is negative and
--- none positive, "none" otherwise (nothing changes, or the parts push opposite ways).
-local function specVerdict(parts)
-  local up, down, approx = false, false, false
-  for _, p in ipairs(parts) do
-    local v = p.percent or 0
-    if p.approx then approx = true end
-    if v >= THRESHOLD then up = true
-    elseif v <= -THRESHOLD then down = true end
-  end
-  if up and not down then return "up", approx end
-  if down and not up then return "down", approx end
-  return "none", approx
-end
-
 -- Stat keys the model prices for this class (any spec, any measure, nonzero):
 -- only their losses can veto an arrow. An unmodelled loss (3 armor the class
 -- never converts) still prints its line, but never blocks an upgrade alone.
 local function modelledKeys()
   local _, class = ask(UnitClass, "player")
-  local specs = type(class) == "string" and M.SPECS and M.SPECS[class]
+  local specs = type(class) == "string" and not isSecret(class) and M.SPECS and M.SPECS[class]
   local set = {}
   if specs then for _, spec in ipairs(specs) do
     for _, mname in ipairs({ "damage", "survival", "threat", "healing" }) do
@@ -303,7 +288,7 @@ local function comparisonVerdict(link, c)
   local sawUp, sawDown, sawNeutral, sawSignificant = false, false, false, false
   local upSpecs = {}
   for _, row in ipairs(ratings) do
-    local v, approx = specVerdict(row.parts)
+    local v, approx = M.RatingVerdict(row.parts)
     if v == "up" then
       sawUp = true
       upSpecs[#upSpecs + 1] = { spec = row.spec, approx = approx }
@@ -352,7 +337,6 @@ local function levelGate(link)
   local _, _, _, _, minLevel = ask(C_Item and C_Item.GetItemInfo, link)
   if isSecret(minLevel) then return "dead" end
   if minLevel == nil then return "ok" end
-  if isSecret(minLevel) then return "dead" end
   if type(minLevel) ~= "number" or minLevel ~= minLevel
       or minLevel == math.huge or minLevel == -math.huge then
     return "dead" -- a malformed requirement is unknown, never a number to compare with
@@ -367,7 +351,7 @@ end
 -- return): nil for anything that goes nowhere.
 local function equipLocOf(link)
   local _, _, _, loc = ask(C_Item and C_Item.GetItemInfoInstant, link)
-  return type(loc) == "string" and loc ~= "" and loc or nil
+  return type(loc) == "string" and not isSecret(loc) and loc ~= "" and loc or nil
 end
 
 -- Whether the player can wear and use link. The client's own answers are the whole truth:
@@ -379,6 +363,7 @@ end
 local function wearable(link)
   if C_Item and type(C_Item.IsEquippableItem) == "function" then
     local r = ask(C_Item.IsEquippableItem, link)
+    if isSecret(r) then return false end
     if r == false then return false end
     if r ~= true and not equipLocOf(link) then return false end
   elseif not equipLocOf(link) then
@@ -715,6 +700,19 @@ local function createMarker(button)
   initContents(marker)
   markers[button] = marker
   return marker
+end
+
+-- The same arrow WorldMarkers paints on loot, roll and merchant buttons. No second verdict.
+function M.PaintVerdictMarker(container, verdict)
+  if type(container) ~= "table" then return end
+  if not container.arrow then initContents(container) end
+  if not verdict or (verdict.verdict ~= "up" and verdict.verdict ~= "down") then
+    clearContents(container)
+    if type(container.Hide) == "function" then container:Hide() end
+    return
+  end
+  paintContents(container, verdict, false)
+  if type(container.Show) == "function" then container:Show() end
 end
 
 -- Pawn-style, clean-room (Pawn is CC BY-NC-ND: technique only, no code copied):
@@ -1278,6 +1276,7 @@ loader:SetScript("OnEvent", function(self, event, arg1)
   end
   if not active then return end
   if event == "ITEM_DATA_LOAD_RESULT" or event == "GET_ITEM_INFO_RECEIVED" then
+    bumpRevision() -- an unchanged link may now include stats or an enchant absent on the last pass
     onItemDataArrived(arg1)
     return
   end
