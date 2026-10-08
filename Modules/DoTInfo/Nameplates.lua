@@ -1,4 +1,4 @@
--- BattleInfoTool module DoTInfo: nameplates. Based on the standalone DoT addon's nameplate code
+-- UsefulPlatesAndTooltips module DoTInfo: nameplates. Based on the standalone DoT addon's nameplate code
 -- at e4faef4 by Joe Greive (MIT); it lives only here now and is edited directly.
 -- The damage marker (and optionally the kill icon) on every enemy nameplate that has your
 -- DoTs on it, using the per-mob tracking in Core.lua (ns.dotBreakdownForUnit). Same secret-value trick as
@@ -11,7 +11,7 @@
 -- Also the probe (/dotinfo plates): what the addon can reach on nameplates, logged, with a test bar on each.
 
 local ADDON_NAME, BIT = ...
--- BattleInfoTool's own namespace for the module, shared by its four files.
+-- UsefulPlatesAndTooltips's own namespace for the module, shared by its four files.
 local ns = BIT.Module("DoTInfo")
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
@@ -401,7 +401,7 @@ local driver = CreateFrame("Frame")
 local sinceUpdate = 0
 local reportedError = false
 driver:SetScript("OnUpdate", function(self, elapsed)
-    -- switched off in BattleInfoTool (Core.lua decides at ADDON_LOADED): stop for good
+    -- switched off in UsefulPlatesAndTooltips (Core.lua decides at ADDON_LOADED): stop for good
     if ns.off then self:SetScript("OnUpdate", nil) return end
     sinceUpdate = sinceUpdate + elapsed
     if sinceUpdate < UPDATE_INTERVAL then return end

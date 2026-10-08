@@ -1,4 +1,4 @@
--- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/SpellCoefficients.lua at 8269edd.
+-- UsefulPlatesAndTooltips module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/SpellCoefficients.lua at 8269edd.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: the share of spell power each spell gets, from the client's own spell tables
 -- (SpellEffect.EffectBonusCoefficient) of WoW: Forever 1.60.1.70009 and Classic Era 1.15.9.69722.
@@ -6,7 +6,7 @@
 -- Copyright (c) 2026 Ironship. MIT licence, see LICENSE.
 
 local _, BIT = ...
--- Inside BattleInfoTool its own namespace; loaded on its own, the addon's table as before.
+-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon's table as before.
 local ns = BIT and BIT.Module and BIT.Module("SpellDamageInfo") or BIT or {}
 
 -- [spell id] = { d = direct damage, o = damage over time (per tick x ticks), h = direct healing,

@@ -1,4 +1,4 @@
--- BattleInfoTool: the settings window (/bit). One tab per module, in the order the modules'
+-- UsefulPlatesAndTooltips: the settings window (/upt). One tab per module, in the order the modules'
 -- files load, plus a Together tab that is not a module. Each module tab starts with Enable.
 -- The module's own settings are built the first time the tab is shown while it runs, and
 -- also the moment Enable is ticked while it is still off (a waker fills defaults only;
@@ -415,7 +415,7 @@ local function buildTogether(page)
     local plate = BIT.Plate or {}
     local rows = plate.Rows()
     local owns = rows.hunter.on
-    local dotDB = BattleInfoTool_DoTInfoDB or {}
+    local dotDB = UsefulPlatesAndTooltips_DoTInfoDB or {}
     local mods = BIT.DB().modules or {}
     local dotsOn = moduleOn("DoTInfo") and dotDB.showMarkers ~= false and dotDB.nameplateMode ~= "off"
     local shieldsOn = moduleOn("ShieldsInfo") and (mods.ShieldsInfo or {}).nameplates ~= false
@@ -656,7 +656,7 @@ end
 
 local function createWindow()
   local w, h = tabSize()
-  window = CreateFrame("Frame", "BattleInfoToolSettings", UIParent, "BackdropTemplate")
+  window = CreateFrame("Frame", "UsefulPlatesAndTooltipsSettings", UIParent, "BackdropTemplate")
   window:Hide()
   window:SetSize(w + 2 * MARGIN, HEADER_HEIGHT + TAB_HEIGHT + SWITCH_HEIGHT + h + MARGIN)
   window:SetFrameStrata("DIALOG")
@@ -672,11 +672,11 @@ local function createWindow()
   end)
   applyWindowPoint()
   UI.Backdrop(window, 0.06, 0.97)
-  if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "BattleInfoToolSettings") end
+  if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "UsefulPlatesAndTooltipsSettings") end
 
   local title = window:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
   title:SetPoint("TOPLEFT", 16, -14)
-  title:SetText("BattleInfoTool")
+  title:SetText("Useful Plates and Tooltips")
   local close = CreateFrame("Button", nil, window, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", -6, -6)
 
@@ -720,14 +720,14 @@ function BIT.OpenSettings(name)
 end
 
 ---------------------------------------------------------------------------------------------
--- /bit, and a page in Options > AddOns
+-- /upt, and a page in Options > AddOns
 ---------------------------------------------------------------------------------------------
 
-BIT.commands = {} -- word -> function(rest), from the modules (/bit probe)
+BIT.commands = {} -- word -> function(rest), from the modules (/upt probe)
 
 function BIT.RegisterCommand(word, fn) BIT.commands[word] = fn end
 
--- Short names for the tabs: /bit sdi, /bit did, /bit stats, /bit ding, /bit range
+-- Short names for the tabs: /upt sdi, /upt did, /upt stats, /upt ding, /upt range
 BIT.tabWords = {}
 
 local function slash(msg)
@@ -740,23 +740,23 @@ local function slash(msg)
   for _, name in ipairs(BIT.order) do
     if word == name:lower() or BIT.tabWords[word] == name then BIT.OpenSettings(name) return end
   end
-  BIT.Say("/bit opens the settings; /bit <part> opens a part's tab ("
-    .. table.concat(BIT.order, ", ") .. "); /bit probe records what StatsInfo can read.")
+  BIT.Say("/upt opens the settings; /upt <part> opens a part's tab ("
+    .. table.concat(BIT.order, ", ") .. "); /upt probe records what StatsInfo can read.")
 end
 
-SLASH_BATTLEINFOTOOL1 = "/bit"
-SLASH_BATTLEINFOTOOL2 = "/battleinfotool"
-if type(SlashCmdList) == "table" then SlashCmdList.BATTLEINFOTOOL = slash end
+SLASH_USEFULPLATESANDTOOLTIPS1 = "/upt"
+SLASH_USEFULPLATESANDTOOLTIPS2 = "/usefulplates"
+if type(SlashCmdList) == "table" then SlashCmdList.USEFULPLATESANDTOOLTIPS = slash end
 
 local function registerOptionsPage()
   local panel = CreateFrame("Frame")
   local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
   title:SetPoint("TOPLEFT", 16, -16)
-  title:SetText("BattleInfoTool")
+  title:SetText("Useful Plates and Tooltips")
   local text = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
   text:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -10)
-  text:SetText("The settings have their own window. You can also type /bit.")
-  local open = UI.Button(panel, "Open BattleInfoTool settings", 240, function()
+  text:SetText("The settings have their own window. You can also type /upt.")
+  local open = UI.Button(panel, "Open Useful Plates and Tooltips settings", 240, function()
     if SettingsPanel and SettingsPanel.IsShown and SettingsPanel:IsShown() and type(HideUIPanel) == "function"
       and not (type(InCombatLockdown) == "function" and InCombatLockdown()) then
       pcall(HideUIPanel, SettingsPanel)
@@ -766,9 +766,9 @@ local function registerOptionsPage()
   open:SetPoint("TOPLEFT", text, "BOTTOMLEFT", 0, -14)
   if type(Settings) == "table" and type(Settings.RegisterCanvasLayoutCategory) == "function"
     and type(Settings.RegisterAddOnCategory) == "function" then
-    Settings.RegisterAddOnCategory(Settings.RegisterCanvasLayoutCategory(panel, "BattleInfoTool"))
+    Settings.RegisterAddOnCategory(Settings.RegisterCanvasLayoutCategory(panel, "Useful Plates and Tooltips"))
   elseif type(InterfaceOptions_AddCategory) == "function" then
-    panel.name = "BattleInfoTool"
+    panel.name = "Useful Plates and Tooltips"
     InterfaceOptions_AddCategory(panel)
   end
 end
@@ -777,7 +777,7 @@ local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_LOGIN")
 loader:SetScript("OnEvent", function(self)
   local ok, err = pcall(registerOptionsPage)
-  if not ok then BIT.Say("Options > AddOns page not added (" .. tostring(err) .. "); /bit still opens the settings.") end
+  if not ok then BIT.Say("Options > AddOns page not added (" .. tostring(err) .. "); /upt still opens the settings.") end
   self:UnregisterAllEvents()
 end)
 

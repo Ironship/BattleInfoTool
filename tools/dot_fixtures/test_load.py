@@ -161,7 +161,7 @@ local H = {}
 function H.load(path, src, ns)
     local fn, err = (loadstring or load)(src, "@" .. path)
     if not fn then error(err) end
-    fn("BattleInfoTool", ns)
+    fn("UsefulPlatesAndTooltips", ns)
 end
 function H.fire(event, ...)
     for _, f in ipairs(frames) do
@@ -239,7 +239,7 @@ def step(label, fn):
 
 lua.execute("ns = { Module = function(name) return ns end }")
 ns = lua.globals()["ns"]
-toc = open(os.path.join(ROOT, "BattleInfoTool.toc"), encoding="utf-8").read().splitlines()
+toc = open(os.path.join(ROOT, "UsefulPlatesAndTooltips.toc"), encoding="utf-8").read().splitlines()
 files = [line.strip().replace("\\", os.sep) for line in toc if line.strip().startswith("Modules\\DoTInfo\\")]
 expected = [os.path.join("Modules", "DoTInfo", n) for n in ("Locale.lua", "Core.lua", "Options.lua", "Nameplates.lua")]
 if files != expected:
@@ -247,11 +247,11 @@ if files != expected:
 for name in files:
     step(f"load {name}", lambda name=name: H.load(name, open(os.path.join(ROOT, name), encoding="utf-8").read(), ns))
 
-step("ADDON_LOADED", lambda: H.fire("ADDON_LOADED", "BattleInfoTool"))
-check("defaults applied", G.BattleInfoTool_DoTInfoDB.skullIcon, "cross")
+step("ADDON_LOADED", lambda: H.fire("ADDON_LOADED", "UsefulPlatesAndTooltips"))
+check("defaults applied", G.UsefulPlatesAndTooltips_DoTInfoDB.skullIcon, "cross")
 step("run the display loop with no target", lambda: H.update(0.2))
 step("/dotinfo opens the window", lambda: G.SlashCmdList.BITDOTINFO(""))
-check("window shown", G.BattleInfoTool_DoTInfoOptions.shown, True)
+check("window shown", G.UsefulPlatesAndTooltips_DoTInfoOptions.shown, True)
 step("display loop with the window's preview", lambda: H.update(0.2))
 
 for tab in ("Kill icon", "Marker", "Effects", "Text", "Nameplates", "Behavior"):
@@ -260,23 +260,23 @@ for tab in ("Kill icon", "Marker", "Effects", "Text", "Nameplates", "Behavior"):
 
 def copy_marker_look():
     H.clickText("Nameplates")
-    G.BattleInfoTool_DoTInfoDB.fillColor = "gold"
+    G.UsefulPlatesAndTooltips_DoTInfoDB.fillColor = "gold"
     H.clickText("Copy from Marker tab")
 
 
 step("Nameplates: Copy from Marker tab", copy_marker_look)
-check("  plate fill color copied from the marker", G.BattleInfoTool_DoTInfoDB.plateFillColor, "gold")
+check("  plate fill color copied from the marker", G.UsefulPlatesAndTooltips_DoTInfoDB.plateFillColor, "gold")
 
 for preset in ("Minimal", "Classic", "Debug", "Juicy"):
     step(f"apply preset {preset}", lambda p=preset: H.clickText(p))
     step(f"  display loop after {preset}", lambda: H.update(0.2))
-    settings = G.BattleInfoTool_DoTInfoDB
+    settings = G.UsefulPlatesAndTooltips_DoTInfoDB
     check(f"  {preset} styles both bars",
           (settings.plateFillTexture, settings.plateDotColors, settings.plateFillOpacity),
           (settings.fillTexture, settings.dotColors, settings.fillOpacity))
-check("Juicy preset set the fill", G.BattleInfoTool_DoTInfoDB.fillTexture, "stripes")
-check("Juicy nameplates use a different color per DoT", G.BattleInfoTool_DoTInfoDB.plateDotColors, "each")
-check("presets keep the smaller nameplate icon size", G.BattleInfoTool_DoTInfoDB.nameplateIconSize, 18)
+check("Juicy preset set the fill", G.UsefulPlatesAndTooltips_DoTInfoDB.fillTexture, "stripes")
+check("Juicy nameplates use a different color per DoT", G.UsefulPlatesAndTooltips_DoTInfoDB.plateDotColors, "each")
+check("presets keep the smaller nameplate icon size", G.UsefulPlatesAndTooltips_DoTInfoDB.nameplateIconSize, 18)
 
 
 def toggle_glow():
@@ -286,7 +286,7 @@ def toggle_glow():
 
 
 step("untick Glow", toggle_glow)
-check("  glow setting off", G.BattleInfoTool_DoTInfoDB.showGlow, False)
+check("  glow setting off", G.UsefulPlatesAndTooltips_DoTInfoDB.showGlow, False)
 
 
 def set_slider(label, value):
@@ -296,19 +296,19 @@ def set_slider(label, value):
 
 
 step("drag Size slider to 40", set_slider("Size", 40))
-check("  icon size saved", G.BattleInfoTool_DoTInfoDB.skullSize, 40)
+check("  icon size saved", G.UsefulPlatesAndTooltips_DoTInfoDB.skullSize, 40)
 step("drag Target health to 30", set_slider("Target health", 30))
 step("drag DoT damage to 50", set_slider("DoT damage", 50))
 step("display loop with a lethal preview", lambda: H.update(1.2))
-check("  marker frame shown", G.BattleInfoTool_DoTInfoRemaining.shown, True)
-check("  marker filled to the DoT damage", round(G.BattleInfoTool_DoTInfoRemaining.value or -1), 50)
-check("  kill icon frame shown", G.BattleInfoTool_DoTInfoSkull.shown, True)
-check("  marker layered above the window's strata", G.BattleInfoTool_DoTInfoRemaining.strata, "FULLSCREEN")
+check("  marker frame shown", G.UsefulPlatesAndTooltips_DoTInfoRemaining.shown, True)
+check("  marker filled to the DoT damage", round(G.UsefulPlatesAndTooltips_DoTInfoRemaining.value or -1), 50)
+check("  kill icon frame shown", G.UsefulPlatesAndTooltips_DoTInfoSkull.shown, True)
+check("  marker layered above the window's strata", G.UsefulPlatesAndTooltips_DoTInfoRemaining.strata, "FULLSCREEN")
 
 
 def preview_plate_markers():
     # The window keeps its mock nameplate and that plate's health bar; any other StatusBar on it is a marker.
-    win = G.BattleInfoTool_DoTInfoOptions
+    win = G.UsefulPlatesAndTooltips_DoTInfoOptions
     plate, bar = win.mockPlate, win.plateHealthBar
     if plate is None:
         return []
@@ -335,11 +335,11 @@ def pick_outline_none():
 
 
 step("pick Outline: None from the dropdown", pick_outline_none)
-check("  outline style saved", G.BattleInfoTool_DoTInfoDB.outlineStyle, "none")
+check("  outline style saved", G.UsefulPlatesAndTooltips_DoTInfoDB.outlineStyle, "none")
 step("display loop without outline", lambda: H.update(0.2))
 
 step("Reset this tab (Marker)", lambda: H.clickText("Reset this tab"))
-check("  outline back to default", G.BattleInfoTool_DoTInfoDB.outlineStyle, "dashed")
+check("  outline back to default", G.UsefulPlatesAndTooltips_DoTInfoDB.outlineStyle, "dashed")
 
 def enter_combat():
     G.combat = True
@@ -354,22 +354,22 @@ def leave_combat():
 
 
 step("enter combat with the window open", enter_combat)
-check("  display back on the target frame (not the window's strata)", G.BattleInfoTool_DoTInfoRemaining.strata != "FULLSCREEN", True)
+check("  display back on the target frame (not the window's strata)", G.UsefulPlatesAndTooltips_DoTInfoRemaining.strata != "FULLSCREEN", True)
 check("  log says the preview stepped aside",
-      any("PREVIEW off" in line for line in list(G.BattleInfoTool_DoTInfoDB.log.values())[-5:]), True)
+      any("PREVIEW off" in line for line in list(G.UsefulPlatesAndTooltips_DoTInfoDB.log.values())[-5:]), True)
 step("leave combat", leave_combat)
-check("  preview has the display again", G.BattleInfoTool_DoTInfoRemaining.strata, "FULLSCREEN")
+check("  preview has the display again", G.UsefulPlatesAndTooltips_DoTInfoRemaining.strata, "FULLSCREEN")
 
 step("start Simulate fight", lambda: H.clickText("Simulate fight"))
 step("run the simulated fight", lambda: (H.runTickers(25), H.update(0.2)))
 step("Flash button", lambda: H.clickText("Flash"))
 step("Reset learned tick sizes", lambda: H.clickText("Reset"))
-step("close the window", lambda: G.BattleInfoTool_DoTInfoOptions.Hide(G.BattleInfoTool_DoTInfoOptions))
-check("window hidden", G.BattleInfoTool_DoTInfoOptions.shown, False)
+step("close the window", lambda: G.UsefulPlatesAndTooltips_DoTInfoOptions.Hide(G.UsefulPlatesAndTooltips_DoTInfoOptions))
+check("window hidden", G.UsefulPlatesAndTooltips_DoTInfoOptions.shown, False)
 step("display loop back on the (absent) target", lambda: H.update(0.2))
 step("/dotinfo help", lambda: G.SlashCmdList.BITDOTINFO("help"))
 step("/dotinfo plates", lambda: G.SlashCmdList.BITDOTINFO("plates"))
-plate_lines = [line for line in G.BattleInfoTool_DoTInfoDB.log.values() if "PLATES" in line]
+plate_lines = [line for line in G.UsefulPlatesAndTooltips_DoTInfoDB.log.values() if "PLATES" in line]
 check("  probe logged the fake nameplate", any("nameplate1" in line and "healthBar=UnitFrame.healthBar" in line
                                                 and "anchorPlate=ok" in line for line in plate_lines), True)
 check("  probe summary", plate_lines[-1].split("PLATES ")[1], "probe done: 1 nameplates, 1 test bars shown")
@@ -423,10 +423,10 @@ check("  the DoTs have different colors", tuple(fills[0].vertex.values()) != tup
 check("  the first DoT matches the target's color", tuple(fills[0].vertex.values())[:3],
       tuple(ns.dotColor(lua.eval('{ name = "Corruption", school = 32 }'), "each").values()))
 check("  one divider separates the two DoTs", len(shown_dividers()), 1)
-G.BattleInfoTool_DoTInfoDB.segmentDividers = False
+G.UsefulPlatesAndTooltips_DoTInfoDB.segmentDividers = False
 H.update(0.2)
 check("  shared divider option also applies to nameplates", len(shown_dividers()), 0)
-G.BattleInfoTool_DoTInfoDB.segmentDividers = True
+G.UsefulPlatesAndTooltips_DoTInfoDB.segmentDividers = True
 step("the cast is interrupted", fire_and_update("UNIT_SPELLCAST_INTERRUPTED", "cast-2", 348))
 check("  back to Corruption alone", markers[0].value if markers else None, 40)
 check("  a single DoT has no internal divider", len(shown_dividers()), 0)
@@ -442,12 +442,12 @@ def set_estimate(on):
 
 
 step("untick Estimate during casting", set_estimate(False))
-check("  setting off", G.BattleInfoTool_DoTInfoDB.estimateDuringCast, False)
+check("  setting off", G.UsefulPlatesAndTooltips_DoTInfoDB.estimateDuringCast, False)
 step("start casting Immolate with it off", fire_and_update("UNIT_SPELLCAST_START", "cast-3", 348))
 check("  nothing added while casting", markers[0].value if markers else None, 40)
 step("  and interrupted", fire_and_update("UNIT_SPELLCAST_INTERRUPTED", "cast-3", 348))
 step("tick it again", set_estimate(True))
-check("  setting on", G.BattleInfoTool_DoTInfoDB.estimateDuringCast, True)
+check("  setting on", G.UsefulPlatesAndTooltips_DoTInfoDB.estimateDuringCast, True)
 step("cast Immolate again", fire_and_update("UNIT_SPELLCAST_START", "cast-4", 348))
 step("  it lands (SUCCEEDED, then STOP)", lambda: (H.fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-4", 348),
                                                    H.fire("UNIT_SPELLCAST_STOP", "player", "cast-4", 348),
@@ -470,7 +470,7 @@ H.update(0.2)
 
 
 def plates_off():
-    G.BattleInfoTool_DoTInfoDB.nameplateMode = "off"
+    G.UsefulPlatesAndTooltips_DoTInfoDB.nameplateMode = "off"
     H.update(0.2)
 
 

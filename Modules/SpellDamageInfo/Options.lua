@@ -1,4 +1,4 @@
--- BattleInfoTool module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Options.lua at 8269edd.
+-- UsefulPlatesAndTooltips module SpellDamageInfo: ported by tools/port.py from SpellDamageInfo/Options.lua at 8269edd.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 -- SpellDamageInfo: the settings window (/sdi) and its page in Options > AddOns.
 -- Options window adapted from a standalone DoT addon by Joe Greive (MIT).
@@ -15,7 +15,7 @@
 -- touches a secure frame or calls a protected function, so the window works in combat too.
 
 local _, BIT = ...
--- Inside BattleInfoTool its own namespace; loaded on its own, the addon's table as before.
+-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon's table as before.
 local ns = BIT.Module and BIT.Module("SpellDamageInfo") or BIT
 local L, Estimate = ns.L, ns.Estimate
 
@@ -454,7 +454,7 @@ local function buildSettings(area)
 end
 
 -- The preview and the settings, in window: the addon's own window, below its title bar, or
--- inside BattleInfoTool the tab it is built into.
+-- inside UsefulPlatesAndTooltips the tab it is built into.
 local function buildContent(top)
   local pane = CreateFrame("Frame", nil, window, "BackdropTemplate")
   pane:SetPoint("TOPLEFT", 10, -top)
@@ -575,7 +575,7 @@ end)
 local function buildSDIPreview(parent)
   -- OFF previews can be opened before ADDON_LOADED wakes this module's locale.
   if not L.OVER then
-    local saved = type(BattleInfoTool_SpellDamageInfoDB) == "table" and BattleInfoTool_SpellDamageInfoDB
+    local saved = type(UsefulPlatesAndTooltips_SpellDamageInfoDB) == "table" and UsefulPlatesAndTooltips_SpellDamageInfoDB
     ns.InitInterfaceL(saved and saved.interfaceLang or "auto")
   end
   local scene = CreateFrame("Frame", nil, parent)

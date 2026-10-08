@@ -1,5 +1,5 @@
-"""BattleInfoTool as a whole: every file of the .toc loaded in order in Lua 5.1 (lupa) against a fake
-game, then driven: ADDON_LOADED, PLAYER_LOGIN, /bit and each tab, a module switched off,
+"""UsefulPlatesAndTooltips as a whole: every file of the .toc loaded in order in Lua 5.1 (lupa) against a fake
+game, then driven: ADDON_LOADED, PLAYER_LOGIN, /upt and each tab, a module switched off,
 an unrelated addon enabled (ignored), the range mark, StatsInfo's comparison and probe.
 
     python tests/test_bit.py
@@ -260,8 +260,8 @@ def load(saved=None, standalone=()):
     if saved:
         rt.execute(saved)
     BIT = rt.eval("{}")
-    loader = rt.eval("function(src, name, BIT) local f = assert(loadstring(src, '@' .. name)); return f('BattleInfoTool', BIT) end")
-    toc = (ROOT / "BattleInfoTool.toc").read_text(encoding="utf-8").splitlines()
+    loader = rt.eval("function(src, name, BIT) local f = assert(loadstring(src, '@' .. name)); return f('UsefulPlatesAndTooltips', BIT) end")
+    toc = (ROOT / "UsefulPlatesAndTooltips.toc").read_text(encoding="utf-8").splitlines()
     files = [l.strip() for l in toc if l.strip() and not l.startswith("#")]
     for f in files:
         loader((ROOT / f.replace("\\", "/")).read_text(encoding="utf-8"), f, BIT)
@@ -278,50 +278,50 @@ rt, G, BIT, files = load()
 check("the .toc lists the core and seven modules' files", len(files), 28)  # PlateLayout.lua and WorldMarkers.lua add two (28)
 check("the tabs are in the order the files load", list(BIT.order.values()),
       ["SpellDamageInfo", "DoTInfo", "StatsInfo", "ResourceDing", "Range", "ShieldsInfo", "HunterRangeFinder"])
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G.Fire("PLAYER_LOGIN")
 for name in ("SpellDamageInfo", "DoTInfo", "StatsInfo", "ResourceDing", "Range", "ShieldsInfo", "HunterRangeFinder"):
     check(f"{name} runs", BIT.state[name], "on")
 check("each ported module keeps its SavedVariables apart",
       all(isinstance(G[n], object) and G[n] is not None for n in
-          ("BattleInfoTool_SpellDamageInfoDB", "BattleInfoTool_DoTInfoDB", "BattleInfoTool_ResourceDingDB")), True)
+          ("UsefulPlatesAndTooltips_SpellDamageInfoDB", "UsefulPlatesAndTooltips_DoTInfoDB", "UsefulPlatesAndTooltips_ResourceDingDB")), True)
 check("the standalone addons' SavedVariables are left alone",
       [G[n] for n in ("SpellDamageInfoDB", "ResourceDingDB")], [None, None])
 check("the DoTInfo runtime file is Modules/DoTInfo/Core.lua",
       "Modules\\DoTInfo\\Core.lua" in files, True)
 check("DoTInfo's marker frames carry canonical names",
-      (G.BattleInfoTool_DoTInfoSkull is not None, G.BattleInfoTool_DoTInfoRemaining is not None), (True, True))
+      (G.UsefulPlatesAndTooltips_DoTInfoSkull is not None, G.UsefulPlatesAndTooltips_DoTInfoRemaining is not None), (True, True))
 did = BIT.modules["DoTInfo"]
 check("DoTInfo's textures are in the module's folder",
-      str(did.textureDir or ""), "Interface\\AddOns\\BattleInfoTool\\Modules\\DoTInfo\\Textures\\")
-check("no global ResourceDing table inside BattleInfoTool", G.ResourceDing, None)
+      str(did.textureDir or ""), "Interface\\AddOns\\UsefulPlatesAndTooltips\\Modules\\DoTInfo\\Textures\\")
+check("no global ResourceDing table inside UsefulPlatesAndTooltips", G.ResourceDing, None)
 check("ResourceDing's combo point dots started", BIT.modules["ResourceDing"]._dotsRow() is not None, True)
 
-# /bit and the tabs
-G.SlashCmdList.BATTLEINFOTOOL("")
-window = G.BattleInfoToolSettings
-check("/bit opens the window", window is not None and window.shown, True)
+# /upt and the tabs
+G.SlashCmdList.USEFULPLATESANDTOOLTIPS("")
+window = G.UsefulPlatesAndTooltipsSettings
+check("/upt opens the window", window is not None and window.shown, True)
 for name in ("SpellDamageInfo", "DoTInfo", "StatsInfo", "ResourceDing", "Range", "ShieldsInfo", "HunterRangeFinder"):
     BIT.OpenSettings(name)
     page = BIT._pages[name]
     check(f"the {name} tab is built and shown", page is not None and page.shown, True)
     check(f"  its content was built, not the off note", page.offNote, None)
 check("no tab failed to build", [m for m in chat(G) if "could not be built" in m], [])
-G.SlashCmdList.BATTLEINFOTOOL("ding")
-check("/bit ding opens ResourceDing's tab", BIT._pages["ResourceDing"].shown, True)
+G.SlashCmdList.USEFULPLATESANDTOOLTIPS("ding")
+check("/upt ding opens ResourceDing's tab", BIT._pages["ResourceDing"].shown, True)
 
 # the switch
 page = BIT._pages["Range"]
 page.switch.scripts.OnClick(page.switch)  # the box was checked; OnClick reads it after the click
 page.switch.checked = False
 page.switch.scripts.OnClick(page.switch)
-check("unticking Enable saves the switch", G.BattleInfoToolDB.modules.Range.enabled, False)
+check("unticking Enable saves the switch", G.UsefulPlatesAndTooltipsDB.modules.Range.enabled, False)
 check("  and offers a reload", page.reload.shown, True)
 check("  the module keeps running until then", BIT.state["Range"], "on")
 
 # ---------------------------------------------------------------------------------------------
 print("-- DoTInfo's preview and a fight")
-log = G.BattleInfoTool_DoTInfoDB.log
+log = G.UsefulPlatesAndTooltips_DoTInfoDB.log
 
 
 def since_last(text):
@@ -340,7 +340,7 @@ G.combat = False
 G.Fire("PLAYER_REGEN_ENABLED")
 check("  a fight while the tab is open: afterwards the preview has the marker again",
       any("PREVIEW on" in l for l in since_last("PREVIEW off")), True)
-G.BattleInfoToolSettings.Hide(G.BattleInfoToolSettings)
+G.UsefulPlatesAndTooltipsSettings.Hide(G.UsefulPlatesAndTooltipsSettings)
 check("the window closed: the marker goes back to the target frame",
       any("PREVIEW off" in l for l in since_last("PREVIEW on")), True)
 G.combat = True
@@ -428,9 +428,9 @@ G.inRange["Verwunden"] = True
 G.Tick(0.2)
 check("  in melee range of Rend: the checkmark", icon.texture.texture, "Interface\RaidFrame\ReadyCheck-Ready")
 before = len(chat(G))
-G.SlashCmdList["BATTLEINFOTOOL"]("rangecheck")
+G.SlashCmdList["USEFULPLATESANDTOOLTIPS"]("rangecheck")
 lines = chat(G)[before:]
-check("/bit rangecheck: a line for the mark and one per spell, the next-swing ones and Attack included",
+check("/upt rangecheck: a line for the mark and one per spell, the next-swing ones and Attack included",
       (len(lines), any("78 Heldenhafter Stoß" in l and "by name true" in l and "(measured)" not in l for l in lines),
        any("6603 Angreifen" in l for l in lines), any("772 Verwunden" in l and "(measured)" in l for l in lines)),
       (9, True, True, True))
@@ -485,7 +485,7 @@ rt.execute("SECRET = {} function issecretvalue(v) return v == SECRET end")
 dim(button, True, G.SECRET)
 check("a secret answer is left alone", icon.desat, False)
 rt.execute("issecretvalue = nil")
-check("the setting is on by default", rt.eval("BattleInfoToolDB.modules.Range.dimIcons"), True)
+check("the setting is on by default", rt.eval("UsefulPlatesAndTooltipsDB.modules.Range.dimIcons"), True)
 
 # ---------------------------------------------------------------------------------------------
 print("-- StatsInfo")
@@ -1027,9 +1027,9 @@ function UnitHPPerStamina() return 10 end
 """)
 G.playerClass = "DRUID"  # as the probe below expects
 
-G.SlashCmdList.BATTLEINFOTOOL("probe")
-probes = G.BattleInfoToolDB.probes
-check("/bit probe records one probe", len(probes), 1)
+G.SlashCmdList.USEFULPLATESANDTOOLTIPS("probe")
+probes = G.UsefulPlatesAndTooltipsDB.probes
+check("/upt probe records one probe", len(probes), 1)
 check("  with the class, the functions this client has and the worn items",
       (probes[1]["class"], probes[1]["functions"]["UnitStat"], probes[1]["items"][11]["link"]), ("DRUID", "function", "ring-a"))
 check("  and says so", any("probe 1 recorded" in m for m in chat(G)), True)
@@ -1054,25 +1054,25 @@ check("  with the game's crit, spell crit, dodge and health per point", (
 
 # ---------------------------------------------------------------------------------------------
 print("-- the range mark's height from 0.1.0")
-rt, G, BIT, _ = load(saved="BattleInfoToolDB = { modules = { Range = { offset = 2, size = 26 } } }")
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+rt, G, BIT, _ = load(saved="UsefulPlatesAndTooltipsDB = { modules = { Range = { offset = 2, size = 26 } } }")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 check("0.1.0's default height moves up over the debuff icons", BIT.modules["Range"].settings.offset, 22)
-rt, G, BIT, _ = load(saved="BattleInfoToolDB = { modules = { Range = { offset = 10 } } }")
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+rt, G, BIT, _ = load(saved="UsefulPlatesAndTooltipsDB = { modules = { Range = { offset = 10 } } }")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 check("a height the player chose stays", BIT.modules["Range"].settings.offset, 10)
-rt, G, BIT, _ = load(saved="BattleInfoToolDB = { modules = { Range = { offset = 2, version = 2 } } }")
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+rt, G, BIT, _ = load(saved="UsefulPlatesAndTooltipsDB = { modules = { Range = { offset = 2, version = 2 } } }")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 check("2 chosen after the move stays too", BIT.modules["Range"].settings.offset, 2)
 
 # ---------------------------------------------------------------------------------------------
 print("-- DoTInfo's settings persist under their current names")
-rt, G, BIT, _ = load(saved="BattleInfoToolDB = { modules = { DoTInfo = { enabled = false } } }")
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+rt, G, BIT, _ = load(saved="UsefulPlatesAndTooltipsDB = { modules = { DoTInfo = { enabled = false } } }")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 check("the switch saved under its current name comes along", BIT.state["DoTInfo"], "off")
-rt, G, BIT, _ = load(saved="BattleInfoTool_DoTInfoDB = { fillTexture = 'dots', log = {} }")
-G.Fire("ADDON_LOADED", "BattleInfoTool")
-check("settings saved in BattleInfoTool_DoTInfoDB come along unchanged",
-      G.BattleInfoTool_DoTInfoDB.fillTexture, "dots")
+rt, G, BIT, _ = load(saved="UsefulPlatesAndTooltips_DoTInfoDB = { fillTexture = 'dots', log = {} }")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
+check("settings saved in UsefulPlatesAndTooltips_DoTInfoDB come along unchanged",
+      G.UsefulPlatesAndTooltips_DoTInfoDB.fillTexture, "dots")
 check("/dotinfo is DoTInfo's command", (G.SLASH_BITDOTINFO1, G.SlashCmdList.BITDOTINFO is not None), ("/dotinfo", True))
 G.SlashCmdList.BITDOTINFO("help")
 check("its messages say DoTInfo", any("DoTInfo" in m for m in chat(G)), True)
@@ -1081,11 +1081,11 @@ check("  and its help shows /dotinfo, never /did", (any("/dotinfo line" in m for
 
 # ---------------------------------------------------------------------------------------------
 print("-- a module switched off")
-rt, G, BIT, _ = load(saved="BattleInfoToolDB = { modules = { SpellDamageInfo = { enabled = false } } }")
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+rt, G, BIT, _ = load(saved="UsefulPlatesAndTooltipsDB = { modules = { SpellDamageInfo = { enabled = false } } }")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G.Fire("PLAYER_LOGIN")
 check("SpellDamageInfo is off", BIT.state["SpellDamageInfo"], "off")
-check("  its settings were never made", G.BattleInfoTool_SpellDamageInfoDB, None)
+check("  its settings were never made", G.UsefulPlatesAndTooltips_SpellDamageInfoDB, None)
 check("  the others run", [BIT.state[n] for n in ("DoTInfo", "StatsInfo", "ResourceDing", "Range")], ["on"] * 4)
 G.SlashCmdList.SPELLDAMAGEINFO("")
 check("  /sdi says it is switched off", any("SpellDamageInfo is switched off" in m for m in chat(G)), True)
@@ -1094,8 +1094,8 @@ check("  its tab says how to switch it on instead of building settings", BIT._pa
 
 # ---------------------------------------------------------------------------------------------
 print("-- StatsInfo and Range switched off")
-rt, G, BIT, _ = load(saved="BattleInfoToolDB = { modules = { StatsInfo = { enabled = false }, Range = { enabled = false } } }")
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+rt, G, BIT, _ = load(saved="UsefulPlatesAndTooltipsDB = { modules = { StatsInfo = { enabled = false }, Range = { enabled = false } } }")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G.Fire("PLAYER_LOGIN")
 check("both are off", (BIT.state["StatsInfo"], BIT.state["Range"]), ("off", "off"))
 check("  StatsInfo hooked no tooltip", G.GameTooltip.scripts.OnTooltipSetItem, None)
@@ -1105,11 +1105,11 @@ check("  nor hooked the action bar", G.hooks["ActionButton_UpdateRangeIndicator"
 # ---------------------------------------------------------------------------------------------
 print("-- a standalone addon enabled: ignored, BIT runs anyway")
 rt, G, BIT, _ = load(standalone=("ResourceDing",))
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G.Fire("PLAYER_LOGIN")
 check("ResourceDing stays on despite the standalone addon", BIT.state["ResourceDing"], "on")
 check("DoTInfo stays on despite the standalone addon", BIT.state["DoTInfo"], "on")
-check("  both made their settings here", (G.BattleInfoTool_ResourceDingDB is not None, G.BattleInfoTool_DoTInfoDB is not None), (True, True))
+check("  both made their settings here", (G.UsefulPlatesAndTooltips_ResourceDingDB is not None, G.UsefulPlatesAndTooltips_DoTInfoDB is not None), (True, True))
 check("  ResourceDing's dots started", BIT.modules["ResourceDing"]._dotsRow() is not None, True)
 check("  DoTInfo's nameplate updater running", BIT.modules["DoTInfo"].off, None)
 check("SpellDamageInfo, enabled on other characters only, still runs", BIT.state["SpellDamageInfo"], "on")
@@ -1117,7 +1117,7 @@ check("SpellDamageInfo, enabled on other characters only, still runs", BIT.state
 # ---------------------------------------------------------------------------------------------
 print("-- a standalone addon that loads anyway: ignored, BIT runs anyway")
 rt, G, BIT, _ = load()
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G.loaded["ResourceDing"] = True  # enabled for this character after all, or loaded some other way
 G.Fire("PLAYER_LOGIN")
 check("no standalone warning at login", any("as its own addon" in m for m in chat(G)), False)
@@ -1125,7 +1125,7 @@ check("no standalone warning at login", any("as its own addon" in m for m in cha
 # ---------------------------------------------------------------------------------------------
 print("-- DOT-2: combo cache must not survive a target change")
 rt2, G2, BIT2, _ = load()
-G2.Fire("ADDON_LOADED", "BattleInfoTool")
+G2.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G2.Fire("PLAYER_LOGIN")
 G2.spellNames[1079] = "Rip"
 G2.spellDesc[1079] = "Finishing move that deals damage over time. 1 point : 243 damage over 12 sec. 2 points: 396 damage over 12 sec. 3 points: 549 damage over 12 sec. 4 points: 702 damage over 12 sec. 5 points: 855 damage over 12 sec."
@@ -1138,13 +1138,13 @@ G2.Fire("PLAYER_TARGET_CHANGED")
 G2.comboPoints = 0
 G2.Fire("UNIT_SPELLCAST_SENT", "player", "target", "Cast-1", 1079)
 G2.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-1", 1079)
-log2 = [G2.BattleInfoTool_DoTInfoDB.log[i] for i in range(1, len(G2.BattleInfoTool_DoTInfoDB.log) + 1)]
+log2 = [G2.UsefulPlatesAndTooltips_DoTInfoDB.log[i] for i in range(1, len(G2.UsefulPlatesAndTooltips_DoTInfoDB.log) + 1)]
 check("a finisher on a fresh target must not reuse the points cached on the old one", any("5 combo points (cached)" in l for l in log2), False)
 
 # ---------------------------------------------------------------------------------------------
 print("-- DOT-1: a cast must land on the mob it was aimed at, not the current target")
 rt1, G1, BIT1, _ = load()
-G1.Fire("ADDON_LOADED", "BattleInfoTool")
+G1.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G1.Fire("PLAYER_LOGIN")
 G1.spellNames[172] = "Verderbnis"
 G1.spellDesc[172] = "Corrupts the target, causing 40 Shadow damage over 12 sec."
@@ -1161,7 +1161,7 @@ check("the DoT lands on the cast target, not the tabbed-to mob", int(tot), 0)
 # ---------------------------------------------------------------------------------------------
 print("-- DOT-3: a white hit must not become tick 1 of an unsure bleed")
 rt3, G3, BIT3, _ = load()
-G3.Fire("ADDON_LOADED", "BattleInfoTool")
+G3.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G3.Fire("PLAYER_LOGIN")
 G3.spellNames[1079] = "Rip"
 G3.spellDesc[1079] = "Finishing move that deals damage over time. 1 point : 243 damage over 12 sec. 2 points: 396 damage over 12 sec. 3 points: 549 damage over 12 sec. 4 points: 702 damage over 12 sec. 5 points: 855 damage over 12 sec."
@@ -1185,7 +1185,7 @@ check("  but real ticks on the rhythm are still taken", int(tot3b) > 0, True)
 # ---------------------------------------------------------------------------------------------
 print("-- F2: a same-slot swap must prefer the learned size over the description")
 rt4, G4, BIT4, _ = load()
-G4.Fire("ADDON_LOADED", "BattleInfoTool")
+G4.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G4.Fire("PLAYER_LOGIN")
 G4.spellNames[1122] = "Rupture"
 G4.spellDesc[1122] = "Finishing move that deals damage over time. 1 point: 25 damage over 8 secs. 2 points: 40 damage over 10 secs. 3 points: 55 damage over 12 secs. 4 points: 71 damage over 14 secs. 5 points: 87 damage over 16 secs."
@@ -1205,13 +1205,13 @@ G4.Advance(2)
 G4.Fire("UNIT_COMBAT", "target", "WOUND", None, 30, 1)
 G4.Advance(0.1)
 G4.Fire("UNIT_COMBAT", "target", "WOUND", None, 12, 1)
-log4 = [G4.BattleInfoTool_DoTInfoDB.log[i] for i in range(1, len(G4.BattleInfoTool_DoTInfoDB.log) + 1)]
+log4 = [G4.UsefulPlatesAndTooltips_DoTInfoDB.log[i] for i in range(1, len(G4.UsefulPlatesAndTooltips_DoTInfoDB.log) + 1)]
 check("the white hit does not swap out the real tick against the learned size", any("SWAP" in l for l in log4), False)
 
 # ---------------------------------------------------------------------------------------------
 print("-- L11-1: a finisher reads the display when the count itself is secret")
 rt5, G5, BIT5, _ = load()
-G5.Fire("ADDON_LOADED", "BattleInfoTool")
+G5.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G5.Fire("PLAYER_LOGIN")
 G5.spellNames[1079] = "Rip"
 G5.spellDesc[1079] = "Finishing move that deals damage over time. 1 point : 243 damage over 12 sec. 2 points: 396 damage over 12 sec. 3 points: 549 damage over 12 sec. 4 points: 702 damage over 12 sec. 5 points: 855 damage over 12 sec."
@@ -1232,13 +1232,13 @@ _G["ComboPoint6"] = FakeMock("point6")
 rt5.execute("SECRET = {} function issecretvalue(v) return v == SECRET end function GetComboPoints(u, t) return SECRET end function UnitPower(u, pt) return SECRET end")
 G5.Fire("UNIT_SPELLCAST_SENT", "player", "target", "Cast-6", 1079)
 G5.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-6", 1079)
-log5 = [G5.BattleInfoTool_DoTInfoDB.log[i] for i in range(1, len(G5.BattleInfoTool_DoTInfoDB.log) + 1)]
+log5 = [G5.UsefulPlatesAndTooltips_DoTInfoDB.log[i] for i in range(1, len(G5.UsefulPlatesAndTooltips_DoTInfoDB.log) + 1)]
 check("the finisher takes the 5 lit points from the display, not unknown", any("5 combo points" in l for l in log5), True)
 
 # ---------------------------------------------------------------------------------------------
 print("-- F3: two foreign hits must not relearn a known tick size")
 rt6, G6, BIT6, _ = load()
-G6.Fire("ADDON_LOADED", "BattleInfoTool")
+G6.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G6.Fire("PLAYER_LOGIN")
 G6.spellNames[172] = "Verderbnis"
 G6.spellDesc[172] = "Corrupts the target, causing 400 Shadow damage over 12 sec."
@@ -1257,18 +1257,18 @@ G6.Advance(3)
 G6.Fire("UNIT_COMBAT", "target", "WOUND", None, 500, 32)
 G6.Advance(3)
 G6.Fire("UNIT_COMBAT", "target", "WOUND", None, 500, 32)
-log6 = [G6.BattleInfoTool_DoTInfoDB.log[i] for i in range(1, len(G6.BattleInfoTool_DoTInfoDB.log) + 1)]
+log6 = [G6.UsefulPlatesAndTooltips_DoTInfoDB.log[i] for i in range(1, len(G6.UsefulPlatesAndTooltips_DoTInfoDB.log) + 1)]
 check("two foreign hits do not relearn the known size", any("RELEARN" in l for l in log6), False)
 # the real size right after must still be taken
 G6.Advance(3)
 G6.Fire("UNIT_COMBAT", "target", "WOUND", None, 100, 32)
-log6b = [G6.BattleInfoTool_DoTInfoDB.log[i] for i in range(1, len(G6.BattleInfoTool_DoTInfoDB.log) + 1)]
+log6b = [G6.UsefulPlatesAndTooltips_DoTInfoDB.log[i] for i in range(1, len(G6.UsefulPlatesAndTooltips_DoTInfoDB.log) + 1)]
 check("  and the real tick still lands afterwards", any("TICK Verderbnis 100" in l for l in log6b), True)
 
 # ---------------------------------------------------------------------------------------------
 print("-- UI-1: recycling a plate must not leave a second widget set behind")
 rt7, G7, BIT7, _ = load()
-G7.Fire("ADDON_LOADED", "BattleInfoTool")
+G7.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G7.Fire("PLAYER_LOGIN")
 G7.spellNames[172] = "Verderbnis"
 G7.spellDesc[172] = "Corrupts the target, causing 40 Shadow damage over 12 sec."
@@ -1290,7 +1290,7 @@ check("recycling the health bar adds no second widget set (one frame for the bar
 # ---------------------------------------------------------------------------------------------
 print("-- UI-2: a dead mob's plate must hide the marker at once, not until expiry")
 rt8, G8, BIT8, _ = load()
-G8.Fire("ADDON_LOADED", "BattleInfoTool")
+G8.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G8.Fire("PLAYER_LOGIN")
 G8.spellNames[172] = "Verderbnis"
 G8.spellDesc[172] = "Corrupts the target, causing 40 Shadow damage over 12 sec."
@@ -1317,7 +1317,7 @@ check("no marker left shown on the corpse plate", int(shown_markers), 0)
 # ---------------------------------------------------------------------------------------------
 print("-- F1: two same-school ticks in one frame must feed two DoTs, not one")
 rt9, G9, BIT9, _ = load()
-G9.Fire("ADDON_LOADED", "BattleInfoTool")
+G9.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G9.Fire("PLAYER_LOGIN")
 G9.spellNames[172] = "Corruption"
 G9.spellDesc[172] = "Corrupts the target, causing 400 Shadow damage over 12 sec."
@@ -1332,14 +1332,14 @@ G9.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-21", 348)
 G9.Advance(3)
 G9.Fire("UNIT_COMBAT", "target", "WOUND", None, 100, 32)
 G9.Fire("UNIT_COMBAT", "target", "WOUND", None, 100, 32)
-log9 = [G9.BattleInfoTool_DoTInfoDB.log[i] for i in range(1, len(G9.BattleInfoTool_DoTInfoDB.log) + 1)]
+log9 = [G9.UsefulPlatesAndTooltips_DoTInfoDB.log[i] for i in range(1, len(G9.UsefulPlatesAndTooltips_DoTInfoDB.log) + 1)]
 ticks9 = [l for l in log9 if "TICK " in l and " 100 " in l]
 check("both DoTs eat (two ticks, one per DoT)", len(ticks9), 2)
 
 # ---------------------------------------------------------------------------------------------
 print("-- L-10: combo cache must not survive death + rez (same root as DOT-2)")
 rt10, G10, BIT10, _ = load()
-G10.Fire("ADDON_LOADED", "BattleInfoTool")
+G10.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G10.Fire("PLAYER_LOGIN")
 G10.spellNames[1079] = "Rip"
 G10.spellDesc[1079] = "Finishing move that deals damage over time. 1 point : 243 damage over 12 sec. 2 points: 396 damage over 12 sec. 3 points: 549 damage over 12 sec. 4 points: 702 damage over 12 sec. 5 points: 855 damage over 12 sec."
@@ -1356,13 +1356,13 @@ G10.Advance(1.9)
 G10.comboPoints = 0
 G10.Fire("UNIT_SPELLCAST_SENT", "player", "target", "Cast-30", 1079)
 G10.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-30", 1079)
-log10 = [G10.BattleInfoTool_DoTInfoDB.log[i] for i in range(1, len(G10.BattleInfoTool_DoTInfoDB.log) + 1)]
+log10 = [G10.UsefulPlatesAndTooltips_DoTInfoDB.log[i] for i in range(1, len(G10.UsefulPlatesAndTooltips_DoTInfoDB.log) + 1)]
 check("a finisher after death+rez on a fresh target must not reuse the old points", any("5 combo points (cached)" in l for l in log10), False)
 
 # ---------------------------------------------------------------------------------------------
 print("-- L07-2: widget count must not grow on repeated plate recycles (same root as UI-1)")
 rt11, G11, BIT11, _ = load()
-G11.Fire("ADDON_LOADED", "BattleInfoTool")
+G11.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G11.Fire("PLAYER_LOGIN")
 G11.spellNames[172] = "Verderbnis"
 G11.spellDesc[172] = "Corrupts the target, causing 40 Shadow damage over 12 sec."
@@ -1388,15 +1388,15 @@ check("two recycles add no growing widget sets (second recycle adds only the bar
 # ---------------------------------------------------------------------------------------------
 print("-- UI-3: showMarkers=false must hide the kill icon too, not only the marker")
 rtU3, GU3, BITU3, _ = load()
-GU3.Fire("ADDON_LOADED", "BattleInfoTool")
+GU3.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GU3.Fire("PLAYER_LOGIN")
 GU3.spellNames[172] = "Verderbnis"
 GU3.spellDesc[172] = "Corrupts the target, causing 40 Shadow damage over 12 sec."
 GU3.target = rtU3.eval("{ hostile = true }")
 rtU3.execute("units['target'] = { guid = 'Mob-A-1', health = 500, max = 500 }")
 rtU3.execute("units['nameplate1'] = { guid = 'Mob-A-1', health = 500, max = 500 }")
-rtU3.execute("BattleInfoTool_DoTInfoDB.showMarkers = false")
-rtU3.execute("BattleInfoTool_DoTInfoDB.nameplateMode = 'markerIcon'")
+rtU3.execute("UsefulPlatesAndTooltips_DoTInfoDB.showMarkers = false")
+rtU3.execute("UsefulPlatesAndTooltips_DoTInfoDB.nameplateMode = 'markerIcon'")
 GU3.Fire("UNIT_SPELLCAST_SENT", "player", "target", "Cast-60", 172)
 GU3.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-60", 172)
 GU3.plate = rtU3.eval("NewPlate()")
@@ -1416,7 +1416,7 @@ check("  and the kill icon too", str(visU3).split("/")[1], "0")
 # ---------------------------------------------------------------------------------------------
 print("-- F4: two partial-resist ticks must not relearn the known size down")
 rtF4, GF4, BITF4, _ = load()
-GF4.Fire("ADDON_LOADED", "BattleInfoTool")
+GF4.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GF4.Fire("PLAYER_LOGIN")
 GF4.spellNames[172] = "Verderbnis"
 GF4.spellDesc[172] = "Corrupts the target, causing 400 Shadow damage over 12 sec."
@@ -1435,26 +1435,26 @@ GF4.Advance(3)
 GF4.Fire("UNIT_COMBAT", "target", "WOUND", None, 60, 32)
 GF4.Advance(3)
 GF4.Fire("UNIT_COMBAT", "target", "WOUND", None, 60, 32)
-logF4 = [GF4.BattleInfoTool_DoTInfoDB.log[i] for i in range(1, len(GF4.BattleInfoTool_DoTInfoDB.log) + 1)]
+logF4 = [GF4.UsefulPlatesAndTooltips_DoTInfoDB.log[i] for i in range(1, len(GF4.UsefulPlatesAndTooltips_DoTInfoDB.log) + 1)]
 check("two partial ticks do not relearn the known size down", any("RELEARN" in l for l in logF4), False)
 # a full-size tick right after must still be taken
 GF4.Advance(3)
 GF4.Fire("UNIT_COMBAT", "target", "WOUND", None, 100, 32)
-logF4b = [GF4.BattleInfoTool_DoTInfoDB.log[i] for i in range(1, len(GF4.BattleInfoTool_DoTInfoDB.log) + 1)]
+logF4b = [GF4.UsefulPlatesAndTooltips_DoTInfoDB.log[i] for i in range(1, len(GF4.UsefulPlatesAndTooltips_DoTInfoDB.log) + 1)]
 check("  and a full tick still lands afterwards", any("TICK Verderbnis 100" in l for l in logF4b), True)
 
 # ---------------------------------------------------------------------------------------------
 print("-- UI-4: preview at 0 health must hide skull and marker, not draw a kill on a corpse")
 rtU4, GU4, BITU4, _ = load()
-GU4.Fire("ADDON_LOADED", "BattleInfoTool")
+GU4.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GU4.Fire("PLAYER_LOGIN")
 didU4 = BITU4.modules["DoTInfo"]
 rtU4.execute("previewHostU4 = { healthBar = FakeMock('phbU4'), portrait = FakeMock('ppU4'), layerFrame = FakeMock('plfU4') }")
 rtU4.execute("previewDeadU4 = { health = 0, dots = { { name = 'Corruption', school = 32, damage = 45 } } }")
 didU4.setPreviewState(rtU4.eval("previewDeadU4"))
 didU4.setDisplayHost(rtU4.eval("previewHostU4"))
-check("preview on a dead mock hides the kill icon", GU4.BattleInfoTool_DoTInfoSkull.shown, False)
-check("  and the target marker too", GU4.BattleInfoTool_DoTInfoRemaining.shown, False)
+check("preview on a dead mock hides the kill icon", GU4.UsefulPlatesAndTooltips_DoTInfoSkull.shown, False)
+check("  and the target marker too", GU4.UsefulPlatesAndTooltips_DoTInfoRemaining.shown, False)
 rtU4.execute("plateU4 = NewPlate()")
 rtU4.execute("plateHostU4 = { plate = plateU4, healthBar = plateU4.UnitFrame.healthBar }")
 didU4.setPlatePreview(rtU4.eval("plateHostU4"), rtU4.eval("previewDeadU4"))
@@ -1472,14 +1472,14 @@ check("  and the nameplate preview stays empty", int(visU4), 0)
 # ---------------------------------------------------------------------------------------------
 print("-- UI-7: glow needs its outline: outline none + glow on must show no halo")
 rtU7, GU7, BITU7, _ = load()
-GU7.Fire("ADDON_LOADED", "BattleInfoTool")
+GU7.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GU7.Fire("PLAYER_LOGIN")
-rtU7.execute("BattleInfoTool_DoTInfoDB.showGlow = true")
-rtU7.execute("BattleInfoTool_DoTInfoDB.outlineStyle = 'none'")
+rtU7.execute("UsefulPlatesAndTooltips_DoTInfoDB.showGlow = true")
+rtU7.execute("UsefulPlatesAndTooltips_DoTInfoDB.outlineStyle = 'none'")
 GU7.Tick(0.2)
 GU7.Tick(0.2)
 glowU7 = rtU7.eval("""(function()
-  local rem = BattleInfoTool_DoTInfoRemaining
+  local rem = UsefulPlatesAndTooltips_DoTInfoRemaining
   local found, shown = 0, 0
   for _, layer in ipairs(rem.children) do
     if layer.kind == "Frame" then
@@ -1498,7 +1498,7 @@ check("  and no halo shows without its outline", str(glowU7).split("/")[1], "0")
 # ---------------------------------------------------------------------------------------------
 print("-- DOT-6: absorbed ticks must not drop the DoT")
 rtD6, GD6, BITD6, _ = load()
-GD6.Fire("ADDON_LOADED", "BattleInfoTool")
+GD6.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GD6.Fire("PLAYER_LOGIN")
 GD6.spellNames[172] = "Verderbnis"
 GD6.spellDesc[172] = "Corrupts the target, causing 400 Shadow damage over 12 sec."
@@ -1524,20 +1524,20 @@ check("two absorbed ticks keep the DoT alive", int(totD6) > 0, True)
 # ---------------------------------------------------------------------------------------------
 print("-- DOT-5b: a cast with no target must leave a log line, not vanish silently")
 rtD5, GD5, BITD5, _ = load()
-GD5.Fire("ADDON_LOADED", "BattleInfoTool")
+GD5.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GD5.Fire("PLAYER_LOGIN")
 GD5.spellNames[172] = "Verderbnis"
 GD5.spellDesc[172] = "Corrupts the target, causing 400 Shadow damage over 12 sec."
 GD5.target = None
 GD5.Fire("UNIT_SPELLCAST_SENT", "player", "target", "Cast-70", 172)
 GD5.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-70", 172)
-logD5 = [GD5.BattleInfoTool_DoTInfoDB.log[i] for i in range(1, len(GD5.BattleInfoTool_DoTInfoDB.log) + 1)]
+logD5 = [GD5.UsefulPlatesAndTooltips_DoTInfoDB.log[i] for i in range(1, len(GD5.UsefulPlatesAndTooltips_DoTInfoDB.log) + 1)]
 check("a cast with no target is logged, not silent", any("Cast-70" in l or "no target" in l for l in logD5), True)
 
 # ---------------------------------------------------------------------------------------------
 print("-- F5: a resisted cast is dropped (safe direction, locked - no prod change)")
 rtF5, Gf5, BITf5, _ = load()
-Gf5.Fire("ADDON_LOADED", "BattleInfoTool")
+Gf5.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 Gf5.Fire("PLAYER_LOGIN")
 Gf5.spellNames[172] = "Corruption"
 Gf5.spellDesc[172] = "Corrupts the target, causing 400 Shadow damage over 12 sec."
@@ -1560,7 +1560,7 @@ check("  and a real tick still lands on the next cast", int(totF5b) > 0, True)
 # ---------------------------------------------------------------------------------------------
 print("-- RD-1: a full target must not re-ding after tabbing away and back")
 rtRD1, GRD1, BITRD1, _ = load()
-GRD1.Fire("ADDON_LOADED", "BattleInfoTool")
+GRD1.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GRD1.Fire("PLAYER_LOGIN")
 GRD1.playerClass = "ROGUE"  # combo points on the target, as on Classic/Forever
 GRD1.combat = True          # the combat-only default sounds in combat
@@ -1600,7 +1600,7 @@ STRICT = setmetatable({}, {
   __index = function(t, k) if rawequal(k, SECRET_GUID) then error("attempted to index a table that cannot be indexed with secret keys") end return rawget(t, k) end,
   __newindex = function(t, k, v) if rawequal(k, SECRET_GUID) then error("attempted to index a table that cannot be indexed with secret keys") end rawset(t, k, v) end })
 """)
-GRDS.Fire("ADDON_LOADED", "BattleInfoTool")
+GRDS.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GRDS.Fire("PLAYER_LOGIN")
 GRDS.playerClass = "ROGUE"
 GRDS.combat = True
@@ -1619,7 +1619,7 @@ check("  and nothing was ever written into the latch", rtRDS.eval("next(STRICT) 
 # without the detector the per-target latch must still work for a real GUID
 # (the probe only refuses keys the client itself rejects, which lupa cannot model)
 rtRDN, GRDN, BITRDN, _ = load()
-GRDN.Fire("ADDON_LOADED", "BattleInfoTool")
+GRDN.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GRDN.Fire("PLAYER_LOGIN")
 GRDN.playerClass = "ROGUE"
 GRDN.combat = True
@@ -1656,7 +1656,7 @@ C_Timer = { After = function(delay, fn)
     end,
     NewTicker = function() return { Cancel = function() end } end }
 """)
-GRD3.Fire("ADDON_LOADED", "BattleInfoTool")
+GRD3.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GRD3.Fire("PLAYER_LOGIN")
 rd3 = BITRD3.modules["ResourceDing"]
 queued0 = len(GRD3.settleQueue)
@@ -1679,7 +1679,7 @@ print("-- L11-3: the nameplate poll stays within a per-second budget")
 # DoT ticks (once a second or slower) and on health changes. Throttled to 0.2 s the
 # poll must stay under 200 slots/s while the plates still draw.
 rtL11, GL11, BITL11, _ = load()
-GL11.Fire("ADDON_LOADED", "BattleInfoTool")
+GL11.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GL11.Fire("PLAYER_LOGIN")
 GL11.spellNames[172] = "Verderbnis"
 GL11.spellDesc[172] = "Corrupts the target, causing 40 Shadow damage over 12 sec."
@@ -1743,7 +1743,7 @@ for i = 1, 12 do
   _G["ComboPoint" .. i] = p
 end
 """)
-GRD4.Fire("ADDON_LOADED", "BattleInfoTool")
+GRD4.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GRD4.Fire("PLAYER_LOGIN")
 GRD4.playerClass = "ROGUE"   # combo points on the target, as on Classic/Forever
 GRD4.comboPoints = 5
@@ -1767,7 +1767,7 @@ manaCurrent, manaMax = 300, 400
 function UnitPower(u, pt) if pt == 4 then return comboPoints end return manaCurrent end
 function UnitPowerMax(u, pt) if pt == 4 then return 5 end return manaMax end
 """)
-GRD10.Fire("ADDON_LOADED", "BattleInfoTool")
+GRD10.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GRD10.Fire("PLAYER_LOGIN")
 
 
@@ -1797,7 +1797,7 @@ print("-- RD-5: dots and shard diamonds move independently")
 rtRD5, GRD5, BITRD5, _ = load(saved="""
 C_Item.GetItemCount = function() return 2 end  -- two soul shards in the bags
 """)
-GRD5.Fire("ADDON_LOADED", "BattleInfoTool")
+GRD5.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GRD5.Fire("PLAYER_LOGIN")
 rd5 = BITRD5.modules["ResourceDing"]
 rtRD5.execute("units['target'] = { guid = 'Mob-D-1' }")
@@ -1855,7 +1855,7 @@ print("-- RD-7: a dead PlaySound must not take the event handler down")
 rtRD7, GRD7, BITRD7, _ = load()
 GRD7.RD7 = BITRD7.modules["ResourceDing"]
 rd7 = BITRD7.modules["ResourceDing"]
-GRD7.Fire("ADDON_LOADED", "BattleInfoTool")
+GRD7.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GRD7.Fire("PLAYER_LOGIN")
 GRD7.playerClass = "ROGUE"   # combo points on the target, as on Classic/Forever
 before7 = len(GRD7.plays)
@@ -1932,7 +1932,7 @@ check("  tooltip shows cost and gain", (lifeTip[1][1], lifeTip[2][1]), ("-58 HP"
 # ---------------------------------------------------------------------------------------------
 print("-- SDI-LIFETAP-POS: the two lines take opposite ends, so they do not share a corner")
 rtLP, GLP, BITLP, _ = load()
-GLP.Fire("ADDON_LOADED", "BattleInfoTool")
+GLP.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GLP.Fire("PLAYER_LOGIN")
 sdiLP = BITLP.modules["SpellDamageInfo"]
 rtLP.execute('''
@@ -1968,7 +1968,7 @@ check("SDI-LIFETAP-POS: options preview includes the same two-line Life Tap",
 # ---------------------------------------------------------------------------------------------
 print("-- SI-PCT-CAP RED: empty slot and over-cap read as >300%, no points")
 rtC, GC, BITC, _ = load()
-GC.Fire("ADDON_LOADED", "BattleInfoTool")
+GC.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GC.Fire("PLAYER_LOGIN")
 siC = BITC.modules["StatsInfo"]
 siC.settings.detail = "full"
@@ -2004,7 +2004,7 @@ print("-- ENCHANT: an item's enchant is part of its stats (GetItemStats leaves i
 # ratings miss it. The enchant is read from the tooltip's enchant-marked line instead: the
 # client's own words (the ITEM_ENCHANTMENT header, its names for the stats), nothing guessed.
 rtE, GE, BITE, _ = load()
-GE.Fire("ADDON_LOADED", "BattleInfoTool")
+GE.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GE.Fire("PLAYER_LOGIN")
 siE = BITE.modules["StatsInfo"]
 siE.settings.specs, siE.settings.icons = False, False
@@ -2335,14 +2335,14 @@ check("ENCHANT-40: an arrived tooltip is cached then (no scan without new data)"
       int(GE.tooltopCallsE), 3)
 
 # ---------------------------------------------------------------------------------------------
-print("-- UX: nameplate lanes, compact tooltip, /bit shell, SDI second line")
+print("-- UX: nameplate lanes, compact tooltip, /upt shell, SDI second line")
 rtU, GU, BITU, _ = load()
 rtU.execute("""
 function LootFrame_Update() end
 function MerchantFrame_Update() end
 function GroupLootFrame_OpenNewFrame() end
 """)
-GU.Fire("ADDON_LOADED", "BattleInfoTool")
+GU.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GU.Fire("PLAYER_LOGIN")
 plate = BITU.Plate
 span = plate.Span(2, 14)
@@ -2397,8 +2397,8 @@ fullU = [l[1] for l in siU.TooltipLines("ux-hide").values()]
 check("Shift expands the same item to the full breakdown", len(fullU) > 1, True)
 rtU.execute("IsShiftKeyDown = nil")
 
-GU.SlashCmdList.BATTLEINFOTOOL("")
-winU = GU.BattleInfoToolSettings
+GU.SlashCmdList.USEFULPLATESANDTOOLTIPS("")
+winU = GU.UsefulPlatesAndTooltipsSettings
 labelsU = {}
 for i in range(1, len(winU.children) + 1):
     child = winU.children[i]
@@ -2409,9 +2409,9 @@ check("the tabs use short names", labelsU, {
     "__together": "Together", "SpellDamageInfo": "Spells", "DoTInfo": "DoTs", "StatsInfo": "Stats",
     "ResourceDing": "Points", "Range": "Range", "ShieldsInfo": "Shields", "HunterRangeFinder": "Hunter",
 })
-GU.SlashCmdList.BATTLEINFOTOOL("together")
+GU.SlashCmdList.USEFULPLATESANDTOOLTIPS("together")
 together = BITU._pages["__together"]
-check("/bit together shows the shared nameplate", together is not None and together.shown, True)
+check("/upt together shows the shared nameplate", together is not None and together.shown, True)
 check("the settings page has a scrollbar", together.scrollBar is not None and together.scrollBar.kind == "Slider", True)
 check("opening Together did not report a failed build",
       [m for m in chat(GU) if "could not be built" in m], [])
@@ -2432,24 +2432,24 @@ check("the preview samples Drain Life, Health Funnel, food and a bandage", len(m
 
 # ---------------------------------------------------------------------------------------------
 print("-- UX: an off module stays off until Enable, and waking it does not start it")
-rtW, GW, BITW, _ = load(saved="BattleInfoToolDB = { modules = { SpellDamageInfo = { enabled = false }, StatsInfo = { enabled = false } } }")
+rtW, GW, BITW, _ = load(saved="UsefulPlatesAndTooltipsDB = { modules = { SpellDamageInfo = { enabled = false }, StatsInfo = { enabled = false } } }")
 rtW.execute("""
 function LootFrame_Update() end
 function MerchantFrame_Update() end
 """)
-GW.Fire("ADDON_LOADED", "BattleInfoTool")
+GW.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GW.Fire("PLAYER_LOGIN")
 check("a switched-off StatsInfo does not hook loot", GW.hooks["LootFrame_Update"], None)
 BITW.OpenSettings("SpellDamageInfo")
 off = BITW._pages["SpellDamageInfo"]
 check("opening an off tab still shows the note", off.offNote is not None, True)
-check("  and still does not create its saved variables", GW.BattleInfoTool_SpellDamageInfoDB, None)
+check("  and still does not create its saved variables", GW.UsefulPlatesAndTooltips_SpellDamageInfoDB, None)
 check("the advanced look starts hidden", off.appearance.advanced.shown, False)
 off.switch.checked = True
 off.switch.scripts.OnClick(off.switch)
 woke = BITW._pages["SpellDamageInfo"]
 check("ticking Enable builds the real settings", woke.offNote, None)
-check("  and prepares the saved variables", GW.BattleInfoTool_SpellDamageInfoDB is not None, True)
+check("  and prepares the saved variables", GW.UsefulPlatesAndTooltips_SpellDamageInfoDB is not None, True)
 check("  gameplay still waits for a reload", (BITW.state["SpellDamageInfo"], woke.reload.shown), ("off", True))
 check("  the state line says so", "Switched on after a reload" in (woke.stateLine.text or ""), True)
 BITW.OpenSettings("StatsInfo")
@@ -2492,8 +2492,8 @@ GU.Fire("PET_BAR_UPDATE")
 check("the pet bar stays clear while stance and pet bars are skipped", len(sdiU._petButtons), pet_before)
 
 # Enable prepares ResourceDing's settings and does not arm the ding.
-rtR, GR, BITR, _ = load(saved="BattleInfoToolDB = { modules = { ResourceDing = { enabled = false } } }")
-GR.Fire("ADDON_LOADED", "BattleInfoTool")
+rtR, GR, BITR, _ = load(saved="UsefulPlatesAndTooltipsDB = { modules = { ResourceDing = { enabled = false } } }")
+GR.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GR.Fire("PLAYER_LOGIN")
 BITR.OpenSettings("ResourceDing")
 rdPage = BITR._pages["ResourceDing"]
@@ -2512,7 +2512,7 @@ rdW.CheckPower = real_check
 check("a combo redraw before that reload does not check the bar", probe["n"], 0)
 
 rtOn, GOn, BITOn, _ = load()
-GOn.Fire("ADDON_LOADED", "BattleInfoTool")
+GOn.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GOn.Fire("PLAYER_LOGIN")
 rdOn = BITOn.modules["ResourceDing"]
 probe_on = {"n": 0}
@@ -2525,10 +2525,10 @@ rdOn.CheckPower = real_on
 check("a running module still checks the bar on that redraw", probe_on["n"], 1)
 
 # Together does not warn about a module that is not on the plate.
-rtT, GT, BITT, _ = load(saved="BattleInfoToolDB = { modules = { HunterRangeFinder = { enabled = false } } }")
-GT.Fire("ADDON_LOADED", "BattleInfoTool")
+rtT, GT, BITT, _ = load(saved="UsefulPlatesAndTooltipsDB = { modules = { HunterRangeFinder = { enabled = false } } }")
+GT.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GT.Fire("PLAYER_LOGIN")
-GT.SlashCmdList.BATTLEINFOTOOL("together")
+GT.SlashCmdList.USEFULPLATESANDTOOLTIPS("together")
 together_text = []
 for i in range(1, len(GT.AllFrames) + 1):
     text = getattr(GT.AllFrames[i], "text", None)

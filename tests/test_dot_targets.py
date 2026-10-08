@@ -37,7 +37,7 @@ def fight(hard=True, soft=False):
         rt.execute("target = { hostile = true }; units.target = mobA")
     if soft:
         rt.execute("units.softenemy = " + ("mobB" if hard else "mobA"))
-    game.Fire("ADDON_LOADED", "BattleInfoTool")
+    game.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
     game.Fire("PLAYER_LOGIN")
     return rt, game, addon.modules["DoTInfo"]
 

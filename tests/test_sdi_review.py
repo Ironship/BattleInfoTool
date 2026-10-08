@@ -20,7 +20,7 @@ C_Item.GetItemSpell = function() return "Food", 100 end
 spellDesc[100] = "Restores 1.290 health over 15 Sek."
 spellDesc[101] = "Verursacht 55 Schaden."
 ''')
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G.Fire("PLAYER_LOGIN")
 G.SDI = BIT.modules["SpellDamageInfo"]
 rt.execute(r'''
@@ -134,7 +134,7 @@ for version in ("1.60.1", "12.0.0"):
     tip_rt, tip_G, tip_BIT, _ = namespace["load"](
         f'function GetBuildInfo() return "{version}" end'
     )
-    tip_G.Fire("ADDON_LOADED", "BattleInfoTool")
+    tip_G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
     tip_G.Fire("PLAYER_LOGIN")
     tip_BIT.OpenSettings("SpellDamageInfo")
     tip_G.SDI = tip_BIT.modules["SpellDamageInfo"]
@@ -156,10 +156,10 @@ end
 
 for language in ("en", "de"):
     off_rt, off_G, off_BIT, _ = namespace["load"](
-        'BattleInfoToolDB={modules={SpellDamageInfo={enabled=false}}}\n'
-        f'BattleInfoTool_SpellDamageInfoDB={{interfaceLang="{language}"}}'
+        'UsefulPlatesAndTooltipsDB={modules={SpellDamageInfo={enabled=false}}}\n'
+        f'UsefulPlatesAndTooltips_SpellDamageInfoDB={{interfaceLang="{language}"}}'
     )
-    off_G.Fire("ADDON_LOADED", "BattleInfoTool")
+    off_G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
     off_G.Fire("PLAYER_LOGIN")
     off_BIT.OpenSettings("SpellDamageInfo")
     module = off_BIT.modules["SpellDamageInfo"]

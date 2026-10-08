@@ -1,4 +1,4 @@
--- BattleInfoTool: one owner for the marks that share a nameplate.
+-- UsefulPlatesAndTooltips: one owner for the marks that share a nameplate.
 -- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- The live seat, for the hunter rail and for ResourceDing's dots and diamonds, is
@@ -49,7 +49,7 @@ function Plate.ReadOffsets()
   local hs = moduleSettings("HunterRangeFinder")
   if hs and type(hs.plateOffset) == "number" then hunter = hs.plateOffset end
   local dots, shards = 2, 2
-  local rd = BattleInfoTool_ResourceDingDB
+  local rd = UsefulPlatesAndTooltips_ResourceDingDB
   if type(rd) == "table" then
     if type(rd.dotOffset) == "number" then dots = rd.dotOffset end
     if type(rd.shardOffset) == "number" then shards = rd.shardOffset end
@@ -106,7 +106,7 @@ function Plate.Rows()
     return BIT.IsRunning(name) or (BIT.woke and BIT.woke[name] == true)
   end
   local hunter, dots, shards = Plate.ReadOffsets()
-  local rd = BattleInfoTool_ResourceDingDB or {}
+  local rd = UsefulPlatesAndTooltips_ResourceDingDB or {}
   local size = math.min(24, math.max(8, tonumber(rd.dotSize) or 14))
   local resource = BIT.modules and BIT.modules.ResourceDing
   local kind = resource and resource.GetResource and resource.GetResource()

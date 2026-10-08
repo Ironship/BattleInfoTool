@@ -1,4 +1,4 @@
--- BattleInfoTool module StatsInfo: the bag verdict on loot, need/greed rolls and the merchant.
+-- UsefulPlatesAndTooltips module StatsInfo: the bag verdict on loot, need/greed rolls and the merchant.
 -- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
 -- Same answer as the bag arrows (M.BagVerdict) and the same Blizzard stream textures

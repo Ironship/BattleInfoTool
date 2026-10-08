@@ -1,4 +1,4 @@
-"""Copies SpellDamageInfo and ResourceDing into BattleInfoTool, and makes the few
+"""Copies SpellDamageInfo and ResourceDing into UsefulPlatesAndTooltips, and makes the few
 changes they need to live inside it. Every change is listed here, so a module can be brought up
 to date with its addon by running this again:
 
@@ -13,11 +13,11 @@ recipe was removed; port() below guards the module as frozen).
 
 What every module gets:
 - its own namespace, BIT.Module(name), in place of the addon's own table;
-- its SavedVariables under a BattleInfoTool_ name, so it never shares settings with the
+- its SavedVariables under a UsefulPlatesAndTooltips_ name, so it never shares settings with the
   original addon;
 - at ADDON_LOADED, BIT.ShouldRun(name): off, and it
   unregisters its events and stays silent;
-- its settings built into its tab of the BattleInfoTool window (BIT.RegisterTab) instead of
+- its settings built into its tab of the UsefulPlatesAndTooltips window (BIT.RegisterTab) instead of
   a window or an Options page of its own.
 """
 import pathlib
@@ -57,7 +57,7 @@ def apply(name, text, edits):
 
 
 def header(module, repo, src):
-    return (f"-- BattleInfoTool module {module}: ported by tools/port.py from {repo.name}/{src} at "
+    return (f"-- UsefulPlatesAndTooltips module {module}: ported by tools/port.py from {repo.name}/{src} at "
             f"{git_head(repo)}.\n-- Change it there, or in tools/port.py; an edit made here is lost at the next port.\n")
 
 
@@ -105,17 +105,17 @@ MODULES["ResourceDing"] = {
         ("Core.lua", "Core.lua", [
             ('local addonName, Addon = ...\n_G.ResourceDing = Addon\n',
              'local addonName, BIT = ...\n'
-             '-- Inside BattleInfoTool its own namespace; loaded on its own, the addon\'s table as before.\n'
+             '-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon\'s table as before.\n'
              'local Addon = BIT.Module and BIT.Module("ResourceDing") or BIT\n'
              'if not BIT.Module then _G.ResourceDing = Addon end\n'),
-            ('ResourceDingDB', 'BattleInfoTool_ResourceDingDB', 13),
+            ('ResourceDingDB', 'UsefulPlatesAndTooltips_ResourceDingDB', 13),
             ('    if arg1 ~= addonName then return end\n    initializeDatabase()\n'
              '    if Addon.CreateSettingsPanel then Addon.CreateSettingsPanel() end\n',
              '    if arg1 ~= addonName then return end\n'
-             '    -- switched off in BattleInfoTool: silent\n'
+             '    -- switched off in UsefulPlatesAndTooltips: silent\n'
              '    if BIT.ShouldRun and not BIT.ShouldRun("ResourceDing") then events:UnregisterAllEvents() return end\n'
              '    initializeDatabase()\n'
-             '    -- inside BattleInfoTool the settings are built into its tab when that is first shown\n'
+             '    -- inside UsefulPlatesAndTooltips the settings are built into its tab when that is first shown\n'
              '    if not BIT.RegisterTab and Addon.CreateSettingsPanel then Addon.CreateSettingsPanel() end\n'),
             # the hooks on Blizzard's combo point display are there from the start; switched off (no
             # settings loaded), they schedule nothing
@@ -130,41 +130,41 @@ MODULES["ResourceDing"] = {
         ("Dots.lua", "Dots.lua", [
             ('local _, Addon = ...\n',
              'local _, BIT = ...\n'
-             '-- Inside BattleInfoTool its own namespace; loaded on its own, the addon\'s table as before.\n'
+             '-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon\'s table as before.\n'
              'local Addon = BIT.Module and BIT.Module("ResourceDing") or BIT\n'),
         ]),
         # a warlock's Soul Shards and the mana level; started by Core.lua once the module runs
         ("Shards.lua", "Shards.lua", [
             ('local _, Addon = ...\n',
              'local _, BIT = ...\n'
-             '-- Inside BattleInfoTool its own namespace; loaded on its own, the addon\'s table as before.\n'
+             '-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon\'s table as before.\n'
              'local Addon = BIT.Module and BIT.Module("ResourceDing") or BIT\n'),
         ]),
         ("Mana.lua", "Mana.lua", [
             ('local _, Addon = ...\n',
              'local _, BIT = ...\n'
-             '-- Inside BattleInfoTool its own namespace; loaded on its own, the addon\'s table as before.\n'
+             '-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon\'s table as before.\n'
              'local Addon = BIT.Module and BIT.Module("ResourceDing") or BIT\n'),
         ]),
         ("Settings.lua", "Settings.lua", [
             ('local Addon = ResourceDing\n', 'local _, BIT = ...\nlocal Addon = BIT.Module("ResourceDing")\n'),
             # named frames of their own, apart from the standalone addon's (a dropdown's legacy frame
             # is named after it)
-            ('"ResourceDingSoundDropdown"', '"BattleInfoTool_ResourceDingSoundDropdown"'),
-            ('"ResourceDingManaSoundDropdown"', '"BattleInfoTool_ResourceDingManaSoundDropdown"'),
-            ('"ResourceDingShardsCheck"', '"BattleInfoTool_ResourceDingShardsCheck"'),
-            ('"ResourceDingShardDiamondsCheck"', '"BattleInfoTool_ResourceDingShardDiamondsCheck"'),
-            ('"ResourceDingManaCheck"', '"BattleInfoTool_ResourceDingManaCheck"'),
+            ('"ResourceDingSoundDropdown"', '"UsefulPlatesAndTooltips_ResourceDingSoundDropdown"'),
+            ('"ResourceDingManaSoundDropdown"', '"UsefulPlatesAndTooltips_ResourceDingManaSoundDropdown"'),
+            ('"ResourceDingShardsCheck"', '"UsefulPlatesAndTooltips_ResourceDingShardsCheck"'),
+            ('"ResourceDingShardDiamondsCheck"', '"UsefulPlatesAndTooltips_ResourceDingShardDiamondsCheck"'),
+            ('"ResourceDingManaCheck"', '"UsefulPlatesAndTooltips_ResourceDingManaCheck"'),
             ('function Addon.CreateSettingsPanel()\n  if Addon.settingsPanel then return Addon.settingsPanel end\n'
              '  local panel = CreateFrame("Frame", "ResourceDingSettingsPanel", UIParent)\n',
-             '-- Built into its tab of the BattleInfoTool window.\n'
+             '-- Built into its tab of the UsefulPlatesAndTooltips window.\n'
              'function Addon.CreateSettingsPanel(parent)\n  if Addon.settingsPanel then return Addon.settingsPanel end\n'
              '  local panel = CreateFrame("Frame", nil, parent)\n  panel:SetAllPoints()\n'),
             # The tab's own switch turns the module on and off; this one silences its sounds and hides its marks.
             ('panel.enabled = checkbox(panel, "ResourceDingEnabledCheck", "Enable ResourceDing", -102,',
-             'panel.enabled = checkbox(panel, "BattleInfoTool_ResourceDingEnabledCheck", "Sounds, dots and diamonds", -102,'),
-            ('"ResourceDingCombatCheck"', '"BattleInfoTool_ResourceDingCombatCheck"'),
-            ('"ResourceDingDotsCheck"', '"BattleInfoTool_ResourceDingDotsCheck"'),
+             'panel.enabled = checkbox(panel, "UsefulPlatesAndTooltips_ResourceDingEnabledCheck", "Sounds, dots and diamonds", -102,'),
+            ('"ResourceDingCombatCheck"', '"UsefulPlatesAndTooltips_ResourceDingCombatCheck"'),
+            ('"ResourceDingDotsCheck"', '"UsefulPlatesAndTooltips_ResourceDingDotsCheck"'),
             ('  if Settings and Settings.RegisterCanvasLayoutCategory then\n'
              '    local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)\n'
              '    Settings.RegisterAddOnCategory(category)\n'
@@ -208,7 +208,7 @@ MODULES["ResourceDing"] = {
 
 def sdi_sanitize_options_credit(name, text):
     """Options.lua: the standalone addon credits its options window as adapted from the addon it
-    was copied from. Inside BattleInfoTool the credit stays; the other addon's name goes."""
+    was copied from. Inside UsefulPlatesAndTooltips the credit stays; the other addon's name goes."""
     marker = "-- Options window adapted from "
     got = text.count(marker)
     if got != 1:
@@ -223,20 +223,20 @@ def sdi_sanitize_options_credit(name, text):
 
 def sdi_header(first_line):
     return (first_line, 'local _, BIT = ...\n'
-            '-- Inside BattleInfoTool its own namespace; loaded on its own, the addon\'s table as before.\n'
+            '-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon\'s table as before.\n'
             'local ns = BIT and BIT.Module and BIT.Module("SpellDamageInfo") or BIT or {}\n')
 
 
 SDI_LIB_HEADER = sdi_header('local _, ns = ...\nns = ns or {}\n')
 
-# BattleInfoTool is GPL-3.0-or-later; the standalone repo stays MIT. The port
+# UsefulPlatesAndTooltips is GPL-3.0-or-later; the standalone repo stays MIT. The port
 # rewrites the header line so regeneration reproduces the shipped bytes.
 SDI_GPL_HEADER = ('MIT licence, see LICENSE', 'GPL-3.0-or-later, see LICENSE')
 
 
 def sdi_move_content(name, text):
     """Options.lua: the preview and the settings go into buildContent(top), which the standalone
-    window calls below its title bar and the BattleInfoTool tab calls at its top."""
+    window calls below its title bar and the UsefulPlatesAndTooltips tab calls at its top."""
     start = '  local pane = CreateFrame("Frame", nil, window, "BackdropTemplate")\n  pane:SetPoint("TOPLEFT", 10, -HEADER_HEIGHT)\n'
     end = '  window:SetScript("OnShow", changed)\n  window:SetScript("OnHide", closeMenu)\nend\n'
     if text.count(start) != 1 or text.count(end) != 1 or text.index(start) > text.index(end):
@@ -249,7 +249,7 @@ def sdi_move_content(name, text):
     if text.count(marker) != 1:
         sys.exit(f"{name}: createWindow is not where it was")
     fn = ('-- The preview and the settings, in window: the addon\'s own window, below its title bar, or\n'
-          '-- inside BattleInfoTool the tab it is built into.\n'
+          '-- inside UsefulPlatesAndTooltips the tab it is built into.\n'
           'local function buildContent(top)\n' + block + 'end\n\n')
     return text.replace(marker, fn + marker)
 
@@ -265,12 +265,12 @@ MODULES["SpellDamageInfo"] = {
         ("Core.lua", "Core.lua", [
             ('local ADDON, ns = ...\n',
              'local ADDON, BIT = ...\n'
-             '-- Inside BattleInfoTool its own namespace; loaded on its own, the addon\'s table as before.\n'
+             '-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon\'s table as before.\n'
              'local ns = BIT.Module and BIT.Module("SpellDamageInfo") or BIT\n'),
-            ('SpellDamageInfoDB', 'BattleInfoTool_SpellDamageInfoDB', 3),
+            ('SpellDamageInfoDB', 'UsefulPlatesAndTooltips_SpellDamageInfoDB', 3),
             ('    if arg1 == ADDON then\n      ns.DecideLangsAtLoad()\n',
              '    if arg1 == ADDON then\n'
-             '      -- switched off in BattleInfoTool: silent\n'
+             '      -- switched off in UsefulPlatesAndTooltips: silent\n'
              '      if BIT.ShouldRun and not BIT.ShouldRun("SpellDamageInfo") then frame:UnregisterAllEvents() return end\n'
              '      ns.DecideLangsAtLoad()\n'),
             ('if type(SlashCmdList) == "table" then SlashCmdList["SPELLDAMAGEINFO"] = slash end\n',
@@ -285,7 +285,7 @@ MODULES["SpellDamageInfo"] = {
         ("Options.lua", "Options.lua", [
             ('local _, ns = ...\n',
              'local _, BIT = ...\n'
-             '-- Inside BattleInfoTool its own namespace; loaded on its own, the addon\'s table as before.\n'
+             '-- Inside UsefulPlatesAndTooltips its own namespace; loaded on its own, the addon\'s table as before.\n'
              'local ns = BIT.Module and BIT.Module("SpellDamageInfo") or BIT\n'),
             sdi_sanitize_options_credit,
             sdi_move_content,
@@ -293,7 +293,7 @@ MODULES["SpellDamageInfo"] = {
              'function ns.OpenOptions()\n'
              '  if BIT.OpenSettings then BIT.OpenSettings("SpellDamageInfo") return end\n'
              '  if not window then createWindow() end\n'),
-            # Inside BattleInfoTool: no page of its own in Options > AddOns, a tab instead.
+            # Inside UsefulPlatesAndTooltips: no page of its own in Options > AddOns, a tab instead.
             ('local loader = CreateFrame("Frame")\nloader:RegisterEvent("PLAYER_LOGIN")\n',
              'local loader = CreateFrame("Frame")\nif not BIT.RegisterTab then loader:RegisterEvent("PLAYER_LOGIN") end\n'),
             ('-- For the tests.\nns._optionsWindow = function() return window end\n',

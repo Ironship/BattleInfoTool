@@ -1,4 +1,4 @@
--- BattleInfoTool module ResourceDing: ported by tools/port.py from ResourceDing/Settings.lua at 540b462.
+-- UsefulPlatesAndTooltips module ResourceDing: ported by tools/port.py from ResourceDing/Settings.lua at 540b462.
 -- Change it there, or in tools/port.py; an edit made here is lost at the next port.
 local _, BIT = ...
 local Addon = BIT.Module("ResourceDing")
@@ -587,7 +587,7 @@ local function buildTabs()
   mana:checkbox("mana", "Sound when mana reaches the level",
     { tooltip = "One cue when your mana climbs back to the level." })
   mana:slider("manaPercent", "Mana level, %", 50, 100, 5, { suffix = "%", enabledIf = function(db) return db.mana end })
-  mana:sound("manaSound", "Sound at the level", "BattleInfoTool_ResourceDingManaSoundDropdown",
+  mana:sound("manaSound", "Sound at the level", "UsefulPlatesAndTooltips_ResourceDingManaSoundDropdown",
     { enabledIf = function(db) return db.mana end })
   mana:gap()
 
@@ -596,7 +596,7 @@ local function buildTabs()
     { tooltip = "The whole module: the finisher sound and the marks under the target." })
   sound:checkbox("combatOnly", "Only play while in combat",
     { tooltip = "A full bar out of combat stays quiet; it dings the moment combat starts." })
-  sound:sound("sound", "Sound", "BattleInfoTool_ResourceDingSoundDropdown")
+  sound:sound("sound", "Sound", "UsefulPlatesAndTooltips_ResourceDingSoundDropdown")
   sound:action("Hear it", "Test sound", Addon.PlaySelectedSound)
 
   local names, seen = {}, {}
@@ -621,7 +621,7 @@ function refreshControls()
   for _, row in ipairs(controls) do row:Refresh() end
 end
 
--- Built into its tab of the BattleInfoTool window: the live preview on the left,
+-- Built into its tab of the UsefulPlatesAndTooltips window: the live preview on the left,
 -- the settings as tabs on the right, each with "Reset this tab".
 function Addon.CreateSettingsPanel(parent)
   if Addon.settingsPanel then

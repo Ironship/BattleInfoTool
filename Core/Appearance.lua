@@ -1,9 +1,9 @@
--- BattleInfoTool: the shared appearance layer (BIT.Style) and the shared appearance editor
+-- UsefulPlatesAndTooltips: the shared appearance layer (BIT.Style) and the shared appearance editor
 -- (BIT.UI.Appearance).
 --
 -- Loaded after Core/Init.lua and before Core/Settings.lua. It defines:
 --   BIT.Style.Resolve(moduleName, legacy)  a NEW sanitized style table
---   BIT.Style.Set(moduleName, key, value)  validated explicit writes to BattleInfoToolDB.appearance
+--   BIT.Style.Set(moduleName, key, value)  validated explicit writes to UsefulPlatesAndTooltipsDB.appearance
 --   BIT.Style.Reset(moduleName)            appearance-only reset, "*"/nil for the shared style
 --   BIT.Style.Subscribe(moduleName, callback) -> unsubscribe function
 --   BIT.Style.ApplyText(fontString, style, role)
@@ -11,7 +11,7 @@
 --   BIT.Style.CreateMarkers(parent, count) / BIT.Style.RenderMarkers(container, style, active, total, role)
 -- and, on BIT.UI: BIT.UI.Appearance(parent, moduleName, capabilities, refresh, legacy).
 --
--- One product style, stored under BattleInfoToolDB.appearance:
+-- One product style, stored under UsefulPlatesAndTooltipsDB.appearance:
 --   appearance.global      shared style writes (Set with moduleName "*" or nil)
 --   appearance.modules     per-module style writes (Set with a module name)
 --   appearance.legacyBypass modules whose old fallback Reset() has disabled
@@ -215,7 +215,7 @@ function Style.GetDefaults(moduleName)
 end
 
 local function appearanceDB()
-  local d = type(BattleInfoToolDB) == "table" and BattleInfoToolDB or nil
+  local d = type(UsefulPlatesAndTooltipsDB) == "table" and UsefulPlatesAndTooltipsDB or nil
   if not d then return nil end
   local a = d.appearance
   return type(a) == "table" and a or nil
@@ -283,9 +283,9 @@ function Style.Resolve(moduleName, legacy)
   ---------------------------------------------------------------------------------------------
 
   local function ensureAppearance()
-    if type(BattleInfoToolDB) ~= "table" then BattleInfoToolDB = {} end
-    local a = BattleInfoToolDB.appearance
-    if type(a) ~= "table" then a = {} BattleInfoToolDB.appearance = a end
+    if type(UsefulPlatesAndTooltipsDB) ~= "table" then UsefulPlatesAndTooltipsDB = {} end
+    local a = UsefulPlatesAndTooltipsDB.appearance
+    if type(a) ~= "table" then a = {} UsefulPlatesAndTooltipsDB.appearance = a end
     local globals = a.global
     if type(globals) ~= "table" then globals = {} a.global = globals end
     local modules = a.modules
@@ -379,7 +379,7 @@ function Style.Resolve(moduleName, legacy)
   -- Reset only the appearance at the requested scope. "*"/nil resets the shared style; a module
   -- name clears that module's overrides and disables the old fallback for it (Resolve then skips
   -- its legacy values). Gameplay settings, anchors, sounds and learned values are never touched:
-  -- only BattleInfoToolDB.appearance changes.
+  -- only UsefulPlatesAndTooltipsDB.appearance changes.
   function Style.Reset(moduleName)
     local isGlobal = moduleName == nil or moduleName == "*"
     if isGlobal then
@@ -1193,7 +1193,7 @@ function BIT.UI.Appearance(parent, moduleName, capabilities, refresh, legacy)
 
   refreshPanel()
   -- The sample hangs below the last control; keep it inside the panel, and grow
-  -- further only while Advanced is open. onLayout lets the /bit scroll follow.
+  -- further only while Advanced is open. onLayout lets the /upt scroll follow.
   y = y - 96
   local function layoutPanel()
     advanced:ClearAllPoints()

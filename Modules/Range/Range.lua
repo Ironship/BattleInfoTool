@@ -1,4 +1,4 @@
--- BattleInfoTool module Range: a red X over the target while it is out of range, a green
+-- UsefulPlatesAndTooltips module Range: a red X over the target while it is out of range, a green
 -- checkmark while it is in range.
 -- Copyright (c) 2026 Ironship. GPL-3.0-or-later, see LICENSE.
 --
@@ -159,7 +159,7 @@ function M.Check()
   return sawOut and "out" or nil
 end
 
--- /bit rangecheck: what the client answers for each spell the class could be measured by, so a
+-- /upt rangecheck: what the client answers for each spell the class could be measured by, so a
 -- wrong mark can be traced to the spell that gave it. Also asked: the next-swing abilities left
 -- out, the other druid forms' spells, and Attack (6603), which every class has from level 1 and
 -- which would measure melee for all of them if the game answered it honestly.

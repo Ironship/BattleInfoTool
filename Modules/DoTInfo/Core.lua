@@ -1,4 +1,4 @@
--- BattleInfoTool module DoTInfo: the module's own runtime. Based on the standalone DoT addon's
+-- UsefulPlatesAndTooltips module DoTInfo: the module's own runtime. Based on the standalone DoT addon's
 -- runtime file at e4faef4 by Joe Greive (MIT); it lives only here now and is edited directly.
 -- DoTInfo
 -- Tracks your DoTs on the target and shows the damage they still have to deal as a marker on its health
@@ -13,7 +13,7 @@
 -- by Lua: see the skull notes in the Display section.
 
 local ADDON_NAME, BIT = ...
--- BattleInfoTool's own namespace for the module, shared by its four files.
+-- UsefulPlatesAndTooltips's own namespace for the module, shared by its four files.
 local ns = BIT.Module("DoTInfo")
 
 local UPDATE_INTERVAL = 0.1
@@ -88,7 +88,7 @@ local SCHOOL_MASKS = {
     Frostfire = 4 + 16, -- Forever's Frostfire Bolt: combined schools report as the OR of their masks
 }
 
--- User options (edited in the options panel, saved in BattleInfoTool_DoTInfoDB).
+-- User options (edited in the options panel, saved in UsefulPlatesAndTooltips_DoTInfoDB).
 local DEFAULTS = {
     -- Skull
     showSkull = true,
@@ -1125,7 +1125,7 @@ local skullTestUntil -- /dotinfo skull forces the skull visible until this time
 -- It starts sliding in at skullSize / SKULL_BAR_LENGTH (~0.4%) short of lethal.
 local SKULL_BAR_LENGTH = 10000
 
-local skullWindow = CreateFrame("Frame", "BattleInfoTool_DoTInfoSkull", UIParent)
+local skullWindow = CreateFrame("Frame", "UsefulPlatesAndTooltips_DoTInfoSkull", UIParent)
 skullWindow:SetClipsChildren(true)
 skullWindow:Hide()
 
@@ -1158,7 +1158,7 @@ plainSkull:SetAllPoints()
 -- the health bar's scale. Its fill (invisible itself) spans the damage the DoTs still have to deal,
 -- measured from the bar's left edge; the visible fill, outline and flash are drawn on top of that span.
 -- If the green ends inside the marker, the current DoTs will kill the target.
-local remainingBar = CreateFrame("StatusBar", "BattleInfoTool_DoTInfoRemaining", UIParent)
+local remainingBar = CreateFrame("StatusBar", "UsefulPlatesAndTooltips_DoTInfoRemaining", UIParent)
 remainingBar:SetStatusBarTexture(WHITE)
 remainingBar:SetStatusBarColor(0, 0, 0, 0)
 remainingBar:Hide()
@@ -1917,8 +1917,8 @@ end
 -- Saved defaults only. Enable on a switched-off module calls this so the settings page
 -- can build; events, the target attach and the options registration stay on ADDON_LOADED.
 function ns.ensureDB()
-    BattleInfoTool_DoTInfoDB = BattleInfoTool_DoTInfoDB or {}
-    db = BattleInfoTool_DoTInfoDB
+    UsefulPlatesAndTooltips_DoTInfoDB = UsefulPlatesAndTooltips_DoTInfoDB or {}
+    db = UsefulPlatesAndTooltips_DoTInfoDB
     if db.version ~= DB_VERSION then
         db.ticks, db.intervals, db.version = nil, nil, DB_VERSION
     end
@@ -2019,7 +2019,7 @@ frame:RegisterEvent("UNIT_COMBAT")
 frame:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
         if ... ~= ADDON_NAME then return end
-        -- switched off in BattleInfoTool: silent
+        -- switched off in UsefulPlatesAndTooltips: silent
         if BIT.ShouldRun and not BIT.ShouldRun("DoTInfo") then
             ns.off = true
             self:UnregisterAllEvents()

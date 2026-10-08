@@ -25,7 +25,7 @@ end
 -- The addon: Locale.lua, then the parser chunks of Core.lua (same cut as tools/test_parse.py).
 local ns = {}
 ns.Module = function(name) return ns end
-run(readFile(root .. "/Modules/DoTInfo/Locale.lua"), "Locale.lua", "BattleInfoTool", ns)
+run(readFile(root .. "/Modules/DoTInfo/Locale.lua"), "Locale.lua", "UsefulPlatesAndTooltips", ns)
 local src = readFile(source)
 local function chunk(startMarker, endMarker)
     local first = assert(src:find(startMarker, 1, true), startMarker)

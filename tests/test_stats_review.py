@@ -6,7 +6,7 @@ fixture = (ROOT / "tests/test_bit.py").read_text(encoding="utf-8")
 namespace = {"__file__": str(ROOT / "tests/test_bit.py")}
 exec(compile(fixture.split('print("-- every module on")', 1)[0], "fixture", "exec"), namespace)
 rt, G, BIT, _ = namespace["load"]()
-G.Fire("ADDON_LOADED", "BattleInfoTool")
+G.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 G.Fire("PLAYER_LOGIN")
 si = BIT.modules["StatsInfo"]
 G.ReviewStats = si
@@ -193,7 +193,7 @@ assert marker.shown and marker.arrow.texture.endswith("Red"), "arrival must inva
 
 # Native buyback retains each button's old vendor link and displays twelve slots.
 rtM, GM, BITM, _ = namespace["load"]("function MerchantFrame_Update() end")
-GM.Fire("ADDON_LOADED", "BattleInfoTool")
+GM.Fire("ADDON_LOADED", "UsefulPlatesAndTooltips")
 GM.Fire("PLAYER_LOGIN")
 GM.ReviewMerchantStats = BITM.modules.StatsInfo
 rtM.execute("""

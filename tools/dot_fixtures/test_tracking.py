@@ -18,7 +18,7 @@ src = open(SRC, encoding="utf-8").read()
 # Locale.lua loads first in the .toc and puts ns.locale on the namespace the chunks below use.
 LOCALE = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Modules", "DoTInfo", "Locale.lua"),
               encoding="utf-8").read()
-LOCALE_PRELUDE = "local ns = {}\nlocal BIT = ns\nns.Module = function(name) return ns end\n(function(...)\n" + LOCALE + "\nend)(\"BattleInfoTool\", ns)\n"
+LOCALE_PRELUDE = "local ns = {}\nlocal BIT = ns\nns.Module = function(name) return ns end\n(function(...)\n" + LOCALE + "\nend)(\"UsefulPlatesAndTooltips\", ns)\n"
 
 
 def chunk(start_marker, end_marker):
