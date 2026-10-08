@@ -2,7 +2,7 @@
 
 Useful combat information for World of Warcraft: Forever. It shows DoT marks, shields and range on nameplates, damage and healing numbers on action buttons, and item comparisons in tooltips. Every part can be switched off.
 
-Version 0.9.45 · Forever client 1.60.x (interface 16001)
+Version 0.9.46 · Forever client 1.60.x (interface 16001)
 
 ## Install
 

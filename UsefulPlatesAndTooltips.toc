@@ -2,7 +2,7 @@
 ## Title: Useful Plates and Tooltips
 ## Notes: Useful nameplate and tooltip info for WoW: Forever: DoT marks, shields, hunter range, combo points, stat comparisons and action bar damage numbers. Every part can be switched off. /upt
 ## Author: Ironship
-## Version: 0.9.45
+## Version: 0.9.46
 ## SavedVariables: UsefulPlatesAndTooltipsDB, UsefulPlatesAndTooltips_SpellDamageInfoDB, UsefulPlatesAndTooltips_DoTInfoDB, UsefulPlatesAndTooltips_ResourceDingDB
 
 Core\Init.lua
