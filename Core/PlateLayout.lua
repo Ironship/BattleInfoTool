@@ -4,8 +4,7 @@
 -- The live seat, for the hunter rail and for ResourceDing's dots and diamonds, is
 -- SetPoint("TOP", healthBar, "BOTTOM", 0, -offset). Positive offset moves the widget down.
 -- In that frame (positive y up, origin on the health bar's bottom edge) the widget's top is
--- at y = -offset and its body occupies [top - height, top]. The hunter preview anchors the
--- other way; clash math here follows the live seat, not that preview.
+-- at y = -offset and its body occupies [top - height, top]. The previews use the same seat.
 -- Range's check sits above the bar (BOTTOM to TOP) and is not part of this span.
 
 local _, BIT = ...
@@ -60,12 +59,17 @@ end
 
 -- The hunter rail is actually on the plate: the module is running, the player is a hunter,
 -- and the rail is attached. A non-hunter keeps the Range check even if this module is on.
-function Plate.HunterOwnsNameplate()
+function Plate.HunterOwnsNameplate(plate)
+  if plate then
+    local hunter = BIT.modules and BIT.modules.HunterRangeFinder
+    return hunter and type(hunter.OwnsNameplate) == "function" and hunter.OwnsNameplate(plate) or false
+  end
   if type(BIT.IsRunning) ~= "function" or not BIT.IsRunning("HunterRangeFinder") then return false end
   local class
   if type(UnitClass) == "function" then
     class = select(2, UnitClass("player"))
   end
+  if type(issecretvalue) == "function" and issecretvalue(class) then return false end
   if class ~= "HUNTER" then return false end
   local s = moduleSettings("HunterRangeFinder")
   if s and s.attachToPlate == false then return false end
@@ -95,18 +99,47 @@ function Plate.RefreshDue(remaining, duration, interval)
   return remaining <= window
 end
 
-function Plate.ClashText()
+-- Settings preview: available rows on this character, independent of whether a target
+-- currently exists. The same rows and dimensions drive Together and clash warnings.
+function Plate.Rows()
+  local function on(name)
+    return BIT.IsRunning(name) or (BIT.woke and BIT.woke[name] == true)
+  end
   local hunter, dots, shards = Plate.ReadOffsets()
+  local rd = BattleInfoTool_ResourceDingDB or {}
+  local size = math.min(24, math.max(8, tonumber(rd.dotSize) or 14))
+  local resource = BIT.modules and BIT.modules.ResourceDing
+  local kind = resource and resource.GetResource and resource.GetResource()
+  local hasPoints = false
+  if kind and type(resource.GetResourceState) == "function" then
+    local ok, _, _, maximum = pcall(resource.GetResourceState)
+    hasPoints = ok and type(maximum) == "number" and maximum > 0
+  end
+  local class = type(UnitClass) == "function" and select(2, UnitClass("player"))
+  local hs = moduleSettings("HunterRangeFinder") or {}
+  return {
+    hunter = { on = on("HunterRangeFinder") and class == "HUNTER" and hs.attachToPlate ~= false,
+      offset = hunter, height = Plate.HUNTER_RAIL_HEIGHT },
+    dots = { on = on("ResourceDing") and rd.enabled ~= false and rd.dots ~= false and hasPoints
+      and (class ~= "DRUID" or (type(GetShapeshiftFormID) == "function" and GetShapeshiftFormID() == 1)),
+      offset = dots, height = size },
+    shards = { on = on("ResourceDing") and rd.enabled ~= false and rd.shardDiamonds ~= false
+      and class == "WARLOCK" and resource and resource.IsClassic and resource.IsClassic(),
+      offset = shards, height = size },
+  }
+end
+
+function Plate.ClashText(rows)
+  rows = rows or Plate.Rows()
   local parts = {}
-  if Plate.Clash(hunter, Plate.HUNTER_RAIL_HEIGHT, dots, Plate.DOT_ROW_HEIGHT) then
-    parts[#parts + 1] = "Hunter rail overlaps combo dots."
+  local function check(a, b, text)
+    if a.on and b.on and Plate.Clash(a.offset, a.height, b.offset, b.height) then
+      parts[#parts + 1] = text
+    end
   end
-  if Plate.Clash(hunter, Plate.HUNTER_RAIL_HEIGHT, shards, Plate.SHARD_ROW_HEIGHT) then
-    parts[#parts + 1] = "Hunter rail overlaps shard diamonds."
-  end
-  if Plate.Clash(dots, Plate.DOT_ROW_HEIGHT, shards, Plate.SHARD_ROW_HEIGHT) then
-    parts[#parts + 1] = "Combo dots overlap shard diamonds."
-  end
+  check(rows.hunter, rows.dots, "Hunter rail overlaps combo dots.")
+  check(rows.hunter, rows.shards, "Hunter rail overlaps shard diamonds.")
+  check(rows.dots, rows.shards, "Combo dots overlap shard diamonds.")
   if #parts == 0 then return "Nameplate lanes are clear." end
   return table.concat(parts, " ")
 end

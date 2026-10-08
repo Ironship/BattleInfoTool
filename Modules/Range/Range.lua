@@ -236,7 +236,7 @@ local function update()
   local plate = targetPlate()
   -- The hunter rail owns this plate, so the check would sit on top of it.
   if plate and BIT.Plate and type(BIT.Plate.HunterOwnsNameplate) == "function"
-    and BIT.Plate.HunterOwnsNameplate() then
+    and BIT.Plate.HunterOwnsNameplate(plate) then
     icon:Hide()
     return
   end
@@ -887,6 +887,7 @@ end
 -- The presets, the preview and the settings in the tab's content frame: the presets
 -- right-aligned above the two columns, the live preview on the left, the tabs on the right.
 local function buildContent(top, anchor)
+  tabs, activeTab = {}, nil
   local presetLabel = window:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   local previous
   for i = #PRESETS, 1, -1 do

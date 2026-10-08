@@ -2,6 +2,10 @@
 
 `/bit` opens one window: short tabs (the full name is on the tooltip), a scrollbar, and the window stays where you left it. **Together** shows every enabled mark on one nameplate and warns when the hunter rail and the combo dots occupy the same lane. A module's own settings open as soon as you tick Enable; the module itself starts at the next `/reload`. Item tooltips are one line (best spec and an arrow) unless you hold Shift or turn on the full tooltip. Agony, Corruption and Shadow Word: Pain grow a gold edge in their refresh window. Spell numbers keep the second line off the first, and skip the stance bar and the pet bar. Loot, need/greed and merchant buttons use the same upgrade arrows as bags.
 
+Together respects the character's available resources, individual display switches and saved row sizes. Its symbols use game textures. The Stats preview follows compact/full tooltip settings and Shift, and scrolls with all its text at larger font sizes. Advanced appearance controls remain reachable in Hunter and Shields. Loot, roll and merchant arrows refresh when equipment or item data changes. Main combat buttons on bonus/form bars keep their spell numbers.
+
+Shortcuts: `/bit together`, `/bit sdi`, `/bit did`, `/bit stats`, `/bit ding`, `/bit range`, `/bit shields`, `/bit hunter`. `/bit probe`, `/bit rangecheck` and `/bit hunterprobe` print diagnostics. Module switches take effect after `/reload`; their settings can be prepared beforehand. The Hunter preview uses the live nameplate anchor, and Range shows its mark while the hunter rail is hidden. Compact item ratings name the spec, identify empty slots without an invented percentage, and show a neutral verdict for mixed tank gains and losses.
+
 **SpellDamageInfo**: Numbers of the damage and healing from each spell on action bar
 
 ![damage prediction](https://i.imgur.com/ySumj4S.png) ![healing prediction](https://i.imgur.com/xvGpoTg.png)

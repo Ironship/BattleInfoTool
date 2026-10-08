@@ -190,7 +190,8 @@ local function state()
     count = ask(UnitPower, "player", resource.power)
     if count == nil and resource.comboPoints then count = ask(GetComboPoints, "player", "target") end
   end
-  if count == nil then return nil end
+  -- A secret count must not meet a comparison; only a readable nil ends the read.
+  if not isSecret(count) and count == nil then return nil end
   -- a maximum of 0 is a spec or form without this bar (a Retail Fire mage has no Arcane Charges)
   if type(maximum) ~= "number" or maximum <= 0 then return nil end
   return math.min(maximum, MAX_DOTS), count

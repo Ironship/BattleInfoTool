@@ -81,6 +81,10 @@ local function clamp(v, lo, hi)
   return math.max(lo, math.min(hi, v))
 end
 
+local function finite(v)
+  return type(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge
+end
+
 -- One scalar field's sanitizer: a number is clamped into the field's bounds, anything else
 -- (nil, string, table) falls back to the product default.
 local BOUNDS = {
@@ -95,7 +99,7 @@ local BOUNDS = {
 
 local function scalar(key, v)
   local b = BOUNDS[key]
-  if type(v) ~= "number" then return DEFAULTS[key] end
+  if not finite(v) then return DEFAULTS[key] end
   return clamp(v, b[1], b[2])
 end
 
@@ -124,7 +128,7 @@ local function color(role, v)
   local fallback = DEFAULTS.colors[role]
   if type(v) ~= "table" then return copyColor(fallback) end
   local a = v[4] == nil and 1 or v[4]
-  if type(v[1]) ~= "number" or type(v[2]) ~= "number" or type(v[3]) ~= "number" or type(a) ~= "number" then
+  if not finite(v[1]) or not finite(v[2]) or not finite(v[3]) or not finite(a) then
     return copyColor(fallback)
   end
   for i = 1, 3 do
@@ -317,7 +321,7 @@ function Style.Resolve(moduleName, legacy)
     end
     local b = BOUNDS[key]
     if not b then return false end
-    if type(v) ~= "number" then return false end
+    if not finite(v) then return false end
     return true, clamp(v, b[1], b[2])
   end
 
@@ -403,8 +407,8 @@ function Style.Resolve(moduleName, legacy)
     if not list then list = {} subscribers[key] = list end
     list[#list + 1] = callback
     return function()
-      for i = 1, #list do
-        if list[i] == callback then list[i] = nil end
+      for i = #list, 1, -1 do
+        if list[i] == callback then table.remove(list, i) end
       end
     end
   end

@@ -292,7 +292,9 @@ local function rewardEntry(kind, index, screenIndex, questLog, questID)
   if not link then link = modernLink(questLog, kind, index) end
   if not link then link = hiddenTooltipLink(kind, index, questLog) end
   if isSecret(apiUsable) then apiUsable = nil end
-  return { kind = kind, index = screenIndex, link = link, apiUsable = apiUsable }
+  local quantity = not isSecret(count) and (count == nil and 1 or cleanCount(count)) or 0
+  return { kind = kind, index = screenIndex, link = link, apiUsable = apiUsable,
+    quantity = quantity > 0 and quantity or nil }
 end
 
 -------------------------------------------------------------------------------------------------
@@ -307,7 +309,7 @@ local function sellPriceOf(link)
   local r = { pcall(C_Item.GetItemInfo, link) }
   if not r[1] then return nil end
   local price = r[12] -- pcall's own true is [1]; the sell price is GetItemInfo's 11th return
-  if type(price) ~= "number" or isSecret(price) or price ~= price or price <= 0 then return nil end
+  if type(price) ~= "number" or isSecret(price) or price ~= price or price == math.huge or price <= 0 then return nil end
   return price
 end
 
@@ -318,7 +320,8 @@ local function usableNow(entry)
   if not entry.link then return false end
   if entry.apiUsable == false then return false end
   if entry.apiUsable == true then return true end
-  return ask(C_Item and C_Item.IsUsableItem, entry.link) == true
+  local usable = ask(C_Item and C_Item.IsUsableItem, entry.link)
+  return not isSecret(usable) and usable == true
 end
 
 -- An upgrade by THIS module's own evaluator (never another addon's weights): the same
@@ -368,8 +371,9 @@ local function updateQuestRewards()
     local best, bestPrice = nil, 0
     for _, r in ipairs(rewards) do
       if r.kind == "choice" then
-        local price = sellPriceOf(r.link)
-        if price and price > bestPrice then best, bestPrice = r, price end
+        local unitPrice = sellPriceOf(r.link)
+        local price = unitPrice and r.quantity and unitPrice * r.quantity
+        if price and price < math.huge and price > bestPrice then best, bestPrice = r, price end
       end
     end
     picked, mode = best, "coin"
@@ -426,12 +430,13 @@ end
 -- ITEM_DATA_LOADED note in BagMarkers.lua), so the optional ones are registered only where
 -- the client itself vouches for the name (C_EventUtils.IsEventValid).
 local CORE_EVENTS = { "QUEST_DETAIL", "QUEST_PROGRESS", "QUEST_COMPLETE", "QUEST_LOG_UPDATE",
-  "PLAYER_EQUIPMENT_CHANGED", "PLAYER_LEVEL_UP", "PLAYER_REGEN_ENABLED" }
+  "PLAYER_EQUIPMENT_CHANGED", "PLAYER_LEVEL_UP", "PLAYER_REGEN_ENABLED", "GET_ITEM_INFO_RECEIVED" }
 local OPTIONAL_EVENTS = { "QUEST_DATA_READY", "QUEST_DATA_LOAD_RESULT" }
 
 local function ensureEvents()
   if not active then return end
   for _, e in ipairs(CORE_EVENTS) do loader:RegisterEvent(e) end
+  pcall(loader.RegisterEvent, loader, "ITEM_DATA_LOAD_RESULT")
   if type(C_EventUtils) == "table" and type(C_EventUtils.IsEventValid) == "function" then
     for _, e in ipairs(OPTIONAL_EVENTS) do
       if ask(C_EventUtils.IsEventValid, e) == true then loader:RegisterEvent(e) end

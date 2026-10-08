@@ -2391,7 +2391,7 @@ GU.itemLoc["ux-hide"] = "INVTYPE_CHEST"
 compactU = [l[1] for l in siU.TooltipLines("ux-hide").values()]
 check("a compact tooltip is one line", len(compactU), 1)
 check("  and that line is the best-spec arrow",
-      "Better" in compactU[0] or "Worse" in compactU[0], True)
+      "Better" in compactU[0] or "Worse" in compactU[0] or "Fills an empty slot" in compactU[0], True)
 rtU.execute("function IsShiftKeyDown() return true end")
 fullU = [l[1] for l in siU.TooltipLines("ux-hide").values()]
 check("Shift expands the same item to the full breakdown", len(fullU) > 1, True)
@@ -2478,7 +2478,6 @@ siU.BagVerdict = rtU.eval("function(link) merchantSeen = link return nil end")
 GU.hooks["MerchantFrame_Update"]()
 check("a merchant button uses the link it is showing", GU.merchantSeen, "item:11")
 rtU.execute("""
-MerchantItem1ItemButton.link = nil
 MerchantFrame.selectedTab = 2
 function GetBuybackItemLink(i) return "buyback:" .. i end
 """)
@@ -2537,8 +2536,8 @@ for i in range(1, len(GT.AllFrames) + 1):
         together_text.append(text)
 check("a switched-off hunter rail is not an overlap",
       any("Hunter rail overlaps" in t for t in together_text), False)
-check("combo dots and shard diamonds still share their lane",
-      any("Combo dots overlap shard diamonds." in t for t in together_text), True)
+check("a Classic warlock has diamonds, not a simultaneous combo row",
+      any("Combo dots overlap shard diamonds." in t for t in together_text), False)
 
 print("failed:", failures)
 sys.exit(1 if failures else 0)

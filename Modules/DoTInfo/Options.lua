@@ -232,7 +232,7 @@ end
 ---------------------------------------------------------------------------
 
 local function changed()
-    ns.refresh()
+    updatePreview()
     refreshControls()
 end
 
@@ -632,7 +632,7 @@ local function buildTabs()
     behavior:choice("waitFirstTick", "Wait for first tick", lists.waitModes, { tooltip = "Whether a new DoT "
         .. "counts before its first tick lands. \"When unsure\" waits for finishers with unknown combo points "
         .. "and spells the addon hasn't seen tick yet." })
-    behavior:checkbox("refreshCue", "Refresh mark on Agony, Corruption and Shadow Word: Pain",
+    behavior:checkbox("refreshCue", "Show refresh marks",
         { tooltip = "A gold edge on that DoT's segment while the time left is inside the refresh window: "
             .. "one tick, three seconds, or a quarter of the duration, whichever is longer. "
             .. "The damage number stays off unless you turn it on." })
@@ -1062,9 +1062,16 @@ local function buildDoTPreview(parent)
   scene.title = scene:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   scene.title:SetPoint("TOPLEFT", 12, -4)
   scene.title:SetText("DoTInfo sample (not your bars)")
-  scene.bar = CreateFrame("Frame", nil, scene)
+  scene.bar = CreateFrame("StatusBar", nil, scene)
   scene.bar:SetSize(180, 20)
   scene.bar:SetPoint("TOPLEFT", 12, -30)
+  scene.bar:SetStatusBarTexture(WHITE)
+  scene.bar:SetStatusBarColor(0.65, 0.2, 0.85)
+  scene.bar:SetMinMaxValues(0, 100)
+  scene.bar:SetValue(60)
+  local back = scene.bar:CreateTexture(nil, "BACKGROUND")
+  back:SetAllPoints()
+  back:SetColorTexture(0.12, 0.04, 0.16, 1)
   scene.label = scene:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   scene.label:SetPoint("TOPLEFT", 12, -56)
   scene.label:SetText("450 over 3 ticks")
@@ -1097,6 +1104,17 @@ if BIT.RegisterTab then
             .. "when they will finish it.",
         width = WINDOW_WIDTH, height = WINDOW_HEIGHT - HEADER_HEIGHT + 44,
         build = function(parent)
+            if window == parent then return end
+            stopSimulation()
+            closeMenu()
+            if window then
+                window:Hide()
+                window:UnregisterAllEvents()
+                window:SetScript("OnShow", nil)
+                window:SetScript("OnHide", nil)
+                window:SetScript("OnEvent", nil)
+            end
+            controls, tabs, activeTab = {}, {}, nil
             window = parent
             local anchor = CreateFrame("Frame", nil, parent)
             anchor:SetSize(1, 22)

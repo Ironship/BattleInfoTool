@@ -56,6 +56,51 @@ def extract(repo, paths, into):
         tar.extractall(into)
 
 
+def adapt_sdi_fixture(text, filename):
+    """Keep upstream's independently calculated expectations aligned with BIT's SDI contracts."""
+    replacements = []
+    if filename == "test_smoke.lua":
+        replacements = [
+            ('T.eq(#mocks, 5, "five mock buttons")', 'T.eq(#mocks, 10, "ten preview samples")', 1),
+            ('function issecretvalue(v) return rawequal(v, SECRET) end',
+             'function issecretvalue(v) return rawequal(v, SECRET) end\nfunction GetComboPoints() return 5 end', 1),
+            ('T.eq(shown(ActionButton7), "1530", "Health Funnel heal 153 x 10")',
+             'T.eq(shown(ActionButton7), "-1530 HP", "Health Funnel costs 153 x 10 health")', 1),
+            ('T.check(label(ActionButton7) and label(ActionButton7).color[2] == 1, "heals are green")',
+             'T.check(label(ActionButton7) and label(ActionButton7).color[1] == ns.Format.REDUCTION_COLOR[1], "pet transfer costs are red")', 1),
+            ('"Bei 5 Combopunkten, ohne Angriffskraft; 1-4: 224-332 / 394-502 / 564-672 / 734-842"',
+             '"Bei den aktuellen 5 Combopunkten, ohne Angriffskraft; die übrigen: 1: 224-332 / 2: 394-502 / 3: 564-672 / 4: 734-842"', 1),
+        ]
+    elif filename == "test_parser.lua":
+        replacements = [
+            ('return { dot = O(n(a) * n(l) / n(i), l) }',
+             'return { dot = O(n(a) * n(l) / n(i), l), hot = O(n(a) * n(l) / n(i), l), transfer = true }', 2),
+            ('return { dot = O(n(a) * n(l), l) }',
+             'return { dot = O(n(a) * n(l), l), hot = O(n(a) * n(l), l), transfer = true }', 2),
+            ('return { hot = O(n(a) * n(d), d) }',
+             'return { healthCost = n(a) * n(d), petHeal = true }', 2),
+            ('{ dot = O(255, 5) }', '{ dot = O(255, 5), hot = O(255, 5), transfer = true }', 1),
+            ('local got = ns.Parser.ParseSpecial(case[2], case[1])',
+             'local got = ns.Parser.ParseItemHeal(case[2], case[1])', 1),
+            ('"Use: Restores 700 to 900 mana.", { heal = D(700, 900) }',
+             '"Use: Restores 700 to 900 mana.", { mana = D(700, 900) }', 1),
+            ('ipairs({ "direct", "heal" })', 'ipairs({ "direct", "heal", "mana" })', 1),
+            ('return got.school == want.school',
+             'for _, key in ipairs({ "healthCost", "petHeal", "transfer" }) do\n'
+             '    if got[key] ~= want[key] then return false end\n'
+             '  end\n  return got.school == want.school', 1),
+        ]
+    for old, new, expected in replacements:
+        if text.count(old) != expected:
+            raise RuntimeError(f"SpellDamageInfo {filename} fixture changed; inspect before adapting: {old}")
+        text = text.replace(old, new)
+    if filename == "test_smoke.lua":
+        # Legacy pet tests explicitly exercise skip=false, including after reloading their DB.
+        text = text.replace('fire("ADDON_LOADED", "SpellDamageInfo")',
+                            'fire("ADDON_LOADED", "SpellDamageInfo")\nns.SetSetting("skipUtilityBars", false)')
+    return text
+
+
 def run_suite(name):
     spec = SUITES[name]
     if "in_repo" in spec:
@@ -75,12 +120,19 @@ def run_suite(name):
                 text = path.read_text(encoding="utf-8")
                 for old, new in spec["rename"]:
                     text = text.replace(old, new)
-                if name == "SpellDamageInfo" and path.name == "test_smoke.lua":
-                    # BIT adds a sixth preview sample (Life Tap), tested by tests/test_bit.py.
-                    old = 'T.eq(#mocks, 5, "five mock buttons")'
-                    if text.count(old) != 1:
-                        raise RuntimeError("SpellDamageInfo preview fixture changed; inspect before adapting")
-                    text = text.replace(old, 'T.eq(#mocks, 6, "six mock buttons including Life Tap")')
+                if name == "SpellDamageInfo":
+                    text = adapt_sdi_fixture(text, path.name)
+                elif name == "ResourceDing" and path.name == "classic.test.lua":
+                    # The native updater requires its maximum, and Classic reads the target.
+                    replacements = [
+                        ('ComboFrame = {\n', 'ComboFrame = {\n      maxComboPoints = 5,\n'),
+                        ('UnitPower = function() return secret() end',
+                         'UnitPower = function() return secret() end\ncomboNow = secret()'),
+                    ]
+                    for old, new in replacements:
+                        if text.count(old) != 1:
+                            raise RuntimeError("ResourceDing Classic fixture changed; inspect before adapting")
+                        text = text.replace(old, new)
                 path.write_text(text, encoding="utf-8")
     try:
         failed = 0

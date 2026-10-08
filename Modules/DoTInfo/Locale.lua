@@ -98,6 +98,7 @@ L.GERMAN_NAMES = {
 -- One spell ID per entry (Classic Era rank 1; all ranks share the name). At load the tables also get the name the
 -- client itself reports for it, whatever the language, and Forever's own renames (980 is its Bane of Agony).
 L.SPELL_IDS = {
+    ["Corruption"] = 172, ["Shadow Word: Pain"] = 589,
     ["Insect Swarm"] = 5570, ["Curse of Agony"] = 980, ["Fireball"] = 133, ["Holy Fire"] = 14914,
     ["Rip"] = 1079, ["Rupture"] = 1943, ["Siphon Life"] = 18265,
     -- The rogue/druid bleed and poison family (Classic Era rank 1; Lacerate is Forever's own, ids 24118-24120):

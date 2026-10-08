@@ -52,7 +52,8 @@ function BIT.Settings(name, defaults)
   if type(d.modules[name]) ~= "table" then d.modules[name] = {} end
   local s = d.modules[name]
   for k, v in pairs(defaults or {}) do
-    if s[k] == nil then s[k] = v end
+    if type(s[k]) ~= type(v) or (type(v) == "number"
+      and (s[k] ~= s[k] or s[k] == math.huge or s[k] == -math.huge)) then s[k] = v end
   end
   return s
 end

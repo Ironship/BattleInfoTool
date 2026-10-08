@@ -129,6 +129,7 @@ function Estimate.ButtonValue(view, mode)
   if mode == "direct" then
     if view.direct then return avg(view.direct), "damage" end
     if view.heal then return avg(view.heal), "heal" end
+    if view.mana then return avg(view.mana), "mana" end
     return nil
   end
   if view.direct or view.dot then

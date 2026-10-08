@@ -80,7 +80,7 @@ ns.refreshNames = {
     ["Verderbnis"] = true, ["Schattenwort: Schmerz"] = true,
 }
 
-local NAME_TABLES = { KNOWN_TICK_INTERVALS, TICK_SHAPES, SCHOOL_BY_NAME, IGNORED_SPELLS }
+local NAME_TABLES = { KNOWN_TICK_INTERVALS, TICK_SHAPES, SCHOOL_BY_NAME, IGNORED_SPELLS, ns.refreshNames }
 ns.locale.addGermanNames(NAME_TABLES)
 
 local SCHOOL_MASKS = {
@@ -341,11 +341,24 @@ local COMBO_CAP = 5
 local COMBO_CACHE_SECONDS = 3
 local comboAtSend, lastComboPoints, lastComboAt = nil, nil, 0
 local countedPoints = 0
--- DOT-1: the mob the cast was aimed at, read at SENT time. SUCCEEDED only
--- carries the spell, so without this a target change mid-cast lands the DoT
--- on the new target. Survives PLAYER_TARGET_CHANGED on purpose; consumed by
--- onPlayerCast, overwritten by the next SENT.
-local pendingCastTargetKey = nil
+-- Retain even an unknown SENT recipient: a target appearing later cannot identify that cast's mob.
+-- Readable GUIDs survive target changes; the current-target-only alias cannot.
+local pendingCast -- { key (possibly nil), castGUID, spellID, sentAt, stoppedAt }
+
+local function sameCast(cast, castGUID, spellID)
+    if cast.castGUID and castGUID ~= nil and not isSecret(castGUID) then return castGUID == cast.castGUID end
+    return not isSecret(spellID) and spellID == cast.spellID
+end
+
+local function castRecipient(castGUID, spellID)
+    if pendingCast and sameCast(pendingCast, castGUID, spellID) then return pendingCast.key end
+    return unitKey("target") or unitKey("softenemy")
+end
+
+local function outcomeRecipient()
+    if pendingCast then return pendingCast.key end
+    return unitKey("target") or unitKey("softenemy")
+end
 
 -- Cast outcomes. UNIT_COMBAT reports a dodge/parry/miss/resist/immune on the target, but not which attack it
 -- belongs to. A cast's own result arrives almost at once (same frame in the logs), so the first outcome on the
@@ -431,13 +444,15 @@ local function isFinisherDescription(desc)
         and (desc:find("Finishing move") ~= nil or ns.locale.isFinisher(desc))
 end
 
-local function onCastSent(spellID)
+local function onCastSent(spellID, castGUID)
     -- DOT-1: remember who the cast is aimed at while the target is still it.
     -- SUCCEEDED only names the spell, so onPlayerCast uses this instead of
     -- the (maybe tabbed-away) current target. Never cleared by target change.
     -- Action targeting can have only softenemy. Hard targets keep precedence; unitKey only uses
     -- a soft target whose own GUID or matching nameplate's GUID can be read safely.
-    pendingCastTargetKey = unitKey("target") or unitKey("softenemy")
+    pendingCast = { key = unitKey("target") or unitKey("softenemy"), spellID = spellID,
+        castGUID = not isSecret(castGUID) and castGUID or nil, sentAt = GetTime() }
+    comboAtSend = nil
     local ok, _, desc = pcall(spellNameAndDescription, spellID)
     if not ok or not isFinisherDescription(desc) then return end
     local points, readings = readComboPoints()
@@ -482,7 +497,7 @@ end
 local function onTargetAvoided(action, key)
     local now = GetTime()
     local window = (AVOIDED_ACTIONS[action] or AVOIDED_ACTIONS.RESIST)[1]
-    if key == (pendingCastTargetKey or unitKey("target") or unitKey("softenemy")) then
+    if key == outcomeRecipient() then
         lastOutcome = { key = key, avoided = true, action = action, at = now }
     end
     if lastBuilder and lastBuilder.key == key then
@@ -500,7 +515,7 @@ end
 
 -- A hit on the cast's recipient proves it landed; a hit on another mob proves nothing about it.
 local function onTargetHit(key)
-    if key == (pendingCastTargetKey or unitKey("target") or unitKey("softenemy")) then
+    if key == outcomeRecipient() then
         lastOutcome = { key = key, avoided = false, at = GetTime() }
     end
     if lastBuilder and lastBuilder.key == key then lastBuilder = nil end
@@ -561,8 +576,9 @@ local function newDot(spellID, tickKey, name, total, school, duration, statedInt
 end
 
 -- Returns the target key the DoT was applied to, or nil if the cast wasn't a tracked DoT.
-local function onPlayerCast(spellID)
-    local key = pendingCastTargetKey or unitKey("target") or unitKey("softenemy")
+local function onPlayerCast(spellID, castGUID)
+    local key = castRecipient(castGUID, spellID)
+    if pendingCast and sameCast(pendingCast, castGUID, spellID) then pendingCast = nil end
     local ok, name, desc = pcall(spellNameAndDescription, spellID)
     if not ok or not name or isSecret(name) then return end
     if type(desc) == "string" and not isSecret(desc) then
@@ -593,9 +609,8 @@ local function onPlayerCast(spellID)
 
     -- DOT-1: SUCCEEDED names only the spell, so the cast belongs to the mob
     -- remembered at SENT time, not to whatever is targeted now (a tab
-    -- mid-cast must not move the DoT). Fall back to the current target when
-    -- no SENT was seen (or its target was unreadable).
-    pendingCastTargetKey = nil
+    -- mid-cast must not move the DoT). Fall back to the current target only
+    -- when no matching SENT was seen; an unreadable SENT recipient stays unknown.
     if not key then
         -- DOT-5b: SUCCEEDED with no readable target silently vanished (0 log
         -- lines, breaking "always recorded"). Log it and stay silent in chat.
@@ -636,12 +651,6 @@ local CAST_STOP_GRACE = 0.5
 local CAST_MAX_SECONDS = 15 -- a lost end event never leaves an estimate behind
 local castInProgress -- { key, name, dot, castGUID, spellID, startedAt, stoppedAt }
 
--- Whether an event's castGUID (or, when either GUID is unreadable, its spell ID) is the cast in progress.
-local function sameCast(cast, castGUID, spellID)
-    if cast.castGUID and castGUID ~= nil and not isSecret(castGUID) then return castGUID == cast.castGUID end
-    return not isSecret(spellID) and spellID == cast.spellID
-end
-
 local function dropCastInProgress(reason)
     if not castInProgress then return end
     trace("CASTING " .. castInProgress.name .. " " .. reason .. "; estimate removed")
@@ -656,7 +665,7 @@ local function onCastStart(castGUID, spellID)
     if not ok or not name or isSecret(name) or IGNORED_SPELLS[name] or isFinisherDescription(desc) then return end
     local total, school, duration, statedInterval = parseDot(desc, 1)
     if not total then return end
-    local key = pendingCastTargetKey or unitKey("target") or unitKey("softenemy")
+    local key = castRecipient(castGUID, spellID)
     if not key then return end
     local now = GetTime()
     local dot = newDot(spellID, spellID, name, total, school, duration, statedInterval, now)
@@ -677,6 +686,13 @@ end
 
 -- UNIT_SPELLCAST_STOP / FAILED / INTERRUPTED (player). Returns true when the estimate was removed.
 local function onCastEnded(event, castGUID, spellID)
+    if pendingCast and sameCast(pendingCast, castGUID, spellID) then
+        if event == "UNIT_SPELLCAST_STOP" then
+            pendingCast.stoppedAt = pendingCast.stoppedAt or GetTime()
+        else
+            pendingCast, comboAtSend = nil, nil
+        end
+    end
     if not castInProgress or not sameCast(castInProgress, castGUID, spellID) then return end
     if event == "UNIT_SPELLCAST_STOP" then
         castInProgress.stoppedAt = castInProgress.stoppedAt or GetTime()
@@ -830,9 +846,8 @@ end
 -- fed and let a repeat feed a different one — but only from the SAME unit
 -- token: a repeat from another token is the same hit seen twice and stays
 -- dropped, so one hit can never feed two DoTs (no false skull).
-local lastCombatSignature
-local lastCombatUnit
-local lastCombatFed
+local combatFrameAt
+local combatFrameHits = {}
 local function onUnitCombat(unit, action, flag, amount, school)
     if isSecret(action) then return end
     local key = unitKey(unit)
@@ -855,15 +870,20 @@ local function onUnitCombat(unit, action, flag, amount, school)
     -- SAME unit token feed a different unfed DoT; repeats from another token
     -- are the same hit seen twice and stay dropped.
     local now = GetTime()
-    local signature = key .. ":" .. amount .. ":" .. school .. ":" .. now
-    if signature == lastCombatSignature then
-        if unit ~= lastCombatUnit then return end
-        lastCombatFed = lastCombatFed or {}
-    else
-        lastCombatSignature = signature
-        lastCombatUnit = unit
-        lastCombatFed = {}
+    -- Keep every signature in this frame: another mob's hit can arrive between a hit and its token copy.
+    if combatFrameAt ~= now then
+        combatFrameHits = {}
+        combatFrameAt = now
     end
+    local signature = key .. ":" .. amount .. ":" .. school
+    local hit = combatFrameHits[signature]
+    if hit then
+        if unit ~= hit.unit then return end
+    else
+        hit = { unit = unit, fed = {} }
+        combatFrameHits[signature] = hit
+    end
+    local lastCombatFed = hit.fed
 
     local best, bestName, bestDistance, bestIndex
     for name, dot in pairs(dots) do
@@ -913,6 +933,10 @@ local function onUnitCombat(unit, action, flag, amount, school)
 end
 
 local function housekeep(now)
+    if pendingCast and ((pendingCast.stoppedAt and now - pendingCast.stoppedAt > CAST_STOP_GRACE)
+        or now - pendingCast.sentAt > CAST_MAX_SECONDS) then
+        pendingCast, comboAtSend = nil, nil
+    end
     for key, dots in pairs(dotsByTarget) do
         for name, dot in pairs(dots) do
             while dot.nextTickAt < now - TICK_MATCH_WINDOW and dot.nextTickAt <= dot.expiresAt do
@@ -2023,6 +2047,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
 
     elseif event == "PLAYER_TARGET_CHANGED" then
         dotsByTarget.target = nil -- only used when the target's GUID is secret
+        if pendingCast and pendingCast.key == "target" then pendingCast.key = nil end
         resetComboCount() -- combo points belong to the target they were built on
         forgetPendingOutcomes()
         dropCastInProgress("target changed")
@@ -2031,8 +2056,8 @@ frame:SetScript("OnEvent", function(self, event, ...)
         safeRefresh()
 
     elseif event == "UNIT_SPELLCAST_SENT" then
-        local _, _, _, spellID = ...
-        onCastSent(spellID)
+        local _, _, castGUID, spellID = ...
+        onCastSent(spellID, castGUID)
 
     elseif event == "UNIT_POWER_FREQUENT" then
         local _, powerType = ...
@@ -2050,7 +2075,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
         local _, castGUID, spellID = ...
         onCastSucceeded(castGUID, spellID)
-        local appliedTo, waiting = onPlayerCast(spellID)
+        local appliedTo, waiting = onPlayerCast(spellID, castGUID)
         safeRefresh()
         -- A DoT waiting for its first tick isn't drawn yet; it flashes when that tick lands instead.
         if appliedTo and not waiting and appliedTo == unitKey("target") then playFlash() end

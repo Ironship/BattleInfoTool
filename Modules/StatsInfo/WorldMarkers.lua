@@ -9,6 +9,12 @@ local M = BIT.Module("StatsInfo")
 
 local markers = {}
 
+local function isSecret(value)
+  if type(issecretvalue) ~= "function" then return false end
+  local ok, secret = pcall(issecretvalue, value)
+  return ok and secret or false
+end
+
 local function inCombat()
   return type(InCombatLockdown) == "function" and InCombatLockdown()
 end
@@ -36,7 +42,7 @@ end
 
 local function paintButton(button, link)
   if type(button) ~= "table" then return end
-  if not allowed() or type(link) ~= "string" or link == "" then
+  if not allowed() or type(link) ~= "string" or isSecret(link) or link == "" then
     local marker = markers[button]
     if marker and type(marker.Hide) == "function" then marker:Hide() end
     return
@@ -49,7 +55,7 @@ end
 local function slotLink(reader, slot)
   if type(reader) ~= "function" then return nil end
   local ok, link = pcall(reader, slot)
-  if ok and type(link) == "string" then return link end
+  if ok and type(link) == "string" and not isSecret(link) then return link end
   return nil
 end
 
@@ -87,13 +93,13 @@ local function paintRolls()
 end
 
 local function merchantLink(button, index)
-  if type(button) == "table" and type(button.link) == "string" and button.link ~= "" then
-    return button.link
-  end
   local frame = _G.MerchantFrame
   local tab = type(frame) == "table" and frame.selectedTab or nil
   if tab ~= nil and tab ~= 1 then
     return slotLink(GetBuybackItemLink, index)
+  end
+  if type(button) == "table" and type(button.link) == "string" and not isSecret(button.link) and button.link ~= "" then
+    return button.link
   end
   local per = _G.MERCHANT_ITEMS_PER_PAGE
   if type(per) ~= "number" or per < 1 or per > 20 then per = 10 end
@@ -103,8 +109,11 @@ local function merchantLink(button, index)
 end
 
 local function paintMerchant()
-  local n = _G.MERCHANT_ITEMS_PER_PAGE
-  if type(n) ~= "number" or n < 1 or n > 20 then n = 10 end
+  local frame = _G.MerchantFrame
+  local buyback = type(frame) == "table" and frame.selectedTab == 2
+  local n
+  if buyback then n = _G.BUYBACK_ITEMS_PER_PAGE else n = _G.MERCHANT_ITEMS_PER_PAGE end
+  if type(n) ~= "number" or n < 1 or n > 20 then n = buyback and 12 or 10 end
   for i = 1, n do
     local button = _G["MerchantItem" .. i .. "ItemButton"]
     local link = shownButton(button) and merchantLink(button, i) or nil
@@ -150,6 +159,10 @@ driver:SetScript("OnEvent", function(self, event)
     self:RegisterEvent("MERCHANT_SHOW")
     self:RegisterEvent("MERCHANT_UPDATE")
     self:RegisterEvent("PLAYER_REGEN_ENABLED")
+    self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+    self:RegisterEvent("PLAYER_LEVEL_UP")
+    self:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+    pcall(self.RegisterEvent, self, "ITEM_DATA_LOAD_RESULT")
     refresh()
     return
   end

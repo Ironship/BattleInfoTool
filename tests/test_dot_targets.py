@@ -240,3 +240,96 @@ for secret in (False, True):
     assert any("no target, not tracked" in str(line) for line in dot.db.log.values())
     assert not any("ERROR" in str(line) for line in dot.db.log.values())
 print("ok missing and secret soft GUIDs remain safely untracked")
+
+# A target appearing after SENT cannot identify the original, unknown recipient.
+for secret_at_send in (False, True):
+    rt, game, dot = fight(hard=False, soft=secret_at_send)
+    if secret_at_send:
+        rt.execute("mobA.guid = SECRET; UnitIsUnit = nil")
+    send(game)
+    rt.execute("units.softenemy = mobB")
+    game.Fire("UNIT_SPELLCAST_START", "player", "Cast-1", 172)
+    assert total(dot, "nameplate2") == 0
+    succeed(game)
+    assert total(dot, "nameplate2") == 0
+print("ok unknown SENT recipient stays untracked when another soft target appears")
+
+# A current-target-only secret alias cannot be carried across a hard-target change.
+rt, game, dot = fight()
+rt.execute("mobA.guid = SECRET; mobB.guid = SECRET")
+send(game)
+rt.execute("units.target = mobB")
+game.Fire("PLAYER_TARGET_CHANGED")
+succeed(game)
+assert total(dot, "target") == 0
+print("ok secret hard-target switch cannot move the original cast onto the new mob")
+
+# Cancelled casts discard SENT even with cast-time estimates disabled or without START.
+for ended in ("UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED", "UNIT_SPELLCAST_STOP"):
+    rt, game, dot = fight(hard=False, soft=True)
+    dot.db.estimateDuringCast = False
+    send(game)
+    game.Fire(ended, "player", "Cast-1", 172)
+    if ended == "UNIT_SPELLCAST_STOP":
+        game.Advance(0.6)
+        game.Tick(0.1)
+    rt.execute("units.softenemy = mobB")
+    game.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", None, 172)
+    assert total(dot) == 0 and total(dot, "nameplate2") == 400
+print("ok failed/interrupted/stopped casts release their old recipient without needing START")
+
+# A different cast's success never consumes the original SENT recipient.
+rt, game, dot = fight(hard=False, soft=True)
+send(game)
+rt.execute("units.softenemy = mobB")
+game.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-2", 172)
+assert total(dot) == 0 and total(dot, "nameplate2") == 400
+succeed(game)
+assert total(dot) == total(dot, "nameplate2") == 400
+print("ok unrelated cast GUID cannot inherit or consume the original SENT recipient")
+
+# STOP just before SUCCEEDED keeps the recipient until success, even after the soft token moves.
+rt, game, dot = fight(hard=False, soft=True)
+send(game)
+game.Fire("UNIT_SPELLCAST_STOP", "player", "Cast-1", 172)
+rt.execute("units.softenemy = mobB")
+succeed(game)
+assert total(dot) == 400 and total(dot, "nameplate2") == 0
+print("ok success during STOP grace retains the original recipient")
+
+# An expired SENT or a consumed non-DoT cast cannot poison a later missing-SENT fallback.
+for non_dot in (False, True):
+    rt, game, dot = fight(hard=False, soft=True)
+    if non_dot:
+        rt.execute("spellNames[686] = 'Shadow Bolt'; spellDesc[686] = 'Deals 100 Shadow damage.'")
+        game.Fire("UNIT_SPELLCAST_SENT", "player", "Mob-A", "Cast-1", 686)
+        game.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-1", 686)
+    else:
+        send(game)
+        game.Advance(16)
+        game.Tick(0.1)
+    rt.execute("units.softenemy = mobB")
+    game.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", None, 172)
+    assert total(dot) == 0 and total(dot, "nameplate2") == 400
+print("ok expired SENT and completed non-DoT casts cannot leave a stale recipient")
+
+# B's tick between A's token copies must not let A's single hit feed its second same-school DoT.
+rt, game, dot = fight()
+rt.execute("spellNames[18265] = 'Siphon Life'; spellDesc[18265] = 'Causes 400 Shadow damage over 12 sec.'")
+send(game)
+succeed(game)
+game.Fire("UNIT_SPELLCAST_SENT", "player", "Mob-A", "Cast-2", 18265)
+game.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-2", 18265)
+rt.execute("units.target = mobB; units.softenemy = mobA")
+game.Fire("PLAYER_TARGET_CHANGED")
+game.Fire("UNIT_SPELLCAST_SENT", "player", "Mob-B", "Cast-3", 172)
+game.Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "Cast-3", 172)
+game.Advance(3)
+game.Fire("UNIT_COMBAT", "nameplate1", "WOUND", "", 100, 32)
+assert total(dot) == 700
+game.Fire("UNIT_COMBAT", "target", "WOUND", "", 100, 32)
+game.Fire("UNIT_COMBAT", "softenemy", "WOUND", "", 100, 32)
+assert total(dot) == 700
+game.Fire("UNIT_COMBAT", "nameplate1", "WOUND", "", 100, 32)
+assert total(dot) == 600  # Another genuine tick from the original token can feed the other DoT.
+print("ok interleaved cross-token duplicates stay rejected while identical real ticks both count")

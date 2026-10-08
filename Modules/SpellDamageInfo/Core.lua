@@ -144,7 +144,7 @@ end
 local function getCastTime(spellID)
   if C_Spell and type(C_Spell.GetSpellInfo) == "function" then
     local ok, info = pcall(C_Spell.GetSpellInfo, spellID)
-    if ok and type(info) == "table" then
+    if ok and not isSecret(info) and type(info) == "table" then
       local ms = info.castTime
       if not isSecret(ms) and type(ms) == "number" then return ms / 1000 end
     end
@@ -270,6 +270,7 @@ local function readWeapon()
   if type(UnitAttackSpeed) == "function" then
     local ok, speed, off = pcall(UnitAttackSpeed, "player")
     if ok then
+      local offSecret = isSecret(off)
       speed = number(speed)
       if speed and speed > 0 then
         weaponStats.meleeSpeed = speed
@@ -277,15 +278,19 @@ local function readWeapon()
         weaponStats.speedSeal = ns.ActiveSeal and ns.ActiveSeal() or nil
       end
       off = number(off)
-      if off ~= nil or speed then weaponStats.offhandSpeed = (off and off > 0) and off or nil end
+      if not offSecret then weaponStats.offhandSpeed = (off and off > 0) and off or nil end
     end
   end
   if type(UnitRangedDamage) == "function" then
     local ok, speed, lo, hi = pcall(UnitRangedDamage, "player")
     if ok then
       speed, lo, hi = number(speed), number(lo), number(hi)
-      if speed and lo and hi and speed > 0 and hi > 0 then
-        weaponStats.ranged, weaponStats.rangedSpeed = (lo + hi) / 2, speed
+      if speed and lo and hi then
+        if speed > 0 and hi > 0 then
+          weaponStats.ranged, weaponStats.rangedSpeed = (lo + hi) / 2, speed
+        else
+          weaponStats.ranged, weaponStats.rangedSpeed = nil, nil
+        end
       end
     end
   end
@@ -293,7 +298,7 @@ local function readWeapon()
     local ok, base, pos, neg = pcall(UnitAttackPower, "player")
     if ok then
       base, pos, neg = number(base), number(pos), number(neg)
-      if base then weaponStats.ap = base + (pos or 0) + (neg or 0) end
+      if base and pos and neg then weaponStats.ap = base + pos + neg end
     end
   end
   if type(UnitHealthMax) == "function" then
@@ -644,7 +649,7 @@ local function itemUseText(itemID)
   if memo ~= nil then return memo ~= "" and memo or nil end
   if type(C_TooltipInfo) ~= "table" or type(C_TooltipInfo.GetHyperlink) ~= "function" then return nil end
   local ok, data = pcall(C_TooltipInfo.GetHyperlink, "item:" .. tostring(itemID))
-  if not ok or isSecret(data) or type(data) ~= "table" or type(data.lines) ~= "table" then return nil end
+  if not ok or isSecret(data) or type(data) ~= "table" or isSecret(data.lines) or type(data.lines) ~= "table" then return nil end
   local out, cacheable, shown = {}, true, 0
   for _, line in ipairs(data.lines) do
     if type(line) ~= "table" or isSecret(line) then
@@ -767,9 +772,6 @@ local function collectButtons()
   local seen = {}
   for _, b in ipairs(buttons) do seen[b] = true end
   for _, prefix in ipairs(prefixes) do
-    if prefix == "BonusActionButton" and db.skipUtilityBars ~= false then
-      -- stance / bonus bar stays free of numbers
-    else
     for i = 1, 12 do
       local b = _G[prefix .. i]
       if type(b) == "table" and not seen[b] and type(b.CreateFontString) == "function" then
@@ -777,20 +779,7 @@ local function collectButtons()
         buttons[#buttons + 1] = b
       end
     end
-    end
   end
-end
-
-local function buttonName(button)
-  if type(button) ~= "table" or type(button.GetName) ~= "function" then return nil end
-  local ok, name = pcall(button.GetName, button)
-  if ok and type(name) == "string" then return name end
-  return nil
-end
-
-local function isBonusButton(button)
-  local name = buttonName(button)
-  return type(name) == "string" and name:find("^BonusActionButton") ~= nil
 end
 
 -- The pet bar: PetActionButton1..10 on Classic Era and Forever (Forever's bar frame is
@@ -868,14 +857,30 @@ local function setFont(fs, size)
 end
 
 -- Shrink the text until it fits inside the button.
-local function fitWidth(fs, button)
+local function fitWidth(fs, button, countShown)
   local w = readNumber(button, "GetWidth")
   if not w or type(fs.GetStringWidth) ~= "function" then return end
-  local size = fontSizes[fs]
+  local available = w - 2
+  if countShown then
+    local count = rawget(button, "Count") or rawget(button, "count")
+    local countWidth = type(count) == "table" and readNumber(count, "GetStringWidth") or nil
+    available = math.max(MIN_FONT, available - (countWidth or 12) - 4)
+  end
+  local size, initialSize = fontSizes[fs], fontSizes[fs]
   for _ = 1, 10 do
     local sw = readNumber(fs, "GetStringWidth")
-    if not sw or sw <= w - 2 or size <= MIN_FONT then return end
-    size = math.max(MIN_FONT, math.min(size - 1, math.floor(size * (w - 2) / sw)))
+    if not sw or sw <= available then return end
+    if size <= MIN_FONT then
+      if countShown then
+        -- A full cost/gain label cannot fit beside a count: put it just above that corner.
+        fs:ClearAllPoints()
+        fs:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 2, 14)
+        setFont(fs, initialSize)
+        fitWidth(fs, button, false)
+      end
+      return
+    end
+    size = math.max(MIN_FONT, math.min(size - 1, math.floor(size * available / sw)))
     setFont(fs, size)
   end
 end
@@ -972,8 +977,9 @@ local function hide(fs)
   if fs then fs:SetText(""); fs:Hide() end
 end
 
--- Collect grows. Turning the stance/pet skip on has to drop buttons it already took,
--- and turning it off has to pick them up. Labels on a dropped button are hidden.
+-- BonusActionButton is the main combat bar in forms/stealth on older clients,
+-- not the stance selector. Keep its numbers; StanceButton is never collected.
+-- Turning pet skip on drops collected buttons and hides their labels.
 local function dropListed(list, pred, slots)
   local i = 1
   while list[i] do
@@ -990,11 +996,10 @@ local function dropListed(list, pred, slots)
 end
 
 local function recollectButtons()
+  collectButtons()
   if db.skipUtilityBars ~= false then
-    dropListed(buttons, isBonusButton)
     dropListed(petButtons, function() return true end, petSlots)
   else
-    collectButtons()
     collectPetButtons()
   end
 end
@@ -1131,7 +1136,7 @@ local function drawStacked(button, fs, side, mainText, mainColor, sideText, side
   setFont(fs, size)
   fs:SetTextColor(mainColor[1], mainColor[2], mainColor[3])
   fs:SetText(mainText)
-  fitWidth(fs, button)
+  fitWidth(fs, button, countShown and db.position == "bottom")
   fs:Show()
   if side and sideText then
     placeSide(side, button)
@@ -1139,7 +1144,7 @@ local function drawStacked(button, fs, side, mainText, mainColor, sideText, side
     local c = sideColor or Format.WEAPON_COLOR
     side:SetTextColor(c[1], c[2], c[3])
     side:SetText(sideText)
-    fitWidth(side, button)
+    fitWidth(side, button, countShown and sideAnchor() == "bottom")
     side:Show()
   else
     hide(side)
@@ -1162,7 +1167,7 @@ local function drawNumber(button, fs, side, mainText, mainColor, sideText, count
   setFont(fs, fontSize(button, 1))
   fs:SetTextColor(mainColor[1], mainColor[2], mainColor[3])
   fs:SetText(mainText)
-  fitWidth(fs, button)
+  fitWidth(fs, button, countShown and db.position == "bottom")
   fs:Show()
 
   if sideText and side then
@@ -1171,6 +1176,7 @@ local function drawNumber(button, fs, side, mainText, mainColor, sideText, count
     local c = sideColor or Format.REDUCTION_COLOR
     side:SetTextColor(c[1], c[2], c[3])
     side:SetText(sideText)
+    fitWidth(side, button, countShown and sideAnchor() == "bottom")
     side:Show()
   else
     hide(side)
@@ -1649,6 +1655,8 @@ end
 function ns.ResetSettings()
   for k, v in pairs(DEFAULTS) do db[k] = v end
   ns.SetInterfaceAndRefreshL(DEFAULTS.interfaceLang)
+  -- Reset skips the pet bar again; the main bonus combat bar keeps its numbers.
+  if type(ns.RecollectButtons) == "function" then ns.RecollectButtons() end
   requestUpdate()
 end
 

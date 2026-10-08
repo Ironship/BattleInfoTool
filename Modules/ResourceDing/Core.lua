@@ -116,7 +116,11 @@ Addon.defaults = defaults
 local function initializeDatabase()
   if type(BattleInfoTool_ResourceDingDB) ~= "table" then BattleInfoTool_ResourceDingDB = {} end
   for key, value in pairs(defaults) do
-    if BattleInfoTool_ResourceDingDB[key] == nil then BattleInfoTool_ResourceDingDB[key] = value end
+    local saved = BattleInfoTool_ResourceDingDB[key]
+    if type(saved) ~= type(value) or (type(value) == "number"
+      and (saved ~= saved or saved == math.huge or saved == -math.huge)) then
+      BattleInfoTool_ResourceDingDB[key] = value
+    end
   end
   if not Addon.SOUNDS[BattleInfoTool_ResourceDingDB.sound] then BattleInfoTool_ResourceDingDB.sound = defaults.sound end
   if type(BattleInfoTool_ResourceDingDB.dotOffset) ~= "number" then BattleInfoTool_ResourceDingDB.dotOffset = defaults.dotOffset
@@ -368,7 +372,7 @@ end
 
 function Addon.ResetPowerState()
   Addon.CheckPower(true)
-  if Addon.RefreshDots then Addon.RefreshDots() end
+  Addon.RefreshMarks()
   if Addon.settingsPanel and Addon.settingsPanel.refresh then Addon.settingsPanel.refresh() end
 end
 

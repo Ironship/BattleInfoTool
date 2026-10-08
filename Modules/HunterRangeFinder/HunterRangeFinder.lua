@@ -124,7 +124,7 @@ local function spellName(id)
     local name
     if C_Spell and C_Spell.GetSpellInfo then
         local ok, info = pcall(C_Spell.GetSpellInfo, id)
-        if ok and type(info) == "table" and type(info.name) == "string" then name = info.name end
+        if ok and not isSecret(info) and type(info) == "table" and type(info.name) == "string" then name = info.name end
         if ok and type(info) == "string" then name = info end
     end
     if not name and GetSpellInfo then
@@ -132,8 +132,8 @@ local function spellName(id)
         if ok then name = info end
     end
     -- A secret name is never cached, compared or printed.
-    if type(name) == "string" and not isSecret(name) then spellNames[id] = name end
-    return name
+    if type(name) == "string" and not isSecret(name) then spellNames[id] = name; return name end
+    return nil
 end
 
 -- 0/1/false/true answered by the client; anything else (an error, a secret) is "cannot say".
@@ -149,6 +149,7 @@ end
 ----------------------------------------------------------------------------------------------
 
 local function safeNormalize(value)
+    if isSecret(value) then return nil end
     local ok, result = pcall(normalize, value) -- instance secrets cannot be compared
     if ok then return result end
     return nil
@@ -245,10 +246,6 @@ local function currentBand()
     local auto
     if melee == nil then
         melee = itemInRange(16114)
-        if melee == nil and CheckInteractDistance then
-            local ok, value = pcall(CheckInteractDistance, "target", 2)
-            if ok then melee = safeNormalize(value) end
-        end
     elseif melee == true then
         auto = spellInRange(75)
         if auto ~= nil then melee = auto == false end
@@ -293,11 +290,14 @@ end
 -- The live HUD is the scene frame itself (buildScene under UIParent); the driver is
 -- the polling frame. Both stay nil while the module is off or the class is not Hunter.
 local hud, driver
+function M.OwnsNameplate(plate)
+    return hud ~= nil and hud:IsShown() and hud:GetParent() == plate
+end
 
 local band = nil
 -- Last rendered state: the poll skips a full relayout when nothing changed.
 -- Style edits re-render directly through Subscribe/refreshAll, never the poll.
-local lastRenderedBand, lastRenderedScatter = nil, nil
+local lastRenderedBand, lastRenderedScatter, lastRenderedScatterRange = nil, nil, nil
 local targetSelectionChanged = true
 local acquiringTarget, acquisitionTime, acquisitionBand, acquisitionSamples = false, 0, nil, 0
 local preview = false
@@ -729,7 +729,7 @@ local function scatterShotMaximum()
     if scatterMaxRange then return scatterMaxRange end
     if C_Spell and C_Spell.GetSpellInfo then
         local ok, info = pcall(C_Spell.GetSpellInfo, SCATTER_SHOT)
-        if ok and type(info) == "table" and type(info.maxRange) == "number"
+        if ok and not isSecret(info) and type(info) == "table" and not isSecret(info.maxRange) and type(info.maxRange) == "number"
             and info.maxRange > 0 then
             scatterMaxRange = info.maxRange
             return scatterMaxRange
@@ -739,7 +739,7 @@ local function scatterShotMaximum()
         local ok, maximum = pcall(function()
             return select(6, GetSpellInfo(SCATTER_SHOT))
         end)
-        if ok and type(maximum) == "number" and maximum > 0 then
+        if ok and not isSecret(maximum) and type(maximum) == "number" and maximum > 0 then
             scatterMaxRange = maximum
             return scatterMaxRange
         end
@@ -755,7 +755,8 @@ local function updateScatterFlag(cur)
         scatterExtendedObserved, scatterRed = false, false
         return false
     end
-    if (cur == "Y20" or cur == "Y25") and scatterShotRange() == true then
+    if (cur == "Y20" or cur == "Y25") and anyInRange(ladder[2]) == false
+        and scatterShotRange() == true then
         scatterExtendedObserved = true
     end
     local maximum = scatterShotMaximum()
@@ -779,6 +780,8 @@ local function updateDisplay(_, dt)
         acquiringTarget, acquisitionTime = true, 0
         acquisitionBand, acquisitionSamples = nil, 0
         band = nil
+        -- Hiding clears the drawn-band cache, so the next reading of the same band shows again.
+        lastRenderedBand, lastRenderedScatter = nil, nil
         hud:Hide()
     end
     local measuredBand = preview and "PREVIEW" or currentBand()
@@ -793,6 +796,7 @@ local function updateDisplay(_, dt)
         end
         if not measuredBand or measuredBand == "OOR"
             or acquisitionTime < 0.08 or acquisitionSamples < 2 then
+            lastRenderedBand, lastRenderedScatter = nil, nil
             hud:Hide()
             return
         end
@@ -800,13 +804,16 @@ local function updateDisplay(_, dt)
     end
     band = measuredBand
     if band == nil or band == "OOR" then
+        lastRenderedBand, lastRenderedScatter = nil, nil
         hud:Hide()
         return
     end
     local scatter = updateScatterFlag(band)
     reanchorHunterHud()
-    if band == lastRenderedBand and scatter == lastRenderedScatter then return end
-    lastRenderedBand, lastRenderedScatter = band, scatter
+    local scatterRange = band == "Y25" and scatter and scatterShotRange() == true
+    if band == lastRenderedBand and scatter == lastRenderedScatter
+        and scatterRange == lastRenderedScatterRange then return end
+    lastRenderedBand, lastRenderedScatter, lastRenderedScatterRange = band, scatter, scatterRange
     renderScene(hud, BIT.Style.Resolve(M.moduleName, hunterLegacy), band, scatter)
 end
 
@@ -826,7 +833,12 @@ end
 local function resetPosition()
     if not settings then return end
     settings.x, settings.y = DEFAULTS.x, DEFAULTS.y
-    if hud then position() end
+    -- Forget the current anchor so an attached rail is re-seated by the attach setting, not left on the screen spot.
+    reanchorKey, reanchorOffset = nil, nil
+    if hud then
+        position()
+        reanchorHunterHud()
+    end
 end
 M.ResetPosition = resetPosition
 
@@ -946,6 +958,7 @@ local function prepareHunterSettings()
   local rawMods = type(BattleInfoToolDB) == "table" and BattleInfoToolDB.modules
   local rawHunter = type(rawMods) == "table" and rawMods["HunterRangeFinder"]
   local hadOldOffset = type(rawHunter) == "table" and type(rawHunter.plateOffset) == "number"
+    and finiteNum(rawHunter.plateOffset, nil) ~= nil
     and rawHunter.plateScheme ~= 2
   settings = BIT.Settings("HunterRangeFinder", DEFAULTS)
   M.settings = settings
@@ -971,6 +984,7 @@ loader:SetScript("OnEvent", function(self, event, name)
         wipe(spellNames)
         scatterMaxRange, scatterExtendedObserved, scatterRed = nil, false, false
         detectLongRange()
+        lastRenderedBand, lastRenderedScatter, lastRenderedScatterRange = nil, nil, nil
         return
     end
     if name ~= BIT.name then return end
@@ -1052,7 +1066,7 @@ local function seatPreviewRail()
     local offset = finiteNum(tonumber(settings and settings.plateOffset), DEFAULTS.plateOffset)
     if offset < -80 then offset = -80 elseif offset > 30 then offset = 30 end
     sample:ClearAllPoints()
-    sample:SetPoint("BOTTOM", previewBar, "TOP", 0, -offset)
+    sample:SetPoint("TOP", previewBar, "BOTTOM", 0, -offset)
 end
 
 -- The retained preview, re-rendered from the resolved style and the TRY IT band. Pure:
@@ -1411,6 +1425,11 @@ local function buildTabs(parent, isHunter)
     local appearance = addTab("Appearance")
     local editor = BIT.UI.Appearance(appearance.inner, M.moduleName, CAPABILITIES, refreshAll, hunterLegacy)
     editor:SetPoint("TOPLEFT", appearance.inner, "TOPLEFT", 0, 0)
+    editor.onLayout = function()
+        appearance.y = (editor:GetHeight() or 0) + 8
+        appearance:finish()
+        appearance.content:SetVerticalScroll(0)
+    end
     appearance.y = (editor:GetHeight() or 0) + 8
     appearance.editor = editor
     appearance.reset = function()
@@ -1532,6 +1551,7 @@ local function buildLivePreview(pane)
 end
 
 local function build(parent)
+    rows, tabs, activeTab = {}, {}, nil
     local _, class = UnitClass("player")
     local isHunter = class == "HUNTER"
     settings = settings or BIT.Settings(M.moduleName, DEFAULTS)

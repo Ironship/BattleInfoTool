@@ -34,6 +34,7 @@ local SHORT_LABEL = {
 
 local window
 local tabButtons, pages = {}, {}
+local parkedPages = {} -- retain one off page and one prepared page per module
 local current
 local tabRows = 1
 
@@ -257,9 +258,12 @@ local function attachScroll(page, topOffset)
   end
   local function syncBar()
     local max = maxScroll()
+    bar._sync = true
     bar:SetMinMaxValues(0, math.max(max, 0.001))
     if max <= 0 then bar:Hide() else bar:Show() end
-    bar._sync = true
+    if scrollOffset() > max and type(scroll.SetVerticalScroll) == "function" then
+      scroll:SetVerticalScroll(max)
+    end
     bar:SetValue(max - math.min(scrollOffset(), max))
     bar._sync = false
   end
@@ -272,6 +276,7 @@ local function attachScroll(page, topOffset)
   scroll:SetScript("OnMouseWheel", function(_, delta)
     setScroll(scrollOffset() - (delta or 0) * 24)
   end)
+  content:SetScript("OnSizeChanged", function() syncBar() end)
   scroll:SetScript("OnSizeChanged", function(_, width)
     if type(width) == "number" and width > 0 then content:SetWidth(width) end
     syncBar()
@@ -337,9 +342,12 @@ local function buildTogether(page)
   blurb:SetJustifyH("LEFT")
   blurb:SetText("Every enabled mark on one nameplate. Offsets use the live seat: the top of a row is -offset under the health bar.")
 
-  local bar = CreateFrame("StatusBar", nil, content)
+  local scene = CreateFrame("Frame", nil, content)
+  scene:SetSize(400, 230)
+  scene:SetPoint("TOPLEFT", 8, -64)
+  local bar = CreateFrame("StatusBar", nil, scene)
   bar:SetSize(240, 18)
-  bar:SetPoint("TOPLEFT", 28, -78)
+  bar:SetPoint("TOPLEFT", 28, -110)
   bar:SetMinMaxValues(0, 100)
   bar:SetValue(100)
   local barFill = bar:CreateTexture(nil, "BACKGROUND")
@@ -359,18 +367,35 @@ local function buildTogether(page)
   rangeIcon:SetSize(16, 16)
   rangeIcon:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
 
-  local dots = content:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  dots:SetText("● ● ● ● ○")
-  local shards = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  shards:SetText("◆ ◆")
-  shards:SetTextColor(0.65, 0.35, 0.9)
-  local rail = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  rail:SetTextColor(0.9, 0.75, 0.3)
+  local function textureRow(count, texture, color)
+    local row = CreateFrame("Frame", nil, scene)
+    row.marks = {}
+    for i = 1, count do
+      local mark = row:CreateTexture(nil, "ARTWORK")
+      mark:SetTexture(texture)
+      mark:SetVertexColor(color[1], color[2], color[3], i == count and 0.35 or 1)
+      row.marks[i] = mark
+    end
+    return row
+  end
+  local dots = textureRow(5, "Interface\\CharacterFrame\\TempPortraitAlphaMask", {1, 0.8, 0.2})
+  local shards = textureRow(2, "Interface\\TargetingFrame\\UI-RaidTargetingIcon_3", {1, 1, 1})
+  local rail = textureRow(6, "Interface\\CharacterFrame\\TempPortraitAlphaMask", {0.9, 0.75, 0.3})
+  page.rows = { dots = dots, shards = shards, hunter = rail }
+  local function layoutRow(row, size)
+    row:SetSize(#row.marks * (size + 3) - 3, size)
+    for i, mark in ipairs(row.marks) do
+      mark:SetSize(size, size)
+      mark:ClearAllPoints()
+      mark:SetPoint("LEFT", row, "LEFT", (i - 1) * (size + 3), 0)
+    end
+  end
 
   local caption = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  caption:SetPoint("TOPLEFT", 8, -112)
+  caption:SetPoint("TOPLEFT", scene, "BOTTOMLEFT", 0, -12)
   caption:SetPoint("RIGHT", content, "RIGHT", -8, 0)
   caption:SetJustifyH("LEFT")
+  page.caption = caption
 
   local warn = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   warn:SetPoint("TOPLEFT", caption, "BOTTOMLEFT", 0, -8)
@@ -388,16 +413,16 @@ local function buildTogether(page)
 
   function page:refresh()
     local plate = BIT.Plate or {}
-    local hunter, dotOffset, shardOffset = -8, 2, 2
-    if type(plate.ReadOffsets) == "function" then
-      hunter, dotOffset, shardOffset = plate.ReadOffsets()
-    end
-    local owns = type(plate.HunterOwnsNameplate) == "function" and plate.HunterOwnsNameplate()
-    local dotsOn = moduleOn("DoTInfo")
-    local shieldsOn = moduleOn("ShieldsInfo")
-    local rangeOn = moduleOn("Range")
-    local rdOn = moduleOn("ResourceDing")
-    local hunterOn = moduleOn("HunterRangeFinder")
+    local rows = plate.Rows()
+    local owns = rows.hunter.on
+    local dotDB = BattleInfoTool_DoTInfoDB or {}
+    local mods = BIT.DB().modules or {}
+    local dotsOn = moduleOn("DoTInfo") and dotDB.showMarkers ~= false and dotDB.nameplateMode ~= "off"
+    local shieldsOn = moduleOn("ShieldsInfo") and (mods.ShieldsInfo or {}).nameplates ~= false
+    local rs = mods.Range or {}
+    local rangeOn = moduleOn("Range") and (rs.showIn ~= false or rs.showOut ~= false)
+    local rdOn = rows.dots.on or rows.shards.on
+    local hunterOn = rows.hunter.on
 
     dotFill:SetShown(dotsOn)
     shield:ClearAllPoints()
@@ -415,58 +440,41 @@ local function buildTogether(page)
 
     rangeIcon:ClearAllPoints()
     rangeIcon:SetPoint("BOTTOM", bar, "TOP", 0, 6)
+    rangeIcon:SetTexture(rs.showIn ~= false and "Interface\\RaidFrame\\ReadyCheck-Ready"
+      or "Interface\\RaidFrame\\ReadyCheck-NotReady")
     rangeIcon:SetShown(rangeOn and not owns)
 
-    dots:SetShown(rdOn)
-    shards:SetShown(rdOn)
-    rail:SetShown(hunterOn)
-    if rdOn then
-      seat(dots, dotOffset)
-      seat(shards, shardOffset)
-    end
-    if hunterOn then
-      seat(rail, hunter)
-      if owns then
-        rail:SetText("hunter rail")
-      elseif playerClass() ~= "HUNTER" then
-        rail:SetText("hunter rail (sample, this character is not a hunter)")
-      else
-        rail:SetText("hunter rail (not attached to the plate)")
-      end
+    for name, widget in pairs(page.rows) do
+      local row = rows[name]
+      widget:SetShown(row.on)
+      layoutRow(widget, row.height)
+      seat(widget, row.offset)
     end
     local parts = {}
     if not dotsOn then parts[#parts + 1] = "DoTs off" end
     if not shieldsOn then parts[#parts + 1] = "Shields off" end
     if not rangeOn then parts[#parts + 1] = "Range off" end
-    if not rdOn then parts[#parts + 1] = "Points off" end
+    if not rdOn then parts[#parts + 1] = "Points unavailable or off" end
     if not hunterOn then parts[#parts + 1] = "Hunter off" end
     if owns then parts[#parts + 1] = "Range check hidden: the hunter rail owns this plate" end
     if #parts == 0 then
       caption:SetText("DoT fill stays on the bar. A shield shares that bar as a thin top edge.")
     else
-      caption:SetText(table.concat(parts, " · "))
-    end
-    -- Only rows this plate is actually drawing. A switched-off module is not a clash.
-    local clashes = {}
-    local function addClash(aOn, aOff, aH, bOn, bOff, bH, text)
-      if aOn and bOn and type(plate.Clash) == "function" and plate.Clash(aOff, aH, bOff, bH) then
-        clashes[#clashes + 1] = text
+      -- Whatever is switched off, the drawn shield is still named: its gold edge is never unexplained.
+      local text = table.concat(parts, " · ")
+      if shieldsOn then
+        text = text .. "\n" .. (dotsOn and "The thin top edge is the shield." or "The shield fills the bar.")
       end
+      caption:SetText(text)
     end
-    local railH = plate.HUNTER_RAIL_HEIGHT or 16
-    local dotH = plate.DOT_ROW_HEIGHT or 14
-    local shardH = plate.SHARD_ROW_HEIGHT or 14
-    addClash(hunterOn, hunter, railH, rdOn, dotOffset, dotH, "Hunter rail overlaps combo dots.")
-    addClash(hunterOn, hunter, railH, rdOn, shardOffset, shardH, "Hunter rail overlaps shard diamonds.")
-    addClash(rdOn, dotOffset, dotH, rdOn, shardOffset, shardH, "Combo dots overlap shard diamonds.")
-    local clash = #clashes == 0 and "Nameplate lanes are clear." or table.concat(clashes, " ")
+    local clash = plate.ClashText(rows)
     warn:SetText(clash)
     if type(clash) == "string" and clash ~= "Nameplate lanes are clear." then
       warn:SetTextColor(1, 0.75, 0.3)
     else
       warn:SetTextColor(0.6, 0.85, 0.6)
     end
-    content:SetHeight(220)
+    content:SetHeight(400)
     if page.syncScroll then page.syncScroll() end
   end
   page:refresh()
@@ -507,7 +515,7 @@ local function buildPage(name)
         BIT.woke[name] = nil
       end
       page:Hide()
-      pages[name] = nil
+      pages[name], parkedPages[name] = parkedPages[name], page
       selectTab(name)
     end, tab.summary)
   page.switch:SetPoint("TOPLEFT", 4, -6)
@@ -524,7 +532,7 @@ local function buildPage(name)
 
   local viewport = window:GetHeight() - headerBottom() - SWITCH_HEIGHT - 2 * MARGIN
   local function layoutContent()
-    local needed = tab.height or DEFAULT_TAB.height
+    local needed = math.max(tab.height or DEFAULT_TAB.height, page.offNote and 0 or content:GetHeight())
     if page.appearance then
       needed = math.max(needed, 74 + page.appearance:GetHeight())
       if page.modulePreview then

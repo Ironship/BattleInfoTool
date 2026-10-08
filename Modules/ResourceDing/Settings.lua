@@ -373,7 +373,7 @@ function updateLivePreview()
     end
   end
 
-  local caption = points .. " of " .. MAX_POINTS .. " combo points"
+  local caption = "Sample: " .. points .. " of " .. MAX_POINTS .. " combo points"
   if points >= MAX_POINTS then caption = caption .. " (full)" end
   if db.enabled and db.shardDiamonds then caption = caption .. "  |  " .. points .. " soul shards" end
   scene.caption:SetText(caption)
@@ -624,7 +624,12 @@ end
 -- Built into its tab of the BattleInfoTool window: the live preview on the left,
 -- the settings as tabs on the right, each with "Reset this tab".
 function Addon.CreateSettingsPanel(parent)
-  if Addon.settingsPanel then return Addon.settingsPanel end
+  if Addon.settingsPanel then
+    if parent then Addon.settingsPanel:SetParent(parent) end
+    Addon.settingsPanel:SetAllPoints()
+    Addon.settingsPanel:Show()
+    return Addon.settingsPanel
+  end
   local panel = CreateFrame("Frame", nil, parent)
   panel:SetAllPoints()
   panel.name = "ResourceDing"
