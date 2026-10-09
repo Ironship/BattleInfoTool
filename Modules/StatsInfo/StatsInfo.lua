@@ -250,6 +250,23 @@ local function equipLoc(link)
   return type(loc) == "string" and not isSecret(loc) and loc or nil
 end
 
+-- CanUseItem checks the player's restrictions on passive gear too; IsUsableItem checks
+-- an item's usable action and can reject an ordinary belt. Missing APIs prove nothing.
+function M.CanEquipItem(link)
+  if type(link) ~= "string" or isSecret(link) then return nil end
+  local canUse = C_PlayerInfo and C_PlayerInfo.CanUseItem
+  if type(canUse) ~= "function" then return true end
+  local id = ask(C_Item and C_Item.GetItemInfoInstant, link)
+  if isSecret(id) then return nil end
+  if id == nil then id = ask(GetItemInfoInstant, link) end
+  if isSecret(id) or type(id) ~= "number" or id ~= id or id <= 0 or id == math.huge then return nil end
+  local cached = ask(C_Item and C_Item.IsItemDataCachedByID, id)
+  if isSecret(cached) or cached == false then return nil end
+  local allowed = ask(canUse, id)
+  if not isSecret(allowed) and type(allowed) == "boolean" then return allowed end
+  return nil
+end
+
 local function equipped(slot)
   local link = ask(GetInventoryItemLink, "player", slot)
   -- A secret link is not a link: it reads as a string (type() cannot tell), but Compare
@@ -335,6 +352,7 @@ end
 -- set against the off hand, an identical dagger was rated as its main-hand worth over its off-hand one).
 local function compareBody(link, alloc)
   if type(link) ~= "string" or isSecret(link) then return nil end
+  if M.CanEquipItem(link) ~= true then return nil end
   local loc = equipLoc(link)
   if not loc then return nil end
   -- Not before the client has the item: its stats would read as none, every stat lost. The tooltip is
@@ -1101,6 +1119,7 @@ local DAMAGE_MEASURES = { "damage" }
 local EMPTY = {} -- a read-only stand-in for "nothing to compare with"; never written to
 
 local function specRatingsBody(link, against, slots, offHand, alloc)
+  if M.CanEquipItem(link) ~= true then return nil end
   local class = charClass()
   -- A secret class (in combat) must not be used as a table key.
   local specs = type(class) == "string" and not isSecret(class) and M.SPECS and M.SPECS[class]
@@ -1705,6 +1724,17 @@ local function tooltipLinesCompact(link, alloc)
 end
 
 local function tooltipLinesBody(link, gameCompares, alloc)
+  local allowed = M.CanEquipItem(link)
+  if allowed ~= true then
+    local lines = alloc("lines")
+    local loc = allowed == false and equipLoc(link)
+    if loc and (SLOTS[loc] or BOTH_HANDS[loc]) and settings and (settings.compare or settings.specs) then
+      local line = alloc("line")
+      line[1], line[2], line[3], line[4] = "Cannot use this item", 1, 0.35, 0.35
+      lines[#lines + 1] = line
+    end
+    return lines
+  end
   if not tooltipWantsFull() then return tooltipLinesCompact(link, alloc) end
   local lines = alloc("lines")
   if not (settings and (settings.compare or settings.specs)) then return lines end
