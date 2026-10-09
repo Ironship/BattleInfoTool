@@ -70,7 +70,7 @@ In an item's tooltip: how it compares with what you wear, what each difference i
 
 Every healer (Restoration druid or shaman, Holy priest or paladin) gets a score marked `(approx.)`. It is a heuristic, because ForeverSim does not simulate healing. **Work in progress.**
 
-Tooltips are one line. Hold Shift to see the full version. Upgrade arrows also appear on bag, loot, need/greed and merchant buttons.
+Fresh installs show the full tooltip by default. Turn off "Always show the full tooltip" for one line, then hold Shift to see the full version. Existing settings are kept. Upgrade arrows also appear on bag, loot, need/greed and merchant buttons.
 
 ![stats comparison](https://i.imgur.com/wXVwDG6.png) ![another look on item](https://i.imgur.com/RIdkm9d.png)
 

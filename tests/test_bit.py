@@ -2383,11 +2383,13 @@ check("stacked Drain Life keeps the number at the bottom and the heal at the top
       (GU.uxMain.points[1][1], GU.uxSide.points[1][1]), ("BOTTOM", "TOPLEFT"))
 
 siU = BITU.modules["StatsInfo"]
-check("tooltips start compact", siU.settings.detail, "compact")
+check("fresh installs start with the full tooltip", siU.settings.detail, "full")
 check("loot, roll and merchant arrows start on", siU.settings.worldMarkers, True)
 GU.playerClass = "DRUID"
 GU.itemStats["ux-hide"] = rtU.eval("{ ITEM_MOD_AGILITY_SHORT = 8 }")
 GU.itemLoc["ux-hide"] = "INVTYPE_CHEST"
+check("the default tooltip shows the full breakdown without Shift", len(siU.TooltipLines("ux-hide")) > 1, True)
+siU.settings.detail = "compact"
 compactU = [l[1] for l in siU.TooltipLines("ux-hide").values()]
 check("a compact tooltip is one line", len(compactU), 1)
 check("  and that line is the best-spec arrow",

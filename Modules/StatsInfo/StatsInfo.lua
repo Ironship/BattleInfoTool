@@ -22,7 +22,7 @@ local DEFAULTS = {
   questMarkers = true, -- the one badge over a quest's reward buttons (an upgrade, or the coin)
   bagSpecIcons = true, -- on an up arrow, the beneficiary spec's icon (+N for the rest)
   worldMarkers = true, -- the same arrows on loot, need/greed rolls and merchant buttons
-  detail = "compact",  -- tooltip density: "compact" (one line; Shift or "full" expands it)
+  detail = "full",  -- tooltip density: "compact" (one line; Shift or "full" expands it)
 }
 
 -- Inventory slots an item of an equip location goes into. Two slots: compared with each.
@@ -1684,7 +1684,7 @@ local function statText(diff, key)
 end
 
 local function tooltipWantsFull()
-  if settings and settings.detail == "full" then return true end
+  if (settings or DEFAULTS).detail == "full" then return true end
   if type(IsShiftKeyDown) == "function" and IsShiftKeyDown() then return true end
   return false
 end
