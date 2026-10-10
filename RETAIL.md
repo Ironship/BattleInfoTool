@@ -5,7 +5,7 @@ Wersja testowa zawiera **DoTInfo, ResourceDing, ShieldsInfo i SpellDamageInfo**,
 ## Instalacja
 
 1. Zbuduj paczkę: `python tools/build_zip.py --retail`.
-2. Wypakuj folder `UsefulPlatesAndTooltips` z `dist/UsefulPlatesAndTooltips-0.9.53-retail.zip` do `_retail_/Interface/AddOns/`. Przy zastępowaniu starszej paczki usuń jej folder po wykonaniu kopii; nie nakładaj ZIP na stare pliki.
+2. Wypakuj folder `UsefulPlatesAndTooltips` z `dist/UsefulPlatesAndTooltips-0.9.54-retail.zip` do `_retail_/Interface/AddOns/`. Przy zastępowaniu starszej paczki usuń jej folder po wykonaniu kopii; nie nakładaj ZIP na stare pliki.
 3. Włącz addon w grze. `/upt` otwiera ustawienia; `/reload` stosuje zmianę włączenia modułu. Włącz wyświetlanie wrogich nameplate klawiszem `V`.
 
 ZIP Retail ma własny `UsefulPlatesAndTooltips_Mainline.toc`; nie zawiera manifestu Forever ani pozostałych modułów. Zwykłe `python tools/build_zip.py` nadal buduje dotychczasową paczkę Forever.
@@ -33,6 +33,16 @@ SpellDamageInfo dodaje liczby obrażeń/leczenia do natywnych pasków akcji Bliz
 Model odnowień i identyfikatory czarów sprawdzono względem [danych SimulationCraft dla Midnight](https://github.com/simulationcraft/simc/blob/midnight/engine/dbc/generated/sc_spell_data.inc). Ekran ładowania czyści przewidywane obrażenia DoT; ich wartości nie są odtwarzane z ukrytych aur. Natywne ikony rogue pokazują bieżące efekty niezależnie od tego szacunku.
 
 Healthstone, Crimson Vial (Blutrote Phiole) i Recuperate (Gesundung) pokazują na action barze liczbę HP odpowiadającą procentowi leczenia z opisu (EN/DE). Dla Crimson Vial jest to całe leczenie przez 4 sekundy, a dla Recuperate przez 10 sekund, a nie pojedynczy tick. Liczba aktualizuje się po zmianie maksymalnego zdrowia. Gdy gra ukrywa maksymalne HP, przycisk pokazuje procent, np. `20% HP`, zamiast nieaktualnej liczby.
+
+## Dodatkowe leczenie procentowe (0.9.54-retail)
+
+Parser EN/DE obsługuje też Renewal, Healing Elixir, Death Pact, Bitter Immunity, Exhilaration, Victory Rush / Impending Victory, Regeneratin’ oraz Cannibalize. Procent pochodzi z bieżącego opisu gry, bez tabeli stałych wartości dla czarów.
+
+Cannibalize sumuje podany procent na tick przez podany czas. Exhilaration liczy tylko gracza; dodatkowe leczenie w czasie jest doliczane, jeśli występuje w aktywnym opisie, a nie w opcjonalnym bloku talentu. Death Pact pokazuje pełną natychmiastową kwotę leczenia, bez odejmowania późniejszej absorpcji leczenia. Dla ataków z leczeniem czytelne obrażenia zostają na przycisku, a leczenie jest osobną zieloną liczbą. Przy ukrytym maksymalnym HP leczenie ma formę procentu.
+
+Sprawdzono opisy w danych klienta Retail: [Renewal](https://www.wowhead.com/spell=108238), [Exhilaration](https://www.wowhead.com/spell=109304), [Victory Rush](https://www.wowhead.com/spell=34428), [Impending Victory](https://www.wowhead.com/spell=202168), [Healing Elixir](https://www.wowhead.com/spell=122281), [Death Pact](https://www.wowhead.com/spell=48743), [Bitter Immunity](https://www.wowhead.com/spell=383762), [Regeneratin’](https://www.wowhead.com/spell=291944), [Cannibalize](https://www.wowhead.com/spell=20577). Testy używają opisów i liczbowych przykładów, nie uruchamiają samych czarów w grze.
+
+Desperate Prayer pozostaje poza tym modelem: jednocześnie zwiększa maksymalne HP i leczy o związaną z tym kwotę. Leczenie zależne od otrzymanych obrażeń, brakującego zdrowia, HP celu lub peta również wymaga osobnego modelu. Nie jest zastępowane procentem zdrowia gracza.
 
 ## Co sprawdzić w grze
 

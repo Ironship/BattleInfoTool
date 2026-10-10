@@ -371,6 +371,93 @@ class RetailSpellDamageTests(unittest.TestCase):
             g.Fire("SPELLS_CHANGED")
             self.assertIsNone(addon.Compute(1231411), text)
 
+    def test_other_class_and_racial_percent_heals(self):
+        rt, g, addon = load("""
+          NewAction('ActionButton', 1, 1)
+          actions[1] = { 'spell', 108238 }
+          function UnitHealthMax() return 1000 end
+        """)
+        # EN/DE tooltip clauses checked against Wowhead's Retail client data (2026-10-11).
+        cases = [
+            ("Renewal", "Instantly heals you for 30% of maximum health.", "Heilt Euch sofort um 30% Eurer gesamten Gesundheit.", 30, None),
+            ("Healing Elixir", "Drink a healing elixir, healing you for 10% of your maximum health.", "Trinkt ein heilendes Elixier, das Euch um 10% Eurer maximalen Gesundheit heilt.", 10, None),
+            ("Death Pact", "Create a death pact that heals you for 50% of your maximum health, but absorbs incoming healing equal to 30% of your max health for 15 sec.", "Geht einen Todespakt ein, der Euch um 50% Eurer maximalen Gesundheit heilt, aber für 15 Sek. eintreffende Heilung in Höhe von 30% Eurer maximalen Gesundheit absorbiert.", 50, None),
+            ("Exhilaration", "Heals you for 30% and your pet for 100% of maximum health.", "Heilt Euch um 30% und Euren Begleiter um 100% der maximalen Gesundheit.", 30, None),
+            ("Bitter Immunity", "Restores 20% health instantly and removes all diseases, poisons, and curses affecting you.", "Stellt sofort 20% Gesundheit wieder her und entfernt alle Krankheiten, Gifte und Flüche von Euch.", 20, None),
+            ("Regeneratin'", "Regenerate 50% of your maximum health over 6 sec, interrupted by direct damage.", "Regeneriert im Verlauf von 6 Sek. 50% Eurer maximalen Gesundheit. Wird durch erlittenen direkten Schaden unterbrochen.", 50, 6),
+            ("Cannibalize", "When activated, regenerates 7% of total health and mana every 2 sec for 10 sec.", "Bei Aktivierung werden 10 Sek. lang alle 2 Sek. 7% der gesamten Gesundheit und des Manas regeneriert.", 35, 10),
+        ]
+        for name, en, de, percent, duration in cases:
+            for lang, text in (("en", en), ("de", de)):
+                with self.subTest(spell=name, lang=lang):
+                    rt, g, addon = load("""
+                      function GetLocale() return 'LOCALE' end
+                      NewAction('ActionButton', 1, 1)
+                      actions[1] = { 'spell', 108238 }
+                      function UnitHealthMax() return 1000 end
+                    """.replace("LOCALE", "deDE" if lang == "de" else "enUS"))
+                    g.spellDesc[108238] = text
+                    g.Fire("SPELLS_CHANGED")
+                    self.assertEqual(label(addon, g.ActionButton1), str(percent * 10))
+                    view = addon.Compute(108238)
+                    if duration:
+                        self.assertEqual(view.hot.duration, duration)
+                    else:
+                        self.assertEqual(view.heal.min, percent * 10)
+        for text in ("Heals your pet for 100% of maximum health.",
+                     "Heals you for 30% of missing health.",
+                     "Heals you for 30% of maximum health every 2 sec.",
+                     "Regenerates 7% of total health every 2 sec.",
+                     "Heilt Euch alle 2 Sek. um 30% Eurer maximalen Gesundheit."):
+            g.spellDesc[108238] = text
+            g.Fire("SPELLS_CHANGED")
+            self.assertIsNone(addon.Compute(108238), text)
+
+    def test_percent_heal_preserves_damage_and_resolved_extra_healing(self):
+        rt, g, addon = load("""
+          NewAction('ActionButton', 1, 1)
+          actions[1] = { 'spell', 34428 }
+          function UnitHealthMax() return 1000 end
+          spellDesc[34428] = 'Strikes the target, causing 100 damage and healing you for 10% of your maximum health.'
+        """)
+        view = addon.Compute(34428)
+        self.assertEqual(view.direct.min, 100)
+        self.assertEqual(view.heal.min, 100)
+        self.assertEqual(addon.ButtonText(view)[2], '+100')
+        for percent in (10, 30):  # Victory Rush and Impending Victory
+            g.spellDesc[34428] = f'Greift das Ziel an, verursacht 100 Schaden und heilt Euch um {percent}% Eurer maximalen Gesundheit.'
+            # Ask the DE parser directly; the runtime locale is fixed at startup.
+            parsed = addon.Parser.ParseHealthPercent(g.spellDesc[34428], 'de')
+            self.assertEqual(parsed.healPercent, percent)
+        g.spellDesc[34428] = 'Strikes the target, causing 100 damage and healing you for 10% of your maximum health.'
+        g.Fire("SPELLS_CHANGED")
+        rt.execute("function UnitHealthMax() return SECRET end")
+        addon.Refresh()
+        self.assertEqual(label(addon, g.ActionButton1), "100")
+        self.assertEqual(addon.ButtonText(addon.Compute(34428))[2], '+10% HP')
+        rt.execute("function UnitHealthMax() return 1000 end")
+        g.spellDesc[34428] = 'Heals you for 30% and your pet for 100% of maximum health. Exhilaration heals you for an additional 12% of your maximum health over 8 sec.'
+        g.Fire("SPELLS_CHANGED")
+        self.assertEqual(label(addon, g.ActionButton1), "420")
+        view = addon.Compute(34428)
+        self.assertEqual(view.heal.min, 300)
+        self.assertEqual(view.hot.total, 120)
+        self.assertEqual(view.hot.duration, 8)
+        rt.execute("function GetLocale() return 'deDE' end")
+        parsed = addon.Parser.ParseHealthPercent('Heilt Euch um 30% und Euren Begleiter um 100% der maximalen Gesundheit. Der Einsatz heilt Euch im Verlauf von 8 Sek. um zusätzlich 12% Eurer maximalen Gesundheit.', 'de')
+        self.assertEqual(parsed.healPercent, 42)
+        self.assertEqual(parsed.directPercent, 30)
+        parsed = addon.Parser.ParseHealthPercent('Heals you for 30% and your pet for 100% of maximum health. [Rejuvenating Wind: Exhilaration heals you for an additional 12% of your maximum health over 8 sec.]', 'en')
+        self.assertEqual(parsed.healPercent, 30)
+        self.assertIsNone(parsed.duration)
+        addon.SetSetting("button", "direct")
+        self.assertEqual(label(addon, g.ActionButton1), "300")
+        rt.execute("function UnitHealthMax() return SECRET end")
+        addon.Refresh()
+        self.assertEqual(label(addon, g.ActionButton1), "30% HP")
+        addon.SetSetting("button", "total")
+        self.assertEqual(label(addon, g.ActionButton1), "42% HP")
+
     def test_instant_heal_percent_parser_rejects_other_percentages(self):
         _, _, addon = load()
         for text, lang in (("Use: Instantly restores 25% health.", "en"),

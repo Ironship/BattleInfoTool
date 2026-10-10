@@ -566,11 +566,17 @@ function Parser.ParseHealthPercent(text, lang)
   local t
   t, lang = prepare(text, lang)
   -- Healthstone states a fraction of maximum HP, never a flat healing amount.
-  local percent, duration
+  local percent, duration, interval, directPercent
   if lang == "de" then
     duration, percent = match(t, "euch im verlauf von (" .. NUM .. ") sek%.? um (" .. NUM .. ")%s*%% eurer maximalen gesundheit heilt")
     if not percent then
       duration, percent = match(t, "stellt im verlauf von (" .. NUM .. ") sek%.? (" .. NUM .. ")%s*%% eurer maximalen gesundheit wieder her")
+      if not percent then
+        duration, percent = match(t, "regeneriert im verlauf von (" .. NUM .. ") sek%.? (" .. NUM .. ")%s*%% eurer maximalen gesundheit")
+      end
+      if not percent then
+        duration, interval, percent = match(t, "werden (" .. NUM .. ") sek%.? lang alle (" .. NUM .. ") sek%.? (" .. NUM .. ")%s*%% der gesamten gesundheit und des manas regeneriert")
+      end
     end
     percent = match(t, "stellt sofort (" .. NUM .. ")%s*%% gesundheit wieder her")
       or match(t, "stellt sofort (" .. NUM .. ")%s*%% eurer maximalen gesundheit wieder her")
@@ -582,17 +588,59 @@ function Parser.ParseHealthPercent(text, lang)
       if not percent then
         percent, duration = match(t, "restores (" .. NUM .. ")%s*%% of maximum health over (" .. NUM .. ") sec")
       end
+      if not percent then
+        percent, duration = match(t, "regenerate (" .. NUM .. ")%s*%% of your maximum health over (" .. NUM .. ") sec")
+      end
+      if not percent then
+        percent, interval, duration = match(t, "regenerates (" .. NUM .. ")%s*%% of total health and mana every (" .. NUM .. ") sec for (" .. NUM .. ") sec")
+      end
     end
     percent = match(t, "instantly restores (" .. NUM .. ")%s*%% health")
       or match(t, "instantly restores (" .. NUM .. ")%s*%% of your maximum health")
       or match(t, "instantly restores (" .. NUM .. ")%s*%% of total health")
+      or match(t, "restores (" .. NUM .. ")%s*%% health instantly")
       or percent
+  end
+  if not percent then
+    local ending
+    if lang == "de" then
+      percent, ending = match(t, "heilt euch sofort um (" .. NUM .. ")%s*%% eurer gesamten gesundheit()")
+      if not percent then percent, ending = match(t, "heilt euch um (" .. NUM .. ")%s*%% eurer maximalen gesundheit()") end
+      if not percent then percent, ending = match(t, "euch um (" .. NUM .. ")%s*%% eurer maximalen gesundheit heilt()") end
+      if not percent then percent = match(t, "heilt euch um (" .. NUM .. ")%s*%% und euren begleiter um " .. NUM .. "%s*%% der maximalen gesundheit") end
+    else
+      percent, ending = match(t, "heals you for (" .. NUM .. ")%s*%% of your maximum health()")
+      if not percent then percent, ending = match(t, "heals you for (" .. NUM .. ")%s*%% of maximum health()") end
+      if not percent then percent, ending = match(t, "healing you for (" .. NUM .. ")%s*%% of your maximum health()") end
+      if not percent then percent = match(t, "heals you for (" .. NUM .. ")%s*%% and your pet for " .. NUM .. "%s*%% of maximum health") end
+    end
+    -- An unrecognised ticking clause must not become an instant heal.
+    local tail = ending and sub(t, ending) or ""
+    if match(tail, "^ *over ") or match(tail, "^ *every ") or match(tail, "^ *alle ")
+      or match(tail, "^ *for " .. NUM .. " sec") then return nil end
+    if percent then
+      local extra, seconds
+      if lang == "de" then
+        seconds, extra = match(t, "heilt euch im verlauf von (" .. NUM .. ") sek%.? um zusätzlich (" .. NUM .. ")%s*%% eurer maximalen gesundheit")
+      else
+        extra, seconds = match(t, "heals you for an additional (" .. NUM .. ")%s*%% of your maximum health over (" .. NUM .. ") sec")
+      end
+      if extra then
+        directPercent = tonumber(percent)
+        percent, duration = directPercent + tonumber(extra), seconds
+      end
+    end
   end
   if percent then
     percent = tonumber(percent)
     duration = duration and tonumber(duration)
+    if interval then
+      interval = tonumber(interval)
+      if interval <= 0 or not duration or duration <= 0 or duration / interval ~= floor(duration / interval) then return nil end
+      percent = percent * duration / interval
+    end
     if percent and percent > 0 and percent <= 100 and (not duration or duration > 0) then
-      return { healPercent = percent, duration = duration }
+      return { healPercent = percent, duration = duration, directPercent = directPercent }
     end
     return nil, "invalid-percent"
   end

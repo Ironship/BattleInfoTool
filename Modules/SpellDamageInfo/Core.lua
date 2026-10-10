@@ -542,12 +542,14 @@ local function percentHealView(parsed)
   if maximum and maximum > 0 and maximum < math.huge then
     local amount = maximum * parsed.healPercent / 100
     if parsed.duration then
-      return { hot = { total = amount, duration = parsed.duration, added = 0 } }
+      local direct = parsed.directPercent and maximum * parsed.directPercent / 100 or 0
+      return { hot = { total = amount - direct, duration = parsed.duration, added = 0 },
+        heal = parsed.directPercent and { min = direct, max = direct, added = 0 } or nil }
     end
     return { heal = { min = amount, max = amount, added = 0 } }
   end
   -- A hidden maximum cannot safely be converted or replaced with stale cached HP.
-  return { healPercent = parsed.healPercent, duration = parsed.duration }
+  return { healPercent = parsed.healPercent, duration = parsed.duration, directPercent = parsed.directPercent }
 end
 
 local function specialView(s, spellID, pet, noBonus)
@@ -628,6 +630,11 @@ function ns.Compute(spellID, pet)
     return judgementView(pet)
   elseif show == "special" then
     view = specialView(entry.special, spellID, pet, proc)
+    if view and entry.special.healPercent and entry.parsed then
+      local damage = withEstimate(entry.parsed, spellID, pet, nil, proc)
+      view.direct, view.dot, view.school = damage.direct, damage.dot, damage.school
+      view.percentSelfHeal = damage.direct ~= nil or damage.dot ~= nil
+    end
   elseif show == "parsed" then
     view = withEstimate(entry.parsed, spellID, pet, nil, proc)
   elseif show == "finisher" then
@@ -1085,8 +1092,19 @@ ns.PetSpellOnSlot = petSpellOnSlot
 local function buttonText(view, reduction)
   if db.button == "off" then return nil end
   if view and view.healPercent then
-    if view.duration and db.button == "direct" then return nil end
-    return tostring(view.healPercent) .. "% HP", Format.HEAL_COLOR
+    local percent = view.healPercent
+    if view.duration and db.button == "direct" then
+      if not view.directPercent then return nil end
+      percent = view.directPercent
+    end
+    local fallback = tostring(percent) .. "% HP"
+    if view.percentSelfHeal then
+      local damage, kind = Estimate.ButtonValue(view, db.button)
+      if kind == "damage" and damage and damage >= 0.5 then
+        return Format.Short(damage), Format.DAMAGE_COLOR, "+" .. fallback, Format.HEAL_COLOR
+      end
+    end
+    return fallback, Format.HEAL_COLOR
   end
   -- Life Tap: vertical dual-label, green -HP on top, blue +mana below.
   if view and view.healthCost then
@@ -1101,7 +1119,7 @@ local function buttonText(view, reduction)
   end
   -- Drain Life and other health transfers: one amount damages the target and heals the caster.
   -- Two stacked labels like Life Tap: the damage in gold above, the healing in green below.
-  if view and view.transfer then
+  if view and (view.transfer or view.percentSelfHeal) then
     local value = Estimate.ButtonValue(view, db.button)
     if value and value >= 0.5 then
       local healValue
