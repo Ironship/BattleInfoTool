@@ -555,6 +555,41 @@ function Parser.Parse(text, lang)
   return result
 end
 
+-- Self-healing based on maximum HP: instantaneous Healthstone or Crimson Vial's
+-- stated total over time. Missing-health, per-tick and pet healing are not equivalent.
+function Parser.ParseHealthPercent(text, lang)
+  if type(text) ~= "string" or text == "" then return nil, "empty" end
+  -- Forever can mix English descriptions with the German client's units and numbers.
+  local textLang = Parser.TextLanguage(text, lang)
+  if lang == "de" and textLang == "en" then text = englishNumbers(text) end
+  lang = textLang
+  local t
+  t, lang = prepare(text, lang)
+  -- Healthstone states a fraction of maximum HP, never a flat healing amount.
+  local percent, duration
+  if lang == "de" then
+    duration, percent = match(t, "euch im verlauf von (" .. NUM .. ") sek%.? um (" .. NUM .. ")%s*%% eurer maximalen gesundheit heilt")
+    percent = match(t, "stellt sofort (" .. NUM .. ")%s*%% gesundheit wieder her")
+      or match(t, "stellt sofort (" .. NUM .. ")%s*%% eurer maximalen gesundheit wieder her")
+      or percent
+  else
+    percent, duration = match(t, "heals you for (" .. NUM .. ")%s*%% of your maximum health over (" .. NUM .. ") sec")
+    percent = match(t, "instantly restores (" .. NUM .. ")%s*%% health")
+      or match(t, "instantly restores (" .. NUM .. ")%s*%% of your maximum health")
+      or match(t, "instantly restores (" .. NUM .. ")%s*%% of total health")
+      or percent
+  end
+  if percent then
+    percent = tonumber(percent)
+    duration = duration and tonumber(duration)
+    if percent and percent > 0 and percent <= 100 and (not duration or duration > 0) then
+      return { healPercent = percent, duration = duration }
+    end
+    return nil, "invalid-percent"
+  end
+  return nil
+end
+
 -- A consumable's healing or mana out of its use text ("Use: Restores 70 to 90
 -- health." / "Benutzen: Stellt 70 bis 90 Gesundheit wieder her."):
 -- { heal = { min, max } } for an instant amount ("Restores"/"Stellt" health as
@@ -573,27 +608,13 @@ end
 -- exactly as before.
 function Parser.ParseItemHeal(text, lang)
   if type(text) ~= "string" or text == "" then return nil, "empty" end
-  -- Forever can mix English descriptions with the German client's units and numbers.
+  local percent, reason = Parser.ParseHealthPercent(text, lang)
+  if percent then return percent end
+  if reason then return nil, reason end
   local textLang = Parser.TextLanguage(text, lang)
   if lang == "de" and textLang == "en" then text = englishNumbers(text) end
-  lang = textLang
   local t
-  t, lang = prepare(text, lang)
-  -- Healthstone states a fraction of maximum HP, never a flat healing amount.
-  local percent
-  if lang == "de" then
-    percent = match(t, "stellt sofort (" .. NUM .. ")%s*%% gesundheit wieder her")
-      or match(t, "stellt sofort (" .. NUM .. ")%s*%% eurer maximalen gesundheit wieder her")
-  else
-    percent = match(t, "instantly restores (" .. NUM .. ")%s*%% health")
-      or match(t, "instantly restores (" .. NUM .. ")%s*%% of your maximum health")
-      or match(t, "instantly restores (" .. NUM .. ")%s*%% of total health")
-  end
-  if percent then
-    percent = tonumber(percent)
-    if percent and percent > 0 and percent <= 100 then return { healPercent = percent } end
-    return nil, "invalid-percent"
-  end
+  t, lang = prepare(text, textLang)
   local lo, hi
   local mlo, mhi
   local dur, minutes = nil, false
@@ -1272,6 +1293,8 @@ end
 
 function Parser.ParseSpecial(text, lang)
   if type(text) ~= "string" or text == "" then return nil end
+  local percent = Parser.ParseHealthPercent(text, lang)
+  if percent then return percent end
   local t
   t, lang = prepare(text, lang)
   t = withoutJudgement(t, lang)
@@ -1382,7 +1405,7 @@ end
 -- per extra rage, several hits; or where it reads a part Parse missed (Forever's German Holy
 -- Shock, whose damage Parse does not find beside the heal). Where both read the same numbers
 -- (Rend, Blizzard), Parse stays. Life Tap's health cost is its own flag.
-local SPECIAL_FLAGS = { "absorb", "healMaxHealth", "perAttack", "perBlock", "perStrike", "every", "perRage", "hits", "first", "healthCost" }
+local SPECIAL_FLAGS = { "absorb", "healMaxHealth", "healPercent", "perAttack", "perBlock", "perStrike", "every", "perRage", "hits", "first", "healthCost" }
 local SLOTS = { "direct", "dot", "heal", "hot" }
 
 local function specialWins(s, parsed)

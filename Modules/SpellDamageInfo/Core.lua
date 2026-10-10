@@ -536,7 +536,22 @@ local function withEstimate(parsed, spellID, pet, castTime, noBonus)
   return Estimate.Apply(parsed, castTime, Estimate.DamageBonus(parsed.school, bonus.damage), bonus.heal, coef)
 end
 
+local function percentHealView(parsed)
+  local ok, maximum = pcall(UnitHealthMax, "player")
+  maximum = ok and number(maximum) or nil
+  if maximum and maximum > 0 and maximum < math.huge then
+    local amount = maximum * parsed.healPercent / 100
+    if parsed.duration then
+      return { hot = { total = amount, duration = parsed.duration, added = 0 } }
+    end
+    return { heal = { min = amount, max = amount, added = 0 } }
+  end
+  -- A hidden maximum cannot safely be converted or replaced with stale cached HP.
+  return { healPercent = parsed.healPercent, duration = parsed.duration }
+end
+
 local function specialView(s, spellID, pet, noBonus)
+  if s.healPercent then return not pet and percentHealView(s) or nil end
   if s.absorb then return { absorb = s.absorb } end
   if s.healthCost then return { healthCost = s.healthCost, manaGain = s.manaGain } end
   if s.healMaxHealth then
@@ -722,14 +737,7 @@ function ns.ComputeItem(itemID)
   end
   if not parsed then return nil end
   if parsed.healPercent then
-    local ok, maximum = pcall(UnitHealthMax, "player")
-    maximum = ok and number(maximum) or nil
-    if maximum and maximum > 0 and maximum < math.huge then
-      local amount = maximum * parsed.healPercent / 100
-      return { heal = { min = amount, max = amount, added = 0 } }
-    end
-    -- A hidden maximum cannot safely be converted or replaced with stale cached HP.
-    return { healPercent = parsed.healPercent }
+    return percentHealView(parsed)
   end
   local view
   if parsed.heal then
@@ -1077,6 +1085,7 @@ ns.PetSpellOnSlot = petSpellOnSlot
 local function buttonText(view, reduction)
   if db.button == "off" then return nil end
   if view and view.healPercent then
+    if view.duration and db.button == "direct" then return nil end
     return tostring(view.healPercent) .. "% HP", Format.HEAL_COLOR
   end
   -- Life Tap: vertical dual-label, green -HP on top, blue +mana below.

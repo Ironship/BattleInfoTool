@@ -293,6 +293,50 @@ class RetailSpellDamageTests(unittest.TestCase):
         addon.Refresh()
         self.assertEqual(label(addon, g.ActionButton1), "250")
 
+    def test_crimson_vial_shows_total_percent_healing_on_spell_and_macro(self):
+        rt, g, addon = load("""
+          function GetLocale() return 'deDE' end
+          NewAction('ActionButton', 1, 1)
+          NewAction('MultiBar7Button', 1, 2)
+          actions[1], actions[2] = { 'spell', 185311 }, { 'macro', 185311, 'spell' }
+          maximumHealth = 1000
+          function UnitHealthMax() return maximumHealth end
+          spellDesc[185311] = 'Trinkt ein alchemistisches Gemisch, das Euch im Verlauf von 4 Sek. um 20% Eurer maximalen Gesundheit heilt.'
+        """)
+        for button in (g.ActionButton1, g.MultiBar7Button1):
+            self.assertEqual(label(addon, button), "200")
+        view = addon.Compute(185311)
+        self.assertEqual(view.hot.total, 200)
+        self.assertEqual(view.hot.duration, 4)
+        g.maximumHealth = 2000
+        g.Fire("UNIT_MAXHEALTH", "player")
+        self.assertEqual(label(addon, g.ActionButton1), "400")
+        for maximum in (g.SECRET, None, 0, -1, float("inf"), float("nan")):
+            g.maximumHealth = maximum
+            g.Fire("UNIT_MAXHEALTH", "player")
+            self.assertEqual(label(addon, g.ActionButton1), "20% HP")
+        rt.execute("function UnitHealthMax() error('HP unavailable') end")
+        addon.Refresh()
+        self.assertEqual(label(addon, g.ActionButton1), "20% HP")
+        rt.execute("function UnitHealthMax() return 1000 end")
+        g.spellDesc[185311] = 'Drink an alchemical concoction that heals you for 20% of your maximum health over 4 sec.'
+        g.Fire("SPELLS_CHANGED")
+        self.assertEqual(label(addon, g.MultiBar7Button1), "200")
+        addon.SetSetting("button", "direct")
+        self.assertIsNone(label(addon, g.ActionButton1))
+        g.maximumHealth = g.SECRET
+        addon.Refresh()
+        self.assertIsNone(label(addon, g.ActionButton1))
+        addon.SetSetting("button", "off")
+        self.assertIsNone(label(addon, g.ActionButton1))
+        for text in ("Heals you for 20% of your missing health over 4 sec.",
+                     "Heals your pet for 20% of your maximum health over 4 sec.",
+                     "Heals you for 20% of your maximum health every 4 sec.",
+                     "Heals you for 120% of your maximum health over 4 sec."):
+            g.spellDesc[185311] = text
+            g.Fire("SPELLS_CHANGED")
+            self.assertIsNone(addon.Compute(185311), text)
+
     def test_instant_heal_percent_parser_rejects_other_percentages(self):
         _, _, addon = load()
         for text, lang in (("Use: Instantly restores 25% health.", "en"),
