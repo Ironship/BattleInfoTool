@@ -2,7 +2,7 @@
 ## Title: Useful Plates and Tooltips (Retail)
 ## Notes: Retail test build: rogue aura icons/timers, DoT estimates, resource sounds/markers, absorb overlays and spell damage numbers. /upt
 ## Author: Ironship
-## Version: 0.9.50-retail
+## Version: 0.9.51-retail
 ## SavedVariables: UsefulPlatesAndTooltipsDB, UsefulPlatesAndTooltips_SpellDamageInfoDB, UsefulPlatesAndTooltips_DoTInfoDB, UsefulPlatesAndTooltips_ResourceDingDB
 
 Core\Init.lua

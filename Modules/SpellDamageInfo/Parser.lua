@@ -559,6 +559,7 @@ end
 -- health." / "Benutzen: Stellt 70 bis 90 Gesundheit wieder her."):
 -- { heal = { min, max } } for an instant amount ("Restores"/"Stellt" health as
 -- well as "Heals"/"Heilt" health or damage outside over time),
+-- { healPercent = n } for instant healing expressed as a percentage of maximum HP,
 -- { hot = { total, duration } } for a stated total over time: a bandage
 -- ("Heals 66 damage over 6 sec." / "Heilt 66 Schaden über 6 Sek.") or food
 -- ("Restores 243 health over 21 sec." / "Stellt 243 Gesundheit über 21 Sek.
@@ -578,6 +579,21 @@ function Parser.ParseItemHeal(text, lang)
   lang = textLang
   local t
   t, lang = prepare(text, lang)
+  -- Healthstone states a fraction of maximum HP, never a flat healing amount.
+  local percent
+  if lang == "de" then
+    percent = match(t, "stellt sofort (" .. NUM .. ")%s*%% gesundheit wieder her")
+      or match(t, "stellt sofort (" .. NUM .. ")%s*%% eurer maximalen gesundheit wieder her")
+  else
+    percent = match(t, "instantly restores (" .. NUM .. ")%s*%% health")
+      or match(t, "instantly restores (" .. NUM .. ")%s*%% of your maximum health")
+      or match(t, "instantly restores (" .. NUM .. ")%s*%% of total health")
+  end
+  if percent then
+    percent = tonumber(percent)
+    if percent and percent > 0 and percent <= 100 then return { healPercent = percent } end
+    return nil, "invalid-percent"
+  end
   local lo, hi
   local mlo, mhi
   local dur, minutes = nil, false

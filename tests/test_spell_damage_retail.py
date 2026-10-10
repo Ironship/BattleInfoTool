@@ -257,6 +257,55 @@ class RetailSpellDamageTests(unittest.TestCase):
         g.Fire("ACTIONBAR_SLOT_CHANGED", 77)
         self.assertEqual(label(addon, g.OverrideActionBarButton1), "500")
 
+    def test_healthstone_percent_uses_live_max_hp_and_refreshes_item_and_macro(self):
+        rt, g, addon = load("""
+          function GetLocale() return 'deDE' end
+          NewAction('ActionButton', 1, 1)
+          NewAction('MultiBar7Button', 1, 2)
+          actions[1], actions[2] = { 'item', 5512 }, { 'macro', 5512, 'item' }
+          maximumHealth = 172
+          function UnitHealthMax() return maximumHealth end
+          C_Item.GetItemSpell = function() return 'Healthstone', 6262 end
+          spellDesc[6262] = 'Unrecognized spell description.'
+          C_TooltipInfo = {GetHyperlink=function()
+            return {lines={{leftText='Gesundheitsstein'},
+              {leftText='Benutzen: Stellt sofort 25% Gesundheit wieder her.'}}}
+          end}
+        """)
+        for button in (g.ActionButton1, g.MultiBar7Button1):
+            self.assertEqual(label(addon, button), "43")
+        self.assertEqual(addon.ComputeItem(5512).heal.min, 43)
+        g.maximumHealth = 200
+        g.Fire("UNIT_MAXHEALTH", "player")
+        self.assertEqual(label(addon, g.ActionButton1), "50")
+        g.maximumHealth = 400
+        g.Fire("PLAYER_EQUIPMENT_CHANGED", 5)
+        self.assertEqual(label(addon, g.MultiBar7Button1), "100")
+        for maximum in (g.SECRET, None, 0, -1, float("inf"), float("nan")):
+            g.maximumHealth = maximum
+            g.Fire("UNIT_MAXHEALTH", "player")
+            self.assertEqual(label(addon, g.ActionButton1), "25% HP")
+        rt.execute("function UnitHealthMax() error('HP unavailable') end")
+        addon.Refresh()
+        self.assertEqual(label(addon, g.ActionButton1), "25% HP")
+        rt.execute("function UnitHealthMax() return 1000 end")
+        g.spellDesc[6262] = "Instantly restores 25% health. (1 Min Cooldown)"
+        addon.Refresh()
+        self.assertEqual(label(addon, g.ActionButton1), "250")
+
+    def test_instant_heal_percent_parser_rejects_other_percentages(self):
+        _, _, addon = load()
+        for text, lang in (("Use: Instantly restores 25% health.", "en"),
+                           ("Instantly restores 25% of total health.", "en"),
+                           ("Instantly restores 25% of your maximum health.", "en"),
+                           ("Benutzen: Stellt sofort 25% Gesundheit wieder her.", "de")):
+            self.assertEqual(addon.Parser.ParseItemHeal(text, lang).healPercent, 25)
+        for text in ("Restores 25% health over 10 sec.", "Instantly restores 25% mana.",
+                     "Instantly restores 25% of missing health.", "Instantly restores 125% health.",
+                     "Instantly restores 0% health.", "Increases healing by 25%."):
+            parsed = addon.Parser.ParseItemHeal(text, "en")
+            self.assertIsNone(parsed[0] if isinstance(parsed, tuple) else parsed, text)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -697,8 +697,8 @@ end
 
 -- What to show for a consumable on the bar: its raw instant healing or mana,
 -- or a stated healing total over time -- a bandage's ("Heals 66 damage over 6
--- sec.") or food's ("Restores 243 health over 21 sec."), no estimate; a
--- consumable's amount is fixed -- or nil. Damage wordings are never read here,
+-- sec.") or food's ("Restores 243 health over 21 sec."). Fixed amounts stay literal;
+-- percentage healing uses the player's current maximum HP. Damage wordings are never read here,
 -- so the damage numbers cannot move. Anything over time without a stated
 -- health total stays unread. The text
 -- comes from the use spell's description where that can be read, else from the
@@ -716,7 +716,21 @@ function ns.ComputeItem(itemID)
     return nil
   end
   local parsed = Parser.ParseItemHeal(text, ns.DescriptionLang())
+  if not parsed then
+    local fallback = itemUseText(itemID)
+    if fallback then parsed = Parser.ParseItemHeal(fallback, ns.DescriptionLang()) end
+  end
   if not parsed then return nil end
+  if parsed.healPercent then
+    local ok, maximum = pcall(UnitHealthMax, "player")
+    maximum = ok and number(maximum) or nil
+    if maximum and maximum > 0 and maximum < math.huge then
+      local amount = maximum * parsed.healPercent / 100
+      return { heal = { min = amount, max = amount, added = 0 } }
+    end
+    -- A hidden maximum cannot safely be converted or replaced with stale cached HP.
+    return { healPercent = parsed.healPercent }
+  end
   local view
   if parsed.heal then
     view = view or {}
@@ -1062,6 +1076,9 @@ ns.PetSpellOnSlot = petSpellOnSlot
 -- next to it (or nil). The options window's preview draws its sample spells through this too.
 local function buttonText(view, reduction)
   if db.button == "off" then return nil end
+  if view and view.healPercent then
+    return tostring(view.healPercent) .. "% HP", Format.HEAL_COLOR
+  end
   -- Life Tap: vertical dual-label, green -HP on top, blue +mana below.
   if view and view.healthCost then
     local mainText = "-" .. Format.Short(view.healthCost) .. " HP"
