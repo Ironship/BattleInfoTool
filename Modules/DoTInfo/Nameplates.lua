@@ -4,8 +4,9 @@
 -- DoTs on it, using the per-mob tracking in Core.lua (ns.dotBreakdownForUnit). Same secret-value trick as
 -- the target frame: StatusBars are fed the mob's hidden health and do the comparing.
 --
--- Widgets are created per Blizzard nameplate frame (which WoW recycles between mobs) and parented to it, so
--- they move, scale and hide with the plate. They're lighter than the target marker: fill, per-DoT segments and a
+-- Widgets are cached and parented to the Blizzard nameplate frame (which WoW recycles between mobs).
+-- Bar dimensions are copied separately: parenting to the native StatusBar hid the overlay in-game.
+-- They're lighter than the target marker: fill, per-DoT segments and a
 -- thin outline in the Marker tab's style; presets match their fill and DoT colors to the target marker.
 --
 -- Also the probe (/dotinfo plates): what the addon can reach on nameplates, logged, with a test bar on each.
@@ -52,8 +53,8 @@ end
 -- "secret", "nil", "error: ...", or the value.
 local function describe(ok, value)
     if not ok then return "error: " .. tostring(value) end
-    if value == nil then return "nil" end
     if isSecret(value) then return "secret" end
+    if value == nil then return "nil" end
     return tostring(value)
 end
 
@@ -62,16 +63,26 @@ local function call(fn, ...)
     return describe(pcall(fn, ...))
 end
 
--- Blizzard's health bar inside a nameplate, and the path it was found under.
-local function findHealthBar(plate)
-    local unitFrame = plate.UnitFrame
-    if not unitFrame then return nil, "no UnitFrame" end
-    if unitFrame.healthBar then return unitFrame.healthBar, "UnitFrame.healthBar" end
-    local container = unitFrame.HealthBarsContainer
-    if container and container.healthBar then return container.healthBar, "UnitFrame.HealthBarsContainer.healthBar" end
-    if unitFrame.HealthBar then return unitFrame.HealthBar, "UnitFrame.HealthBar" end
-    return nil, "no health bar found"
+-- Probe only: preserve each raw coordinate so hidden layout values never enter arithmetic.
+local function geometry(region)
+    if type(region) ~= "table" then return "missing" end
+    local rect = "missing"
+    if type(region.GetRect) == "function" then
+        local ok, left, bottom, width, height = pcall(region.GetRect, region)
+        if ok then
+            rect = table.concat({ describe(true, left), describe(true, bottom),
+                describe(true, width), describe(true, height) }, ",")
+        else
+            rect = describe(false, left)
+        end
+    end
+    return "rect(" .. rect .. ") scale=" .. call(region.GetEffectiveScale, region)
+        .. " local=" .. call(region.GetScale, region)
+        .. " ignoreParent=" .. call(region.IsIgnoringParentScale, region)
+        .. " visible=" .. call(region.IsVisible, region)
 end
+
+local findHealthBar = BIT.Plate.HealthBar
 
 ---------------------------------------------------------------------------
 -- Nameplate display
@@ -91,12 +102,40 @@ local function invisibleBar(parent)
     return bar
 end
 
+local function positiveGeometry(value)
+    return not isSecret(value) and type(value) == "number" and value > 0 and value < math.huge
+end
+
+local function fitMarker(w)
+    local bar = w.healthBar
+    local ok, width, height = pcall(bar.GetSize, bar)
+    local barOK, barScale = pcall(bar.GetEffectiveScale, bar)
+    local ownOK, ownScale = pcall(w.marker.GetEffectiveScale, w.marker)
+    if ok and barOK and ownOK and positiveGeometry(width) and positiveGeometry(height)
+        and positiveGeometry(barScale) and positiveGeometry(ownScale) then
+        width, height = width * barScale / ownScale, height * barScale / ownScale
+        if positiveGeometry(width) and positiveGeometry(height) then
+            if w.geometryBar ~= bar or w.geometryWidth ~= width or w.geometryHeight ~= height then
+                w.marker:ClearAllPoints()
+                w.marker:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
+                w.marker:SetSize(width, height)
+                w.geometryBar, w.geometryWidth, w.geometryHeight = bar, width, height
+            end
+            return
+        end
+    end
+    -- Hidden layout values stay in native anchors, never in arithmetic or a guessed size.
+    w.geometryBar, w.geometryWidth, w.geometryHeight = nil, nil, nil
+    w.marker:ClearAllPoints()
+    w.marker:SetAllPoints(bar)
+end
+
 local function createWidgets(plate, healthBar)
     local w = { healthBar = healthBar }
 
     -- Marker: filled from the bar's left edge to the remaining DoT damage, on the mob's (secret) health scale.
     w.marker = invisibleBar(plate)
-    w.marker:SetAllPoints(healthBar)
+    fitMarker(w)
     w.span = w.marker:GetStatusBarTexture()
     w.fill = w.marker:CreateTexture(nil, "ARTWORK")
     coverSpan(w.fill, w.span)
@@ -306,12 +345,15 @@ end
 local function widgetsFor(plate, healthBar)
     local w = widgetsByPlate[plate]
     if w then
-        if w.healthBar == healthBar then return w end
+        if w.healthBar == healthBar then
+            fitMarker(w)
+            return w
+        end
         -- UI-1: the client recycles the plate frame between mobs with a new
         -- health bar object. Reuse the single widget set and re-anchor it
         -- instead of building a second set and leaking the first.
         w.healthBar = healthBar
-        w.marker:SetAllPoints(healthBar)
+        fitMarker(w)
         -- the icon is anchored to w.healthBar in applyStyle, which exits
         -- early when the style signature is unchanged: force it to re-run
         -- so the icon follows the marker to the new bar.
@@ -340,7 +382,10 @@ local function updatePlate(unit, plate, db)
         return
     end
     local healthBar = findHealthBar(plate)
-    if not healthBar then return end
+    if not healthBar then
+        if w0 then hideWidgets(w0) end
+        return
+    end
     drawPlate(widgetsFor(plate, healthBar), entries, total, UnitHealthMax(unit), UnitHealth(unit), db)
 end
 
@@ -465,8 +510,22 @@ local function probePlate(unit, index)
 
     local healthBar, path = findHealthBar(plate)
     table.insert(parts, "healthBar=" .. path)
+    local function layout(name, region)
+        table.insert(parts, name .. "=" .. geometry(region))
+    end
+    layout("plateRect", plate)
+    layout("unitRect", plate.UnitFrame)
+    layout("containerRect", plate.UnitFrame and plate.UnitFrame.HealthBarsContainer)
     if healthBar then
         table.insert(parts, "barForbidden=" .. tostring(healthBar.IsForbidden and healthBar:IsForbidden() or false))
+        table.insert(parts, "barSize=" .. call(healthBar.GetWidth, healthBar) .. "x" .. call(healthBar.GetHeight, healthBar))
+        table.insert(parts, "barScale=" .. call(healthBar.GetEffectiveScale, healthBar))
+        table.insert(parts, "barVisible=" .. call(healthBar.IsVisible, healthBar))
+        layout("barRect", healthBar)
+        local textureOK, texture = pcall(healthBar.GetStatusBarTexture, healthBar)
+        if textureOK then layout("barFillRect", texture) end
+        layout("barBackgroundRect", healthBar.bgTexture)
+        layout("selectedBorderRect", healthBar.selectedBorder)
     end
     -- Where the marker has to be drawn above: the frame levels and strata of the plate, its unit frame, the
     -- bar, the bar's own child frames, and the marker if there is one.
@@ -485,6 +544,15 @@ local function probePlate(unit, index)
     if w then
         layer("markerLayer", w.marker)
         table.insert(parts, "markerShown=" .. call(w.marker.IsShown, w.marker))
+        table.insert(parts, "markerSize=" .. call(w.marker.GetWidth, w.marker) .. "x" .. call(w.marker.GetHeight, w.marker))
+        table.insert(parts, "markerScale=" .. call(w.marker.GetEffectiveScale, w.marker))
+        table.insert(parts, "markerVisible=" .. call(w.marker.IsVisible, w.marker))
+        layout("markerRect", w.marker)
+        layout("spanRect", w.span)
+        layout("fillRect", w.fill)
+        layout("segmentBarRect", w.segments[1].bar)
+        layout("segmentEndRect", w.segments[1].fillEnd)
+        layout("segmentTextureRect", w.segments[1].texture)
     end
 
     local bar = testBar(index)
@@ -512,6 +580,18 @@ end
 
 function ns.probeNameplates()
     local inInstance, instanceType = IsInInstance()
+    local metadata = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
+    ns.trace("PLATES geometryProbe=2 version=" .. call(metadata, ADDON_NAME, "Version")
+        .. " retail=" .. tostring(ns.Retail ~= nil) .. " build=" .. call(GetBuildInfo)
+        .. " UIParent=" .. geometry(UIParent))
+    local getCVar = C_CVar and C_CVar.GetCVar or GetCVar
+    local settings = {}
+    for _, name in ipairs({ "nameplateSize", "nameplateStyle", "nameplateGlobalScale",
+        "NamePlateHorizontalScale", "NamePlateVerticalScale", "nameplateSelectedScale",
+        "nameplateMinScale", "nameplateMaxScale", "uiScale", "useUiScale" }) do
+        table.insert(settings, name .. "=" .. call(getCVar, name))
+    end
+    ns.trace("PLATES settings " .. table.concat(settings, " "))
     ns.trace(string.format("PLATES probe: C_NamePlate=%s GetNamePlateForUnit=%s instance=%s (%s) inCombat=%s",
         tostring(C_NamePlate ~= nil), tostring(C_NamePlate ~= nil and C_NamePlate.GetNamePlateForUnit ~= nil),
         tostring(inInstance), tostring(instanceType), call(UnitAffectingCombat, "player")))

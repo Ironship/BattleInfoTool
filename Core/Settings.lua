@@ -453,9 +453,9 @@ local function buildTogether(page)
     local parts = {}
     if not dotsOn then parts[#parts + 1] = "DoTs off" end
     if not shieldsOn then parts[#parts + 1] = "Shields off" end
-    if not rangeOn then parts[#parts + 1] = "Range off" end
+    if BIT.modules.Range and not rangeOn then parts[#parts + 1] = "Range off" end
     if not rdOn then parts[#parts + 1] = "Points unavailable or off" end
-    if not hunterOn then parts[#parts + 1] = "Hunter off" end
+    if BIT.modules.HunterRangeFinder and not hunterOn then parts[#parts + 1] = "Hunter off" end
     if owns then parts[#parts + 1] = "Range check hidden: the hunter rail owns this plate" end
     if #parts == 0 then
       caption:SetText("DoT fill stays on the bar. A shield shares that bar as a thin top edge.")

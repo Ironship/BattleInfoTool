@@ -1279,9 +1279,11 @@ function Parser.ParseFinisher(text, lang)
   local marker = (lang == "de") and "punkte?" or "points?"
   local marks, init = {}, 1
   while true do
-    local s, e, n = find(t, "[^0-9]([1-5]) " .. marker .. " *:", init)
+    local s, e, n = find(t, "[^0-9]([1-9]%d*) " .. marker .. " *:", init)
     if not s then break end
-    marks[#marks + 1] = { s = s, e = e, n = tonumber(n) }
+    n = tonumber(n)
+    if not n or n > 20 then return nil end -- bound the tooltip's per-point row walk
+    marks[#marks + 1] = { s = s, e = e, n = n }
     init = e + 1
   end
   if #marks < 2 then return nil end
@@ -1298,6 +1300,11 @@ function Parser.ParseFinisher(text, lang)
     else
       if lo and not find(seg, "damage", 1, true) then lo = nil end
       total, dur = match(seg, "^ *(" .. NUM .. ") damage over (" .. NUM .. ") sec")
+    end
+    -- Retail can list a single finished amount instead of a min/max range.
+    if not lo and not total then
+      lo = match(seg, "^ *(" .. NUM .. ") " .. (lang == "de" and "schaden" or "damage") .. "[%. ]*$")
+      hi = lo
     end
     if lo then
       if kind and kind ~= "direct" then return nil end

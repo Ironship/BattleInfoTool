@@ -629,20 +629,30 @@ local function buildTabs()
     plates.footer:Hide()
 
     local behavior = addTab("Behavior")
-    behavior:choice("waitFirstTick", "Wait for first tick", lists.waitModes, { tooltip = "Whether a new DoT "
-        .. "counts before its first tick lands. \"When unsure\" waits for finishers with unknown combo points "
-        .. "and spells the addon hasn't seen tick yet." })
+    if not ns.Retail then
+        behavior:choice("waitFirstTick", "Wait for first tick", lists.waitModes, { tooltip = "Whether a new DoT "
+            .. "counts before its first tick lands. \"When unsure\" waits for finishers with unknown combo points "
+            .. "and spells the addon hasn't seen tick yet." })
+    end
     behavior:checkbox("refreshCue", "Show refresh marks",
-        { tooltip = "A gold edge on that DoT's segment while the time left is inside the refresh window: "
+        { tooltip = ns.Retail and "A gold edge when the estimated time left is within the 30% Pandemic refresh window."
+            or "A gold edge on that DoT's segment while the time left is inside the refresh window: "
             .. "one tick, three seconds, or a quarter of the duration, whichever is longer. "
             .. "The damage number stays off unless you turn it on." })
     behavior:checkbox("estimateDuringCast", "Estimate during casting", { tooltip = "Shows a DoT with a cast time "
         .. "while you're still casting it. Once the cast lands the normal estimate takes over; an interrupted or "
         .. "failed cast removes it." })
     behavior:checkbox("debug", "Echo trace log to chat",
-        { tooltip = "Prints each DoT cast, matched tick and estimate to chat." })
-    behavior:action("Learned tick sizes", "Reset", function() ns.resetLearnedTicks() end,
-        { tooltip = "Forget the tick sizes learned from earlier casts." })
+        { tooltip = ns.Retail and "Prints each DoT cast and damage estimate to chat."
+            or "Prints each DoT cast, matched tick and estimate to chat." })
+    if ns.Retail then
+        behavior:action("Retail damage estimate", "Info", function()
+            ns.print("Rogue bleed and poison icons use WoW's aura timers. DoT damage is estimated from your casts and spell descriptions; dispels, immunities, procs and damage modifiers may change it.")
+        end, { tooltip = "The skull means estimated damage exceeds health. It is a prediction, not a confirmed kill." })
+    else
+        behavior:action("Learned tick sizes", "Reset", function() ns.resetLearnedTicks() end,
+            { tooltip = "Forget the tick sizes learned from earlier casts." })
+    end
 end
 
 local function buildPreview(pane)

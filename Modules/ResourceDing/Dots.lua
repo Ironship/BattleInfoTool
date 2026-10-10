@@ -161,6 +161,10 @@ local function targetPlate()
 end
 
 local function healthBarOf(plate)
+  if type(BIT.Plate) == "table" and type(BIT.Plate.HealthBar) == "function" then
+    local bar = BIT.Plate.HealthBar(plate)
+    return type(bar) == "table" and bar or plate
+  end
   local unitFrame = type(plate.UnitFrame) == "table" and plate.UnitFrame or nil
   local container = unitFrame and type(unitFrame.HealthBarsContainer) == "table"
     and unitFrame.HealthBarsContainer or nil
@@ -175,6 +179,9 @@ local function state()
   local resource, current, maximum, rawCurrent = Addon.GetResourceState()
   if not resource then return nil end
   local _, class = UnitClass("player")
+  -- The shard diamonds occupy the same nameplate lane. With diamonds off a
+  -- Retail warlock can still choose the ordinary resource circles.
+  if class == "WARLOCK" and not Addon.IsClassic() and Addon.db.shardDiamonds then return nil end
   if class == "DRUID" and resource.comboPoints and plain(GetShapeshiftFormID) ~= DRUID_CAT_FORM then return nil end
   if plain(UnitExists, "target") ~= true then return nil end
   if plain(UnitCanAttack, "player", "target") == false then return nil end
@@ -327,7 +334,7 @@ function Addon.StartDots()
   row:Hide()
   local events = CreateFrame("Frame")
   for _, event in ipairs({ "PLAYER_TARGET_CHANGED", "COMBO_TARGET_CHANGED", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED",
-    "UPDATE_SHAPESHIFT_FORM", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "PLAYER_ENTERING_WORLD" }) do
+    "UPDATE_SHAPESHIFT_FORM", "PLAYER_SPECIALIZATION_CHANGED", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "PLAYER_ENTERING_WORLD" }) do
     pcall(events.RegisterEvent, events, event)
   end
   for _, event in ipairs({ "UNIT_POWER_UPDATE", "UNIT_POWER_FREQUENT", "UNIT_MAXPOWER", "UNIT_COMBO_POINTS" }) do

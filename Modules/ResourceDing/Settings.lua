@@ -263,7 +263,7 @@ function applySetting(key, value, quiet)
     db.shards = value
   elseif key == "shardDiamonds" then
     db.shardDiamonds = value
-    if Addon.RefreshShards then Addon.RefreshShards() end
+    Addon.RefreshMarks()
   elseif key == "mana" then
     db.mana = value
     if Addon.ResetMana then Addon.ResetMana() end
@@ -563,7 +563,7 @@ local function buildTabs()
 
   local dots = addTab("Dots")
   dots:checkbox("dots", "Show the points as dots under the target's nameplate",
-    { tooltip = "Combo points as circles below your target's health bar, on its nameplate." })
+    { tooltip = "Your class resource as circles below the target's health bar. Warlocks use these when shard diamonds are off." })
   dots:slider("dotSize", "Dot / diamond size", 8, 24, 1,
     { tooltip = "How big the circles and the shard diamonds are." })
   dots:slider("dotOffset", "Dot offset (- = above)", -80, 30, 1,
@@ -576,7 +576,7 @@ local function buildTabs()
 
   local shards = addTab("Shards")
   shards:checkbox("shards", "Sound when a shard comes in",
-    { tooltip = "A Soul Shard arriving in your bags plays the sound (Classic warlocks)." })
+    { tooltip = "One cue for a new whole Soul Shard: player power on Retail, bag items on Classic. This also announces the last shard when the bar fills." })
   shards:checkbox("shardDiamonds", "Purple diamonds under the target",
     { tooltip = "Each Soul Shard as a purple diamond below the target's health bar." })
   shards:slider("shardOffset", "Shard offset (- = above)", -80, 30, 1,

@@ -46,10 +46,10 @@ Addon.IsClassic = isClassic
 Addon.RESOURCES = {
   ROGUE = { name = "Combo Points", power = powerType("ComboPoints", 4), comboPoints = true },
   DRUID = { name = "Combo Points", power = powerType("ComboPoints", 4), comboPoints = true },
-  MONK = { name = "Chi", power = powerType("Chi", 12) },
+  MONK = { name = "Chi", power = powerType("Chi", 12), spec = 269 }, -- Windwalker
   PALADIN = { name = "Holy Power", power = powerType("HolyPower", 9) },
   WARLOCK = { name = "Soul Shards", power = powerType("SoulShards", 7) },
-  MAGE = { name = "Arcane Charges", power = powerType("ArcaneCharges", 16) },
+  MAGE = { name = "Arcane Charges", power = powerType("ArcaneCharges", 16), spec = 62 }, -- Arcane
   EVOKER = { name = "Essence", power = powerType("Essence", 19) },
 }
 
@@ -149,7 +149,15 @@ if BIT.RegisterWaker then BIT.RegisterWaker("ResourceDing", initializeDatabase) 
 
 function Addon.GetResource()
   local _, class = UnitClass("player")
-  return class and Addon.RESOURCES[class] or nil
+  local resource = class and Addon.RESOURCES[class] or nil
+  local getSpec = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization or GetSpecialization
+  local getInfo = C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo or GetSpecializationInfo
+  if resource and resource.spec and not isClassic()
+      and type(getSpec) == "function" and type(getInfo) == "function" then
+    local spec = getSpec()
+    if not spec or getInfo(spec) ~= resource.spec then return nil end
+  end
+  return resource
 end
 
 -- A number the client will let this addon use, 0 for no answer, or nil for a
@@ -264,8 +272,14 @@ end
 function Addon.GetResourceState()
   local resource = Addon.GetResource()
   if not resource then return nil, 0, 0 end
+  local _, class = UnitClass("player")
+  if class == "DRUID" and not isClassic() and type(GetShapeshiftFormID) == "function" then
+    local ok, form = pcall(GetShapeshiftFormID)
+    if not ok or isSecret(form) or form ~= 1 then return resource, 0, 0, 0, 0 end
+  end
   local rawCurrent = UnitPower("player", resource.power)
-  local maximum = known(UnitPowerMax("player", resource.power)) or 0
+  local rawMaximum = UnitPowerMax("player", resource.power)
+  local maximum = known(rawMaximum) or 0
   -- Classic/Forever points belong to the selected target, even when the
   -- Retail-based client advertises a five-point player bar. UnitPower can
   -- retain A's points after selecting B; a nonzero maximum does not prove
@@ -282,11 +296,11 @@ function Addon.GetResourceState()
   -- The display is trusted only after a native redraw that really repainted:
   -- when the native body early-returns (its maximum is gone) the highlights
   -- are stale for whichever target the UI last drew.
-  if current == nil and resource.comboPoints and comboDisplayReady
+  if current == nil and resource.comboPoints and isClassic() and comboDisplayReady
       and nativeCanRepaintCombo() then
     current = displayedComboPoints()
   end
-  return resource, current, maximum, rawCurrent
+  return resource, current, maximum, rawCurrent, rawMaximum
 end
 
 -- Plays the sound of that key. Falls through to whatever sound this client does have. The filter
@@ -309,14 +323,15 @@ function Addon.PlaySelectedSound()
 end
 
 function Addon.CheckPower(silent)
-  local resource, current, maximum = Addon.GetResourceState()
+  local resource, current, maximum, _, rawMaximum = Addon.GetResourceState()
+  if isSecret(rawMaximum) then return end
   -- Classic's combo points belong to the target, and the latch follows the
   -- target with them: tabbing away and back to a bar that is still full is
   -- not a new fill, so it must not play the sound again (RD-1). For a
   -- resource that is the player's own, the latch stays the plain one.
   -- A secret GUID must never index the table: the client raises on any touch.
   local guid
-  if resource and resource.comboPoints and type(UnitGUID) == "function" then
+  if resource and resource.comboPoints and isClassic() and type(UnitGUID) == "function" then
     guid = usableGuid(UnitGUID("target"))
   end
   local byTarget = Addon.wasFullBy or {}
@@ -327,6 +342,7 @@ function Addon.CheckPower(silent)
   if guid then wasFull = byTarget[guid] == true end
   if not resource or maximum <= 0 then
     Addon.wasFull = false
+    if not isClassic() then Addon.powerResource, Addon.powerMaximum = nil, nil end
     if guid then byTarget[guid] = false end
     return
   end
@@ -334,8 +350,18 @@ function Addon.CheckPower(silent)
   -- nothing about full or not, so the latch is left exactly as it was.
   if current == nil then return end
 
+  if not isClassic() then
+    -- A talent/spec changing the cap can make unchanged points look full.
+    -- Take a silent baseline even if its MAXPOWER event arrives later.
+    if Addon.powerResource ~= resource.power or Addon.powerMaximum ~= maximum then silent = true end
+    Addon.powerResource, Addon.powerMaximum = resource.power, maximum
+  end
   local isFull = current >= maximum
-  if not silent and isFull and not wasFull and Addon.db.enabled then
+  -- Retail's shard-gain option already announces the last shard. Its full-bar
+  -- sound remains available when gain sounds are switched off.
+  local shardGainSound = not isClassic() and resource.power == powerType("SoulShards", 7)
+    and Addon.db.shards and Addon.CheckShards ~= nil
+  if not silent and isFull and not wasFull and Addon.db.enabled and not shardGainSound then
     if not Addon.db.combatOnly or UnitAffectingCombat("player") then
       Addon.PlaySelectedSound()
     else
@@ -372,6 +398,7 @@ end
 
 function Addon.ResetPowerState()
   Addon.CheckPower(true)
+  if Addon.ResetShards then Addon.ResetShards() end
   Addon.RefreshMarks()
   if Addon.settingsPanel and Addon.settingsPanel.refresh then Addon.settingsPanel.refresh() end
 end
@@ -496,11 +523,13 @@ events:SetScript("OnEvent", function(_, event, arg1)
     for _, start in ipairs(Addon.starters or {}) do start() end
   elseif not Addon.db then
     return
+  elseif event == "PLAYER_SPECIALIZATION_CHANGED" and arg1 and arg1 ~= "player" then
+    return
   elseif event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "UPDATE_SHAPESHIFT_FORM" or event == "UNIT_MAXPOWER" then
     C_Timer.After(0, Addon.ResetPowerState)
   else
     if event == "PLAYER_TARGET_CHANGED" or event == "COMBO_TARGET_CHANGED" then
-      comboDisplayReady = false
+      if isClassic() then comboDisplayReady = false end
     end
     Addon.CheckPower(false)
   end

@@ -36,8 +36,10 @@ end
 function Addon.CheckMana()
   if not (Addon.db and Addon.db.mana) then return end
   local current, maximum = plainNumber(UnitPower, "player", MANA), plainNumber(UnitPowerMax, "player", MANA)
-  if current == nil or maximum == nil then below = nil return end
-  if maximum <= 0 then return end -- no mana: a warrior, a rogue
+  if current == nil or maximum == nil or maximum <= 0 then
+    below, lastMaximum = nil, nil
+    return
+  end
   -- The sound is for mana that climbed to the level. When the maximum falls --
   -- a buff or a form ending -- the same mana crosses the threshold without a
   -- point gained; that is no climb and must not ding. The reading forgets the
@@ -52,19 +54,22 @@ function Addon.CheckMana()
 end
 
 -- A new level in the settings: the next reading only takes note, it does not ding.
-function Addon.ResetMana() below = nil end
+function Addon.ResetMana() below, lastMaximum = nil, nil end
 
 local function start()
   local events = CreateFrame("Frame")
-  pcall(events.RegisterEvent, events, "PLAYER_ENTERING_WORLD")
+  for _, event in ipairs({ "PLAYER_ENTERING_WORLD", "PLAYER_SPECIALIZATION_CHANGED", "UPDATE_SHAPESHIFT_FORM" }) do
+    pcall(events.RegisterEvent, events, event)
+  end
   for _, event in ipairs({ "UNIT_POWER_UPDATE", "UNIT_MAXPOWER" }) do
     pcall(events.RegisterUnitEvent, events, event, "player")
   end
-  events:SetScript("OnEvent", function(_, event)
+  events:SetScript("OnEvent", function(_, event, unit)
+    if event == "PLAYER_SPECIALIZATION_CHANGED" and unit and unit ~= "player" then return end
     if event == "PLAYER_ENTERING_WORLD" then
       quietUntil = GetTime() + QUIET_AFTER_WORLD
-      below = nil
     end
+    if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "UPDATE_SHAPESHIFT_FORM" then Addon.ResetMana() end
     Addon.CheckMana()
   end)
   Addon.CheckMana()

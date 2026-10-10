@@ -239,6 +239,8 @@ def step(label, fn):
 
 lua.execute("ns = { Module = function(name) return ns end }")
 ns = lua.globals()["ns"]
+step("load shared nameplate layout", lambda: H.load("Core/PlateLayout.lua",
+    open(os.path.join(ROOT, "Core", "PlateLayout.lua"), encoding="utf-8").read(), ns))
 toc = open(os.path.join(ROOT, "UsefulPlatesAndTooltips.toc"), encoding="utf-8").read().splitlines()
 files = [line.strip().replace("\\", os.sep) for line in toc if line.strip().startswith("Modules\\DoTInfo\\")]
 expected = [os.path.join("Modules", "DoTInfo", n) for n in ("Locale.lua", "Core.lua", "Options.lua", "Nameplates.lua")]

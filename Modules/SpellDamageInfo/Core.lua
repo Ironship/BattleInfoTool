@@ -109,6 +109,12 @@ local function textClock()
   return ok and type(t) == "number" and t or 0
 end
 local function getEntry(spellID)
+  if isSecret(spellID) or type(spellID) ~= "number" then return nil end
+  if ns.IsRetail and ns.IsRetail() and C_Spell and type(C_Spell.GetOverrideSpell) == "function" then
+    local ok, override = pcall(C_Spell.GetOverrideSpell, spellID)
+    if not ok or isSecret(override) then return nil end
+    if type(override) == "number" and override > 0 then spellID = override end
+  end
   local entry = parsedCache[spellID]
   if entry and entry.checked and textClock() - entry.checked < RECHECK then return entry end
   local text = getDescription(spellID)
@@ -169,9 +175,9 @@ local function isRetail()
 end
 ns.IsRetail = isRetail
 
--- The player's combo points on the selected target, as the client says: a count 0..5 and true,
+-- The player's combo points, as the client says: a count within its resource cap and true,
 -- or nil and false when the client cannot say (no API, a failed call, a secret value, or a
--- count outside 0..5: NaN, infinite, negative, fractional). Classic/Forever keep the count on
+-- invalid count: NaN, infinite, negative, fractional). Classic/Forever keep 0..5 points on
 -- the target: GetComboPoints("player", "target") is the authority, whatever the player's own
 -- UnitPowerMax says (a zero combo bar must not gate the read, and no target GUID is looked at).
 -- Retail keeps it on the player: UnitPower("player", combo points), and the target's
@@ -185,12 +191,17 @@ local COMBO_POWER_TYPE = (Enum and Enum.PowerType and Enum.PowerType.ComboPoints
 -- an event payload arrives in.
 local COMBO_EVENT_TOKEN = "COMBO_POINTS"
 local function comboPoints()
-  local raw
+  local raw, maximum = nil, 5
   if isRetail() then
     if type(UnitPower) ~= "function" then return nil, false end
     local ok, value = pcall(UnitPower, "player", COMBO_POWER_TYPE)
     if not ok then return nil, false end
     raw = value
+    if type(UnitPowerMax) ~= "function" then return nil, false end
+    local okMax, cap = pcall(UnitPowerMax, "player", COMBO_POWER_TYPE)
+    if not okMax or isSecret(cap) or type(cap) ~= "number"
+        or cap ~= cap or cap <= 0 or cap == math.huge or cap % 1 ~= 0 then return nil, false end
+    maximum = cap
   else
     if type(GetComboPoints) ~= "function" then return nil, false end
     local ok, value = pcall(GetComboPoints, "player", "target")
@@ -198,7 +209,7 @@ local function comboPoints()
     raw = value
   end
   if isSecret(raw) or type(raw) ~= "number" then return nil, false end
-  if raw ~= raw or raw < 0 or raw > 5 or raw % 1 ~= 0 then return nil, false end
+  if raw ~= raw or raw < 0 or raw > maximum or raw % 1 ~= 0 then return nil, false end
   return raw, true
 end
 
@@ -361,6 +372,7 @@ function ns.TargetSpeed() return targetSpeed end
 -- What a reduction of attack power takes off each hit of the target, or nil: no target speed, a
 -- percentage, or a reduction of damage (per hit already).
 function ns.ReductionPerHit(r)
+  if isRetail() then return nil end -- 14 AP per DPS is a Classic rule
   if type(r) ~= "table" or r.stat ~= "attackpower" or r.percent or not targetSpeed then return nil end
   local v = r.amount * targetSpeed / AP_PER_DPS
   return v >= 0.5 and v or nil
@@ -565,7 +577,7 @@ local function finisherView(f, spellID, pet)
     -- top row pretending to be current
     view = { finisherAt = { n = nil, known = false } }
   end
-  if view then view.finisher = f end
+  if view then view.finisher, view.finisherRetail = f, isRetail() end
   return view
 end
 
@@ -749,7 +761,7 @@ end
 local BAR_PREFIXES = {
   "ActionButton", "MultiBarBottomLeftButton", "MultiBarBottomRightButton", "MultiBarLeftButton",
   "MultiBarRightButton", "MultiBar5Button", "MultiBar6Button", "MultiBar7Button", "BonusActionButton",
-  "MultiCastActionButton",
+  "MultiCastActionButton", "OverrideActionBarButton",
 }
 
 local buttons = {} -- list of Blizzard action buttons
@@ -1804,13 +1816,15 @@ end
 local frame = CreateFrame("Frame")
 
 local UPDATE_EVENTS = {
-  "ACTIONBAR_SLOT_CHANGED", "ACTIONBAR_PAGE_CHANGED", "UPDATE_BONUS_ACTIONBAR", "UPDATE_SHAPESHIFT_FORM",
+  "ACTIONBAR_SLOT_CHANGED", "ACTIONBAR_PAGE_CHANGED", "UPDATE_BONUS_ACTIONBAR",
   "PLAYER_EQUIPMENT_CHANGED", "PLAYER_REGEN_ENABLED", "PET_BAR_UPDATE", "PET_BAR_UPDATE_USABLE",
   -- an item's data can arrive after its button was drawn (a consumable dragged onto a
   -- bar): paint the numbers again once it is here
   "GET_ITEM_INFO_RECEIVED", "ITEM_DATA_LOAD_RESULT",
+  "UPDATE_OVERRIDE_ACTIONBAR", "UPDATE_VEHICLE_ACTIONBAR",
 }
-local RESET_EVENTS = { "SPELLS_CHANGED", "CHARACTER_POINTS_CHANGED", "PLAYER_TALENT_UPDATE" }
+local RESET_EVENTS = { "SPELLS_CHANGED", "CHARACTER_POINTS_CHANGED", "PLAYER_TALENT_UPDATE",
+  "PLAYER_SPECIALIZATION_CHANGED", "TRAIT_CONFIG_UPDATED", "UPDATE_SHAPESHIFT_FORM" }
 
 local function register(event)
   pcall(frame.RegisterEvent, frame, event) -- an event this client does not know is skipped
@@ -1842,7 +1856,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     -- A seal cast says which seal Judgement unleashes where the buffs cannot be read.
     for _, e in ipairs({ "UNIT_AURA", "UNIT_PET", "UNIT_ATTACK_POWER", "UNIT_RANGED_ATTACK_POWER", "UNIT_DAMAGE",
       "UNIT_ATTACK_SPEED", "UNIT_RANGEDDAMAGE", "UNIT_MAXHEALTH", "UNIT_SPELLCAST_SUCCEEDED",
-      "UNIT_POWER_UPDATE", "UNIT_POWER_FREQUENT" }) do
+      "UNIT_POWER_UPDATE", "UNIT_POWER_FREQUENT", "UNIT_MAXPOWER" }) do
       if type(frame.RegisterUnitEvent) == "function" then
         -- the target's attack speed too, for a reduction of its attack power per hit
         pcall(frame.RegisterUnitEvent, frame, e, "player", e == "UNIT_ATTACK_SPEED" and "target" or nil)
@@ -1870,7 +1884,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     refreshFinishers()
   elseif event == "COMBO_POINTS" or event == "COMBO_TARGET_CHANGED" then
     if not isSecret(arg1) then refreshFinishers() end
-  elseif event == "UNIT_POWER_UPDATE" or event == "UNIT_POWER_FREQUENT" then
+  elseif event == "UNIT_POWER_UPDATE" or event == "UNIT_POWER_FREQUENT" or event == "UNIT_MAXPOWER" then
     -- the payload's powerType is a cstring ("COMBO_POINTS"), never the numeric enum the
     -- UnitPower API takes; unreadable arguments are rejected before any comparison
     if not isSecret(arg1) and not isSecret(arg2) and arg1 == "player" and arg2 == COMBO_EVENT_TOKEN then
@@ -1902,6 +1916,7 @@ frame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
     requestUpdate()
   else
     if isReset[event] then clearCache() end
+    if event == "UPDATE_OVERRIDE_ACTIONBAR" or event == "UPDATE_VEHICLE_ACTIONBAR" then collectButtons() end
     -- out of combat the target's speed can be read again
     if event == "PLAYER_REGEN_ENABLED" then readTargetSpeed() end
     requestUpdate()

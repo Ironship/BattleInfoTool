@@ -1,23 +1,31 @@
-"""Builds dist/UsefulPlatesAndTooltips-<version>.zip: one top folder, the .toc, the files it lists, the
-all module textures and their bundled third-party licences.
+"""Build one installable ZIP and check every member against the source.
 
-    python tools/build_zip.py
+    python tools/build_zip.py           # existing WoW Forever package
+    python tools/build_zip.py --retail  # four Retail modules, Mainline TOC
 
-Then opens the zip again and checks every file against the source.
+Each package has one UsefulPlatesAndTooltips folder and its own TOC.
 """
+import argparse
 import re
 import sys
 import zipfile
 from pathlib import Path
 
 root = Path(__file__).resolve().parent.parent
-toc = (root / "UsefulPlatesAndTooltips.toc").read_text(encoding="utf-8")
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--retail", action="store_true", help="build the Retail DoTInfo, ResourceDing, ShieldsInfo and SpellDamageInfo package")
+args = parser.parse_args()
+toc_name = "UsefulPlatesAndTooltips_Mainline.toc" if args.retail else "UsefulPlatesAndTooltips.toc"
+toc = (root / toc_name).read_text(encoding="utf-8")
 version = re.search(r"^## Version:\s*(\S+)", toc, re.M).group(1)
-files = ["UsefulPlatesAndTooltips.toc"] + [l.strip().replace("\\", "/") for l in toc.splitlines()
+files = [toc_name] + [l.strip().replace("\\", "/") for l in toc.splitlines()
                                   if l.strip() and not l.startswith("#")]
-files += sorted(p.relative_to(root).as_posix() for p in (root / "Modules").rglob("*.tga"))
-files += sorted(p.relative_to(root).as_posix() for p in (root / "Modules").rglob("LICENSE*.txt"))
+asset_roots = [root / "Modules" / module for module in ("DoTInfo", "ResourceDing", "ShieldsInfo", "SpellDamageInfo")] if args.retail else [root / "Modules"]
+files += sorted(p.relative_to(root).as_posix() for directory in asset_roots for p in directory.rglob("*.tga"))
+files += sorted(p.relative_to(root).as_posix() for directory in asset_roots for p in directory.rglob("LICENSE*.txt"))
 files.append("LICENSE")
+if args.retail:
+    files.append("RETAIL.md")
 
 dist = root / "dist"
 dist.mkdir(exist_ok=True)

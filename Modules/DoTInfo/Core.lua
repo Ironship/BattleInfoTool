@@ -204,6 +204,7 @@ end
 -- The same hit arrives for target, nameplateN and softenemy, and their GUIDs may not all be readable,
 -- so a hidden GUID only affects that one unit token.
 local function unitKey(unit)
+    if ns.Retail then return ns.Retail.UnitKey(unit) end
     local ok, guid = pcall(UnitGUID, unit)
     if ok and not isSecret(guid) then return guid end
     -- A secret action-target GUID can still identify the same mob as a readable nameplate.
@@ -327,6 +328,7 @@ end
 
 -- A waiting DoT doesn't count toward the marker until its first tick lands (see WAIT_MODES).
 local function isWaiting(dot)
+    if dot.predictionOnly then return false end
     if dot.ticksSeen > 0 then return false end
     if db.waitFirstTick == "always" then return true end
     return db.waitFirstTick == "unsure" and dot.unsure
@@ -417,6 +419,11 @@ end
 
 -- Returns the best plain reading (or nil) and a description of what each API returned, for the log.
 local function readComboPoints()
+    if ns.Retail then
+        local points = ns.Retail.ComboPoints()
+        if points then return points, "UnitPower=" .. points end
+        return nil, "UnitPower=unknown"
+    end
     local best, parts = nil, {}
     local function consider(label, ok, points)
         table.insert(parts, label .. "=" .. describeReading(ok, points))
@@ -444,17 +451,29 @@ local function isFinisherDescription(desc)
         and (desc:find("Finishing move") ~= nil or ns.locale.isFinisher(desc))
 end
 
-local function onCastSent(spellID, castGUID)
+local function onCastSent(spellID, castGUID, targetName)
+    if isSecret(spellID) or type(spellID) ~= "number" then return end
     -- DOT-1: remember who the cast is aimed at while the target is still it.
     -- SUCCEEDED only names the spell, so onPlayerCast uses this instead of
     -- the (maybe tabbed-away) current target. Never cleared by target change.
     -- Action targeting can have only softenemy. Hard targets keep precedence; unitKey only uses
     -- a soft target whose own GUID or matching nameplate's GUID can be read safely.
-    pendingCast = { key = unitKey("target") or unitKey("softenemy"), spellID = spellID,
+    local recipient
+    if ns.Retail then recipient = ns.Retail.Recipient(targetName)
+    else recipient = unitKey("target") or unitKey("softenemy") end
+    pendingCast = { key = recipient, spellID = spellID,
         castGUID = not isSecret(castGUID) and castGUID or nil, sentAt = GetTime() }
     comboAtSend = nil
-    local ok, _, desc = pcall(spellNameAndDescription, spellID)
-    if not ok or not isFinisherDescription(desc) then return end
+    local ok, name, desc
+    if ns.Retail then
+        lastComboPoints, lastComboAt = nil, 0
+        ok, name, desc = pcall(ns.Retail.SpellDescription, spellID, spellNameAndDescription)
+    else ok, name, desc = pcall(spellNameAndDescription, spellID) end
+    if ns.Retail and ok and not isSecret(name) and not isSecret(desc) then
+        pendingCast.name, pendingCast.desc = name, desc -- Capture before a finisher spends its points.
+    end
+    local finisher = isFinisherDescription(desc) or (ns.Retail and ns.Retail.IsFinisher(spellID))
+    if not ok or not finisher then return end
     local points, readings = readComboPoints()
     comboAtSend = points
     trace("COMBO at send: " .. readings .. ", counted=" .. countedPoints)
@@ -553,7 +572,7 @@ end
 -- A DoT as it stands the moment it's applied, before any tick.
 local function newDot(spellID, tickKey, name, total, school, duration, statedInterval, now)
     local interval = statedInterval or KNOWN_TICK_INTERVALS[name] or DEFAULT_TICK_INTERVAL
-    return {
+    local dot = {
         spellID = spellID,
         tickKey = tickKey,
         -- The size learned on earlier casts, as it stood when this DoT was applied. Same-slot collisions are
@@ -573,17 +592,24 @@ local function newDot(spellID, tickKey, name, total, school, duration, statedInt
         ticksSeen = 0,      -- including crits
         missed = 0,
     }
+    if ns.Retail then ns.Retail.Prepare(dot) end
+    return dot
 end
 
 -- Returns the target key the DoT was applied to, or nil if the cast wasn't a tracked DoT.
 local function onPlayerCast(spellID, castGUID)
+    if isSecret(spellID) or type(spellID) ~= "number" then return end
     local key = castRecipient(castGUID, spellID)
-    if pendingCast and sameCast(pendingCast, castGUID, spellID) then pendingCast = nil end
-    local ok, name, desc = pcall(spellNameAndDescription, spellID)
+    local sent = pendingCast and sameCast(pendingCast, castGUID, spellID) and pendingCast or nil
+    if sent then pendingCast = nil end
+    local ok, name, desc
+    if ns.Retail then ok, name, desc = pcall(ns.Retail.SpellDescription, spellID, spellNameAndDescription) end
+    if not ns.Retail then ok, name, desc = pcall(spellNameAndDescription, spellID) end
+    if ns.Retail and sent and sent.name and sent.desc then ok, name, desc = true, sent.name, sent.desc end
     if not ok or not name or isSecret(name) then return end
     if type(desc) == "string" and not isSecret(desc) then
         local awarded = tonumber(desc:match("Awards (%d+) combo point")) or ns.locale.comboPointsAwarded(desc)
-        if awarded then onBuilderCast(awarded, key) end
+        if awarded and not ns.Retail then onBuilderCast(awarded, key) end
     end
     if IGNORED_SPELLS[name] then
         -- DOT-7: this drop used to be silent (no marker, no log line), which made an ignore or a name
@@ -592,11 +618,19 @@ local function onPlayerCast(spellID, castGUID)
         trace(string.format("IGNORED %s (id %d): on the ignore list", name, spellID))
         return
     end
-    local isFinisher = isFinisherDescription(desc)
+    local isFinisher = isFinisherDescription(desc) or (ns.Retail and ns.Retail.IsFinisher(spellID))
     local comboPoints, comboSource
-    if isFinisher then comboPoints, comboSource = comboPointsForCast() end
-    -- Unknown points: parse the lowest entry (errs low), and don't use or teach learned tick sizes.
-    local total, school, duration, statedInterval = parseDot(desc, comboPoints or 1)
+    if isFinisher then
+        local sentPoints = comboAtSend
+        comboPoints, comboSource = comboPointsForCast()
+        if ns.Retail then
+            comboPoints = sent and sentPoints or nil
+            comboSource = comboPoints and "read" or "unknown"
+        end
+    end
+    local total, school, duration, statedInterval
+    if ns.Retail then total, school, duration, statedInterval = ns.Retail.Parse(spellID, desc, comboPoints, parseDot)
+    else total, school, duration, statedInterval = parseDot(desc, comboPoints or 1) end
     if not total then
         if not isSecret(desc) and ns.locale.shouldLogUnread(spellID, desc) then
             trace(string.format("NOT READ %s (id %d): %s", name, spellID, desc))
@@ -622,9 +656,10 @@ local function onPlayerCast(spellID, castGUID)
     dotsByTarget[key] = dotsByTarget[key] or {}
     local previous = dotsByTarget[key][name]
     local dot = newDot(spellID, tickKey, name, total, school, duration, statedInterval, now)
+    if ns.Retail then ns.Retail.ApplyRefresh(dot, previous, now) end
     dotsByTarget[key][name] = dot
     lastDotCast = { key = key, name = name, dot = dot, previous = previous, at = now }
-    local learned = tickKey and db.ticks[tickKey]
+    local learned = not ns.Retail and tickKey and db.ticks[tickKey]
     -- The starting estimate is shaky without a learned tick size (description numbers leave out spell power
     -- and attack power) or, for finishers, without knowing the combo points.
     dot.unsure = not learned
@@ -632,7 +667,7 @@ local function onPlayerCast(spellID, castGUID)
         isFinisher and string.format(" %s combo points (%s)", comboPoints or "?", comboSource) or "",
         total, duration, dot.school, dot.interval, learned and ("learned " .. learned) or "from description",
         isWaiting(dot) and ", waiting for first tick" or ""))
-    local avoided = avoidJustBefore(key)
+    local avoided = not ns.Retail and avoidJustBefore(key)
     if avoided then
         removeAvoidedDot(lastDotCast, avoided)
         lastDotCast = nil
@@ -661,15 +696,24 @@ end
 local function onCastStart(castGUID, spellID)
     castInProgress = nil
     if not db.estimateDuringCast or isSecret(spellID) then return end
-    local ok, name, desc = pcall(spellNameAndDescription, spellID)
-    if not ok or not name or isSecret(name) or IGNORED_SPELLS[name] or isFinisherDescription(desc) then return end
-    local total, school, duration, statedInterval = parseDot(desc, 1)
+    local ok, name, desc
+    if ns.Retail then ok, name, desc = pcall(ns.Retail.SpellDescription, spellID, spellNameAndDescription) end
+    if not ns.Retail then ok, name, desc = pcall(spellNameAndDescription, spellID) end
+    if ns.Retail and pendingCast and sameCast(pendingCast, castGUID, spellID) and pendingCast.name and pendingCast.desc then
+        ok, name, desc = true, pendingCast.name, pendingCast.desc
+    end
+    if not ok or not name or isSecret(name) or IGNORED_SPELLS[name] or isFinisherDescription(desc)
+        or (ns.Retail and ns.Retail.IsFinisher(spellID)) then return end
+    local total, school, duration, statedInterval
+    if ns.Retail then total, school, duration, statedInterval = ns.Retail.Parse(spellID, desc, nil, parseDot)
+    else total, school, duration, statedInterval = parseDot(desc, 1) end
     if not total then return end
     local key = castRecipient(castGUID, spellID)
     if not key then return end
     local now = GetTime()
     local dot = newDot(spellID, spellID, name, total, school, duration, statedInterval, now)
-    local learned = db.ticks[spellID]
+    if ns.Retail then ns.Retail.ApplyRefresh(dot, dotsByTarget[key] and dotsByTarget[key][name], now) end
+    local learned = not ns.Retail and db.ticks[spellID]
     dot.unsure = not learned
     dot.provisional = true
     castInProgress = { key = key, name = name, dot = dot, spellID = spellID, startedAt = now,
@@ -849,6 +893,7 @@ end
 local combatFrameAt
 local combatFrameHits = {}
 local function onUnitCombat(unit, action, flag, amount, school)
+    if ns.Retail then return end -- No spell/source identity: other players' damage must not teach our estimate.
     if isSecret(action) then return end
     local key = unitKey(unit)
     if not key then return end
@@ -939,11 +984,11 @@ local function housekeep(now)
     end
     for key, dots in pairs(dotsByTarget) do
         for name, dot in pairs(dots) do
-            while dot.nextTickAt < now - TICK_MATCH_WINDOW and dot.nextTickAt <= dot.expiresAt do
+            while not dot.predictionOnly and dot.nextTickAt < now - TICK_MATCH_WINDOW and dot.nextTickAt <= dot.expiresAt do
                 dot.nextTickAt = dot.nextTickAt + dot.interval
                 dot.missed = dot.missed + 1
             end
-            if dot.ticksSeen == 0 and dot.missed >= math.max(MISSED_TICKS_BEFORE_DROP, dot.totalTicks) then
+            if not dot.predictionOnly and dot.ticksSeen == 0 and dot.missed >= math.max(MISSED_TICKS_BEFORE_DROP, dot.totalTicks) then
                 dots[name] = nil
                 trace("DROP " .. name .. " never ticked (resisted or immune?)")
             elseif now > dot.expiresAt + TICK_MATCH_WINDOW then
@@ -963,6 +1008,7 @@ local function housekeep(now)
 end
 
 local function remainingDamage(dot)
+    if dot.predictionOnly then return ns.Retail.Remaining(dot, GetTime()) end
     if dot.nextTickAt > dot.expiresAt + dot.interval / 2 then return 0 end
     local ticksLeft = math.floor((dot.expiresAt - dot.nextTickAt) / dot.interval + 0.5) + 1
     if not dot.shape then return ticksLeft * expectedTick(dot) end
@@ -977,6 +1023,7 @@ end
 -- tick are left out. A DoT being cast on the mob replaces the one of the same name it would refresh.
 local function dotBreakdown(key)
     local function refreshDueFor(name, dot)
+        if ns.Retail then return db and db.refreshCue and ns.Retail.RefreshDue(dot, GetTime()) end
         if not db or db.refreshCue == false or not ns.refreshNames[name] or type(dot) ~= "table" then return false end
         local remaining = (tonumber(dot.expiresAt) or 0) - (GetTime() or 0)
         local duration = dot.duration
@@ -1891,6 +1938,16 @@ end
 -- Lua errors by default, so a broken display would otherwise just not draw.
 local reportedErrors = {}
 local function safeRefresh()
+    -- Native aura containers render their own protected timers; keep an unavailable host
+    -- or API from interrupting the separate cast-based damage estimate.
+    if ns.Retail and ns.Retail.UpdateRogueAuras then
+        local ok, err = pcall(ns.Retail.UpdateRogueAuras)
+        if not ok and not reportedErrors[err] then
+            reportedErrors[err] = true
+            trace("ERROR in rogue aura update: " .. tostring(err))
+            print("Aura display error (logged): " .. tostring(err))
+        end
+    end
     local ok, err = pcall(refresh)
     if not ok and not reportedErrors[err] then
         reportedErrors[err] = true
@@ -2014,6 +2071,11 @@ frame:RegisterUnitEvent("UNIT_SPELLCAST_FAILED", "player")
 frame:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTED", "player")
 frame:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")   -- keeps a recent combo point reading as backup
 frame:RegisterEvent("UNIT_COMBAT")
+if ns.Retail then
+    frame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+    frame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+    frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+end
 -- Never register COMBAT_LOG_EVENT_UNFILTERED: Forever forbids it and shows a "blocked" popup.
 
 frame:SetScript("OnEvent", function(self, event, ...)
@@ -2028,6 +2090,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
         end
         ns.ensureDB()
         trace("===== session start =====")
+        if ns.Retail and ns.Retail.StartRogueAuras then ns.Retail.StartRogueAuras() end
         local added = ns.locale.addClientNames(NAME_TABLES, function(spellID)
             local name = C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(spellID)
             if name and not isSecret(name) and type(name) == "string" then return name end
@@ -2045,7 +2108,33 @@ frame:SetScript("OnEvent", function(self, event, ...)
     elseif not db then
         return
 
+    elseif ns.Retail and (event == "NAME_PLATE_UNIT_ADDED" or event == "NAME_PLATE_UNIT_REMOVED"
+        or event == "PLAYER_ENTERING_WORLD") then
+        local old
+        if event == "NAME_PLATE_UNIT_ADDED" then old = ns.Retail.AddPlate(...)
+        elseif event == "NAME_PLATE_UNIT_REMOVED" then old = ns.Retail.RemovePlate(...)
+        else
+            wipe(dotsByTarget)
+            if pendingCast then pendingCast.key = nil end
+            dropCastInProgress("loading screen")
+            ns.Retail.Reset()
+            ns.Retail.SeedPlates()
+        end
+        if old then
+            dotsByTarget[old] = nil
+            if pendingCast and pendingCast.key == old then pendingCast.key = nil end
+            if castInProgress and castInProgress.key == old then dropCastInProgress("nameplate removed") end
+        end
+        safeRefresh()
+
     elseif event == "PLAYER_TARGET_CHANGED" then
+        if ns.Retail then
+            local old = ns.Retail.TargetChanged()
+            if old then
+                dotsByTarget[old] = nil
+                if pendingCast and pendingCast.key == old then pendingCast.key = nil end
+            end
+        end
         dotsByTarget.target = nil -- only used when the target's GUID is secret
         if pendingCast and pendingCast.key == "target" then pendingCast.key = nil end
         resetComboCount() -- combo points belong to the target they were built on
@@ -2056,8 +2145,8 @@ frame:SetScript("OnEvent", function(self, event, ...)
         safeRefresh()
 
     elseif event == "UNIT_SPELLCAST_SENT" then
-        local _, _, castGUID, spellID = ...
-        onCastSent(spellID, castGUID)
+        local _, targetName, castGUID, spellID = ...
+        onCastSent(spellID, castGUID, targetName)
 
     elseif event == "UNIT_POWER_FREQUENT" then
         local _, powerType = ...

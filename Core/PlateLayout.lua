@@ -19,6 +19,40 @@ Plate.DOT_ROW_HEIGHT = 14
 Plate.SHARD_ROW_HEIGHT = 14
 Plate.SHIELD_EDGE = 4
 
+-- Platynator reparents Blizzard's UnitFrame to a hidden host; use its active health widget.
+function Plate.HealthBar(plate)
+  if type(plate) ~= "table" then return nil, "no nameplate" end
+  if type(Platynator) == "table" then
+    local children = { pcall(plate.GetChildren, plate) }
+    if children[1] then
+      for i = 2, #children do
+        local child = children[i]
+        local ok, bar = pcall(function()
+          if type(child.widgets) ~= "table" or not child:IsVisible() then return end
+          for _, widget in ipairs(child.widgets) do
+            if type(widget.details) == "table" and widget.details.kind == "health"
+              and type(widget.statusBar) == "table" and widget.statusBar:IsVisible() then
+              return widget.statusBar
+            end
+          end
+        end)
+        if ok and type(bar) == "table" then return bar, "Platynator.widgets.health.statusBar" end
+      end
+    end
+    return nil, "Platynator: no visible health bar"
+  end
+  local unitFrame = plate.UnitFrame
+  if type(unitFrame) ~= "table" then return nil, "no UnitFrame" end
+  local container = unitFrame.HealthBarsContainer
+  if type(container) == "table" then
+    if type(container.healthBar) == "table" then return container.healthBar, "UnitFrame.HealthBarsContainer.healthBar" end
+    if type(container.HealthBar) == "table" then return container.HealthBar, "UnitFrame.HealthBarsContainer.HealthBar" end
+  end
+  if type(unitFrame.healthBar) == "table" then return unitFrame.healthBar, "UnitFrame.healthBar" end
+  if type(unitFrame.HealthBar) == "table" then return unitFrame.HealthBar, "UnitFrame.HealthBar" end
+  return nil, "no health bar found"
+end
+
 -- Bottom and top of a widget seated with the live formula, positive y up.
 function Plate.Span(offset, height)
   local top = -(tonumber(offset) or 0)
@@ -116,15 +150,29 @@ function Plate.Rows()
     hasPoints = ok and type(maximum) == "number" and maximum > 0
   end
   local class = type(UnitClass) == "function" and select(2, UnitClass("player"))
+  local catForm = false
+  if class == "DRUID" and type(GetShapeshiftFormID) == "function" then
+    local ok, form = pcall(GetShapeshiftFormID)
+    if ok then
+      local readable = true
+      if type(issecretvalue) == "function" then
+        local checked, secret = pcall(issecretvalue, form)
+        readable = checked and not secret
+      end
+      catForm = readable and form == 1
+    end
+  end
+  local classicShards = resource and type(resource.IsClassic) == "function" and resource.IsClassic()
+  local hasDiamonds = on("ResourceDing") and rd.enabled ~= false and rd.shardDiamonds ~= false
+    and class == "WARLOCK" and (classicShards or hasPoints)
   local hs = moduleSettings("HunterRangeFinder") or {}
   return {
     hunter = { on = on("HunterRangeFinder") and class == "HUNTER" and hs.attachToPlate ~= false,
       offset = hunter, height = Plate.HUNTER_RAIL_HEIGHT },
     dots = { on = on("ResourceDing") and rd.enabled ~= false and rd.dots ~= false and hasPoints
-      and (class ~= "DRUID" or (type(GetShapeshiftFormID) == "function" and GetShapeshiftFormID() == 1)),
+      and not hasDiamonds and (class ~= "DRUID" or catForm),
       offset = dots, height = size },
-    shards = { on = on("ResourceDing") and rd.enabled ~= false and rd.shardDiamonds ~= false
-      and class == "WARLOCK" and resource and resource.IsClassic and resource.IsClassic(),
+    shards = { on = hasDiamonds,
       offset = shards, height = size },
   }
 end

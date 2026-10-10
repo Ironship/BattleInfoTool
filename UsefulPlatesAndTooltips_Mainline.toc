@@ -1,0 +1,38 @@
+## Interface: 120100
+## Title: Useful Plates and Tooltips (Retail)
+## Notes: Retail test build: rogue aura icons/timers, DoT estimates, resource sounds/markers, absorb overlays and spell damage numbers. /upt
+## Author: Ironship
+## Version: 0.9.50-retail
+## SavedVariables: UsefulPlatesAndTooltipsDB, UsefulPlatesAndTooltips_SpellDamageInfoDB, UsefulPlatesAndTooltips_DoTInfoDB, UsefulPlatesAndTooltips_ResourceDingDB
+
+Core\Init.lua
+Core\PlateLayout.lua
+Core\Appearance.lua
+Core\Settings.lua
+
+# SpellDamageInfo: its original MIT notice is included in Modules/SpellDamageInfo.
+Modules\SpellDamageInfo\Locale.lua
+Modules\SpellDamageInfo\SpellIDs.lua
+Modules\SpellDamageInfo\SpellCoefficients.lua
+Modules\SpellDamageInfo\Parser.lua
+Modules\SpellDamageInfo\Estimate.lua
+Modules\SpellDamageInfo\Core.lua
+Modules\SpellDamageInfo\Options.lua
+
+# DoTInfo: original MIT notices are included in LICENSE.
+Modules\DoTInfo\Locale.lua
+Modules\DoTInfo\Retail.lua
+Modules\DoTInfo\RogueAuras.lua
+Modules\DoTInfo\Core.lua
+Modules\DoTInfo\Options.lua
+Modules\DoTInfo\Nameplates.lua
+
+# ResourceDing: its MIT notice is included in Modules/ResourceDing.
+Modules\ResourceDing\Core.lua
+Modules\ResourceDing\Dots.lua
+Modules\ResourceDing\Shards.lua
+Modules\ResourceDing\Mana.lua
+Modules\ResourceDing\Settings.lua
+
+# ShieldsInfo: native absorb overlays on accessible unit frames and nameplates.
+Modules\ShieldsInfo\ShieldsInfo.lua

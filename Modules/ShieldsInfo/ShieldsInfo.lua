@@ -311,6 +311,7 @@ local function updateBar(unit, healthBar, enabled)
     o = overlayFor(healthBar)
     if not o then return end
   end
+  o.current = true
   local ok = pcall(function()
     local dotOn = BIT.Plate and type(BIT.Plate.DotOnUnit) == "function" and BIT.Plate.DotOnUnit(unit)
     applyOverlayMode(o, dotOn == true)
@@ -366,13 +367,19 @@ local function targetBar()
   return nil
 end
 
--- The health bar of one party frame, whichever casing the client uses: the real
+-- Retail nests its party bar inside HealthBarContainer. Older clients expose
+-- the bar directly, with several casings: the real
 -- classic frames (Classic/PartyFrameTemplates.xml parentKey="HealthBar" on era and
 -- beta) and the era pool members carry .HealthBar, the compact frames .healthBar.
 local function partyBar(frame)
   if type(frame) ~= "table" then return nil end
+  if type(frame.HealthBarContainer) == "table"
+    and type(frame.HealthBarContainer.HealthBar) == "table" then
+    return frame.HealthBarContainer.HealthBar
+  end
   local bar = frame.HealthBar
   if type(bar) ~= "table" then bar = frame.healthBar end
+  if type(bar) ~= "table" then bar = frame.healthbar end
   if type(bar) == "table" then return bar end
   return nil
 end
@@ -384,16 +391,30 @@ end
 -- .healthBar, classic templates the big parentKey .HealthBar.
 local function partyBarOf(f)
   if type(f) ~= "table" then return nil end
+  if type(f.HealthBarContainer) == "table"
+    and type(f.HealthBarContainer.HealthBar) == "table" then
+    return f.HealthBarContainer.HealthBar
+  end
   if type(f.healthBar) == "table" then return f.healthBar end
   if type(f.HealthBar) == "table" then return f.HealthBar end
+  if type(f.healthbar) == "table" then return f.healthbar end
   return nil
+end
+
+-- Compact frames can display a party member's vehicle instead of that member.
+-- A present but hidden displayed token cannot safely fall back to a different unit.
+local function memberUnit(frame)
+  local unit = frame.displayedUnit
+  if type(unit) == "nil" then unit = frame.unit end
+  if not isSecret(unit) and type(unit) == "string" then return unit end
 end
 
 -- One member frame into the bars list when it carries a unit and a health bar.
 local function collectMember(f, bars)
-  if type(f) == "table" and not isSecret(f.unit) and type(f.unit) == "string" then
+  if type(f) == "table" then
+    local unit = memberUnit(f)
     local bar = partyBarOf(f)
-    if bar then bars[#bars + 1] = { unit = f.unit, bar = bar } end
+    if unit and bar then bars[#bars + 1] = { unit = unit, bar = bar } end
   end
 end
 
@@ -492,6 +513,19 @@ local function partyBars()
   return out
 end
 
+local function nameplateHealthBar(plate)
+  if type(BIT.Plate) == "table" and type(BIT.Plate.HealthBar) == "function" then
+    return BIT.Plate.HealthBar(plate)
+  end
+  local uf = plate.UnitFrame
+  if type(uf) ~= "table" then return nil end
+  local bar = uf.healthBar
+  if type(bar) ~= "table" and type(uf.HealthBarsContainer) == "table" then
+    bar = uf.HealthBarsContainer.healthBar
+  end
+  return bar
+end
+
 -- Every nameplate the client hands out, with its health bar; protected plates are skipped.
 local function nameplateBars()
   local out = {}
@@ -502,10 +536,7 @@ local function nameplateBars()
     if usableBar(plate) then
       local uf = plate.UnitFrame
       if type(uf) == "table" and type(uf.unit) == "string" then
-        local bar = uf.healthBar
-        if type(bar) ~= "table" and type(uf.HealthBarsContainer) == "table" then
-          bar = uf.HealthBarsContainer.healthBar
-        end
+        local bar = nameplateHealthBar(plate)
         if type(bar) == "table" then
           out[#out + 1] = { unit = uf.unit, bar = bar, plate = plate }
         end
@@ -517,6 +548,7 @@ end
 
 local function updateAll()
   if not settings then return end
+  for _, o in pairs(overlays) do o.current = false end
   local pBar, tBar = playerBar(), targetBar()
   updateBar("player", pBar, settings.player)
   updateBar("target", tBar, settings.target)
@@ -545,6 +577,7 @@ local function updateAll()
   -- departed party bars are touched and overlay objects are kept for reuse
   for bar, o in pairs(overlays) do
     if o.party and not partySeen[bar] then hideOverlay(o) end
+    if not o.current then hideOverlay(o) end
   end
 end
 M.Update = updateAll
@@ -566,7 +599,7 @@ local function compactUpdate(frame)
     compactFrames[frame] = true
     local bar = partyBarOf(frame)
     if type(bar) ~= "table" then return end
-    updateBar(frame.unit, bar, settings ~= nil and settings.party or false)
+    updateBar(memberUnit(frame), bar, settings ~= nil and settings.party or false)
     local o = overlays[bar]
     if o then o.party = true; o.plate = false end
   end)
@@ -613,11 +646,8 @@ local function onEvent(_, event, arg1)
     local cleared = false
     if type(C_NamePlate) == "table" and type(C_NamePlate.GetNamePlateForUnit) == "function" then
       local ok, plate = pcall(C_NamePlate.GetNamePlateForUnit, arg1)
-      if ok and type(plate) == "table" and type(plate.UnitFrame) == "table" then
-        local bar = plate.UnitFrame.healthBar
-        if type(bar) ~= "table" and type(plate.UnitFrame.HealthBarsContainer) == "table" then
-          bar = plate.UnitFrame.HealthBarsContainer.healthBar
-        end
+      if ok and type(plate) == "table" then
+        local bar = nameplateHealthBar(plate)
         local o = type(bar) == "table" and overlays[bar] or nil
         if o then hideOverlay(o); cleared = true end
       end

@@ -84,6 +84,9 @@ Locales.en = {
   FINISHER_CURRENT_NOTE = "At the current %d combo points, attack power not included; the others: %s",
   FINISHER_STATIC_NOTE = "Combo points not readable: static preview, attack power not included; %s",
   FINISHER_NONE_NOTE = "No combo points on the selected target yet: preview, attack power not included; %s",
+  FINISHER_RETAIL_CURRENT_NOTE = "At the current %d combo points; the other description rows: %s",
+  FINISHER_RETAIL_STATIC_NOTE = "Combo points not readable: description preview; %s",
+  FINISHER_RETAIL_NONE_NOTE = "No combo points yet: description preview; %s",
   FROM_SEAL = "From %s",
   JUDGEMENT_LINE = "Judgement: %s damage",
   NO_SEAL = "No seal active: Judgement's damage comes from the seal.",
@@ -219,6 +222,9 @@ Locales.de = {
   FINISHER_CURRENT_NOTE = "Bei den aktuellen %d Combopunkten, ohne Angriffskraft; die \195\188brigen: %s",
   FINISHER_STATIC_NOTE = "Combopunkte nicht ablesbar: statische Vorschau, ohne Angriffskraft; %s",
   FINISHER_NONE_NOTE = "Noch keine Combopunkte am Ziel: Vorschau, ohne Angriffskraft; %s",
+  FINISHER_RETAIL_CURRENT_NOTE = "Bei den aktuellen %d Combopunkten; die anderen Beschreibungswerte: %s",
+  FINISHER_RETAIL_STATIC_NOTE = "Combopunkte nicht ablesbar: Vorschau der Beschreibung; %s",
+  FINISHER_RETAIL_NONE_NOTE = "Noch keine Combopunkte: Vorschau der Beschreibung; %s",
   FROM_SEAL = "Aus %s",
   JUDGEMENT_LINE = "Richturteil: %s Schaden",
   NO_SEAL = "Kein Siegel aktiv: der Schaden des Richturteils kommt vom Siegel.",
@@ -556,7 +562,8 @@ function Format.TooltipLines(view, L)
           others[#others + 1] = tostring(i) .. ": " .. (p.total and Format.Thousands(p.total, L) or rangeText(p, L))
         end
       end
-      lines[#lines + 1] = { string.format(L.FINISHER_CURRENT_NOTE, at.n, table.concat(others, " / ")),
+      local note = view.finisherRetail and L.FINISHER_RETAIL_CURRENT_NOTE or L.FINISHER_CURRENT_NOTE
+      lines[#lines + 1] = { string.format(note, at.n, table.concat(others, " / ")),
         NOTE_COLOR[1], NOTE_COLOR[2], NOTE_COLOR[3] }
     else
       -- zero combo points (or no selected target), or a count the client cannot say: the whole
@@ -569,6 +576,9 @@ function Format.TooltipLines(view, L)
         end
       end
       local note = (at and at.known and at.n == 0) and L.FINISHER_NONE_NOTE or L.FINISHER_STATIC_NOTE
+      if view.finisherRetail then
+        note = (at and at.known and at.n == 0) and L.FINISHER_RETAIL_NONE_NOTE or L.FINISHER_RETAIL_STATIC_NOTE
+      end
       lines[#lines + 1] = { string.format(note, table.concat(others, " / ")),
         NOTE_COLOR[1], NOTE_COLOR[2], NOTE_COLOR[3] }
     end
