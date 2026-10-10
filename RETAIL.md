@@ -5,7 +5,7 @@ Wersja testowa zawiera **DoTInfo, ResourceDing, ShieldsInfo i SpellDamageInfo**,
 ## Instalacja
 
 1. Zbuduj paczkę: `python tools/build_zip.py --retail`.
-2. Wypakuj folder `UsefulPlatesAndTooltips` z `dist/UsefulPlatesAndTooltips-0.9.52-retail.zip` do `_retail_/Interface/AddOns/`. Przy zastępowaniu starszej paczki usuń jej folder po wykonaniu kopii; nie nakładaj ZIP na stare pliki.
+2. Wypakuj folder `UsefulPlatesAndTooltips` z `dist/UsefulPlatesAndTooltips-0.9.53-retail.zip` do `_retail_/Interface/AddOns/`. Przy zastępowaniu starszej paczki usuń jej folder po wykonaniu kopii; nie nakładaj ZIP na stare pliki.
 3. Włącz addon w grze. `/upt` otwiera ustawienia; `/reload` stosuje zmianę włączenia modułu. Włącz wyświetlanie wrogich nameplate klawiszem `V`.
 
 ZIP Retail ma własny `UsefulPlatesAndTooltips_Mainline.toc`; nie zawiera manifestu Forever ani pozostałych modułów. Zwykłe `python tools/build_zip.py` nadal buduje dotychczasową paczkę Forever.
@@ -32,7 +32,7 @@ SpellDamageInfo dodaje liczby obrażeń/leczenia do natywnych pasków akcji Bliz
 
 Model odnowień i identyfikatory czarów sprawdzono względem [danych SimulationCraft dla Midnight](https://github.com/simulationcraft/simc/blob/midnight/engine/dbc/generated/sc_spell_data.inc). Ekran ładowania czyści przewidywane obrażenia DoT; ich wartości nie są odtwarzane z ukrytych aur. Natywne ikony rogue pokazują bieżące efekty niezależnie od tego szacunku.
 
-Healthstone i Crimson Vial (Blutrote Phiole) pokazują na action barze liczbę HP odpowiadającą procentowi leczenia z opisu (EN/DE). Dla Crimson Vial jest to całe leczenie przez 4 sekundy, a nie pojedynczy tick. Liczba aktualizuje się po zmianie maksymalnego zdrowia. Gdy gra ukrywa maksymalne HP, przycisk pokazuje procent, np. `20% HP`, zamiast nieaktualnej liczby.
+Healthstone, Crimson Vial (Blutrote Phiole) i Recuperate (Gesundung) pokazują na action barze liczbę HP odpowiadającą procentowi leczenia z opisu (EN/DE). Dla Crimson Vial jest to całe leczenie przez 4 sekundy, a dla Recuperate przez 10 sekund, a nie pojedynczy tick. Liczba aktualizuje się po zmianie maksymalnego zdrowia. Gdy gra ukrywa maksymalne HP, przycisk pokazuje procent, np. `20% HP`, zamiast nieaktualnej liczby.
 
 ## Co sprawdzić w grze
 

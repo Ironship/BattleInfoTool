@@ -555,7 +555,7 @@ function Parser.Parse(text, lang)
   return result
 end
 
--- Self-healing based on maximum HP: instantaneous Healthstone or Crimson Vial's
+-- Self-healing based on maximum HP: instantaneous Healthstone or a spell's
 -- stated total over time. Missing-health, per-tick and pet healing are not equivalent.
 function Parser.ParseHealthPercent(text, lang)
   if type(text) ~= "string" or text == "" then return nil, "empty" end
@@ -569,11 +569,20 @@ function Parser.ParseHealthPercent(text, lang)
   local percent, duration
   if lang == "de" then
     duration, percent = match(t, "euch im verlauf von (" .. NUM .. ") sek%.? um (" .. NUM .. ")%s*%% eurer maximalen gesundheit heilt")
+    if not percent then
+      duration, percent = match(t, "stellt im verlauf von (" .. NUM .. ") sek%.? (" .. NUM .. ")%s*%% eurer maximalen gesundheit wieder her")
+    end
     percent = match(t, "stellt sofort (" .. NUM .. ")%s*%% gesundheit wieder her")
       or match(t, "stellt sofort (" .. NUM .. ")%s*%% eurer maximalen gesundheit wieder her")
       or percent
   else
     percent, duration = match(t, "heals you for (" .. NUM .. ")%s*%% of your maximum health over (" .. NUM .. ") sec")
+    if not percent then
+      percent, duration = match(t, "restores (" .. NUM .. ")%s*%% of your maximum health over (" .. NUM .. ") sec")
+      if not percent then
+        percent, duration = match(t, "restores (" .. NUM .. ")%s*%% of maximum health over (" .. NUM .. ") sec")
+      end
+    end
     percent = match(t, "instantly restores (" .. NUM .. ")%s*%% health")
       or match(t, "instantly restores (" .. NUM .. ")%s*%% of your maximum health")
       or match(t, "instantly restores (" .. NUM .. ")%s*%% of total health")

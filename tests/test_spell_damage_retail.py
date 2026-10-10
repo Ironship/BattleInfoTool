@@ -337,6 +337,40 @@ class RetailSpellDamageTests(unittest.TestCase):
             g.Fire("SPELLS_CHANGED")
             self.assertIsNone(addon.Compute(185311), text)
 
+    def test_recuperate_restoration_wording_shows_total_healing(self):
+        rt, g, addon = load("""
+          function GetLocale() return 'deDE' end
+          NewAction('ActionButton', 1, 1)
+          NewAction('MultiBar7Button', 1, 2)
+          actions[1], actions[2] = { 'spell', 1231411 }, { 'macro', 1231411, 'spell' }
+          maximumHealth = 1000
+          function UnitHealthMax() return maximumHealth end
+          spellDesc[1231411] = 'Gönnt Euch ein Päuschen, macht Euch was zu Essen und langt ordentlich zu. Stellt im Verlauf von 10 Sek. 50% Eurer maximalen Gesundheit wieder her.'
+        """)
+        for button in (g.ActionButton1, g.MultiBar7Button1):
+            self.assertEqual(label(addon, button), "500")
+        self.assertEqual(addon.Compute(1231411).hot.duration, 10)
+        self.assertEqual(addon.Compute(1231411).hot.total, 500)
+        g.maximumHealth = 2000
+        g.Fire("UNIT_MAXHEALTH", "player")
+        self.assertEqual(label(addon, g.ActionButton1), "1000")
+        g.maximumHealth = g.SECRET
+        g.Fire("UNIT_MAXHEALTH", "player")
+        self.assertEqual(label(addon, g.MultiBar7Button1), "50% HP")
+        g.maximumHealth = 1000
+        for text in ("Restores 50% of your maximum health over 10 sec.",
+                     "Restores 50% of maximum health over 10 sec."):
+            g.spellDesc[1231411] = text
+            g.Fire("SPELLS_CHANGED")
+            self.assertEqual(label(addon, g.ActionButton1), "500")
+        for text in ("Restores 50% of your missing health over 10 sec.",
+                     "Restores 50% of maximum mana over 10 sec.",
+                     "Restores 50% of maximum health every 10 sec.",
+                     "Stellt im Verlauf von 10 Sek. 50% Eurer fehlenden Gesundheit wieder her."):
+            g.spellDesc[1231411] = text
+            g.Fire("SPELLS_CHANGED")
+            self.assertIsNone(addon.Compute(1231411), text)
+
     def test_instant_heal_percent_parser_rejects_other_percentages(self):
         _, _, addon = load()
         for text, lang in (("Use: Instantly restores 25% health.", "en"),
